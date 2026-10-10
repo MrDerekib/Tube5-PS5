@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstring>
 #include "boot_diagnostics.hpp"
+#include "memory_diagnostics.hpp"
 #include <SDL_timer.h>
 extern "C"
 {
@@ -91,6 +92,7 @@ extern "C" int __wrap_avformat_find_stream_info(AVFormatContext *context, AVDict
 {
     if (context && context == network_context.load())
     {
+        tube5::memory_set_stage("HTTP_STREAM_SCAN");
         // Kitchensink's _ScanSource overwrites options with INT_MAX just before
         // this call. Set the actual public fields here, not open_input options
         // that would be silently replaced. These are probe limits, not a total
@@ -108,6 +110,7 @@ extern "C" int __wrap_avformat_open_input(AVFormatContext **context, const char 
     if (!url || std::strncmp(url, "http://", 7) != 0)
         return __real_avformat_open_input(context, url, format, options);
     tube5_boot_checkpoint("Tube5 HTTP H01: abrir conexion");
+    tube5::memory_set_stage("HTTP_OPEN");
     if (!context)
         return AVERROR(EINVAL);
     const bool allocated = !*context;

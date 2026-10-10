@@ -157,6 +157,8 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             char failure[192]{};
             tube5::memory_diagnostic_status(failure, sizeof(failure));
             canvas.text(120, 915, failure, 2, Color::yellow);
+            tube5::memory_failure_stage_status(failure, sizeof(failure));
+            canvas.text(800, 915, failure, 2, Color::yellow);
             tube5::flexible_memory_status(failure, sizeof(failure));
             canvas.text(120, 975, failure, 2, Color::yellow);
             tube5::pipeline_diagnostic_status(0, failure, sizeof(failure));

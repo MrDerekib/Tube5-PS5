@@ -11,9 +11,10 @@ std::atomic<unsigned> failures{0}, kind{0};
 std::atomic<std::size_t> failed_bytes{0};
 std::atomic<int> error{0};
 std::atomic<bool> out_of_memory{false};
+std::atomic<const char *> current_stage{"IDLE"}, failure_stage{"NONE"};
 std::atomic<std::size_t> flexible_bytes_before_open{0};
 std::atomic<int> flexible_query_result{-1};
-#if defined(TUBE5_DIAGNOSTICS) && !defined(TUBE5_HOST)
+#if defined(TUBE5_DIAGNOSTICS) && defined(TUBE5_PS5_NATIVE)
 extern "C" int sceKernelAvailableFlexibleMemorySize(std::size_t *size);
 #endif
 } // namespace
@@ -29,15 +30,21 @@ void reset_memory_diagnostic() noexcept
     failures = kind = 0;
     failed_bytes = 0;
     error = 0;
+    current_stage = "SOURCE_OPEN";
+    failure_stage = "NONE";
     flexible_bytes_before_open = 0;
     flexible_query_result = -1;
-#if defined(TUBE5_DIAGNOSTICS) && !defined(TUBE5_HOST)
+#if defined(TUBE5_DIAGNOSTICS) && defined(TUBE5_PS5_NATIVE)
     std::size_t available = 0;
     const int result = sceKernelAvailableFlexibleMemorySize(&available);
     flexible_query_result = result;
     if (result == 0)
         flexible_bytes_before_open = available;
 #endif
+}
+void memory_set_stage(const char *stage) noexcept
+{
+    current_stage = stage ? stage : "UNKNOWN";
 }
 void memory_diagnostic_status(char *text, std::size_t capacity) noexcept
 {
@@ -46,6 +53,10 @@ void memory_diagnostic_status(char *text, std::size_t capacity) noexcept
     std::snprintf(text, capacity, "MEMFAIL %u %s %zuB ERR %d", failures.load(),
                   allocation < 5 ? names[allocation] : "UNKNOWN", failed_bytes.load(),
                   error.load());
+}
+void memory_failure_stage_status(char *text, std::size_t capacity) noexcept
+{
+    std::snprintf(text, capacity, "ALLOC FAIL STAGE %s", failure_stage.load());
 }
 void flexible_memory_status(char *text, std::size_t capacity) noexcept
 {
@@ -68,6 +79,7 @@ void record(unsigned allocation, std::size_t bytes, int result) noexcept
     // Do not confuse EINVAL (bad alignment) with allocator exhaustion.
     if (result == ENOMEM)
         out_of_memory = true;
+    failure_stage = current_stage.load();
     ++failures;
     kind = allocation;
     failed_bytes = bytes;

@@ -45,6 +45,7 @@ bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
 int MediaPlayer::open_source_worker(void *userdata) noexcept
 {
     auto *self = static_cast<MediaPlayer *>(userdata);
+    memory_set_stage("SOURCE_OPEN");
     self->source_ = Kit_CreateSourceFromUrl(self->opening_path_);
     finish_network_open();
     if (!self->source_)
@@ -110,6 +111,7 @@ MediaPlayer::OpenResult MediaPlayer::poll_open(SDL_Renderer *renderer) noexcept
 
 bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
 {
+    memory_set_stage("PLAYER_SETUP");
     if (memory_out_of_memory())
         return fail("SOURCE MEMORY", "ENOMEM - CIERRA Y REABRE TUBE5");
     const int video = Kit_GetBestSourceStream(source_, KIT_STREAMTYPE_VIDEO);
@@ -138,6 +140,7 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
     Kit_SetHint(KIT_HINT_AUDIO_BUFFER_FRAMES, 8);
     Kit_SetHint(KIT_HINT_AUDIO_BUFFER_PACKETS, 16);
     reset_codec_diagnostic();
+    memory_set_stage("PLAYER_CREATE");
     player_ =
         Kit_CreatePlayer(source_, video, audio, -1, &video_request, &audio_request, 1920, 1080);
     if (!player_)
@@ -153,6 +156,7 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
     frame_area_ = SDL_Rect{0, 0, width_, height_};
     if (width_ <= 0 || height_ <= 0 || width_ > 1920 || height_ > 1080)
         return fail("VIDEO", "unsupported test frame size");
+    memory_set_stage("TEXTURE_CREATE");
     texture_ = SDL_CreateTexture(renderer, info.video_format.format, SDL_TEXTUREACCESS_STATIC,
                                  width_, height_);
     if (!texture_)
@@ -166,12 +170,14 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
     desired.samples = 1024;
     desired.callback = audio_callback;
     desired.userdata = this;
+    memory_set_stage("AUDIO_OPEN");
     audio_ = SDL_OpenAudioDevice(nullptr, 0, &desired, nullptr, 0);
     if (!audio_)
         return fail("AUDIO", SDL_GetError());
     reset_thread_diagnostic();
     begin_pipeline_diagnostic();
     Kit_PlayerPlay(player_);
+    memory_set_stage("PLAYING");
     if (thread_diagnostic()[0])
         return fail("THREAD", thread_diagnostic());
     SDL_PauseAudioDevice(audio_, 0);

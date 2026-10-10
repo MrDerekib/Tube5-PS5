@@ -464,6 +464,26 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-22-HTTP: localizar la fase de la reserva fallida
+
+DIAG21 se probó en PS5 Fat 13.20 y añadió `FMEM BEFORE OPEN 936 MiB` a los datos
+previos: `MEMFAIL 16 ALIGN 247119B ERR 12`, `W 3/3/3`, `READ 45/45 ERR 0`. Los
+936 MiB libres son consistentes con que el kernel aplicó el presupuesto de
+1 GiB; no es un valor compatible con los aproximadamente 413 MiB libres que la
+referencia registra con el presupuesto por defecto de 448 MiB. El ajuste sí se
+cargó y no resolvió el fallo, así que no se debe seguir aumentando la memoria.
+
+DIAG22 registra la fase activa cuando falla una asignación y la muestra como
+`ALLOC FAIL STAGE ...` junto a MEMFAIL. Los contextos son `HTTP_OPEN`,
+`HTTP_STREAM_SCAN`, `PLAYER_CREATE`, `TEXTURE_CREATE`, `AUDIO_OPEN` y `PLAYING`.
+Esto localiza el subsistema, aunque no identifica aún la función exacta que
+pidió los 247119 bytes. `dladdr` no proporciona información de módulos en el
+adaptador nativo, así que la fase es una pista fiable y acotada para el próximo
+paso, no una traza simbólica.
+
+Si vuelve a fallar, anotar juntos `FMEM BEFORE OPEN`, `ALLOC FAIL STAGE`,
+`MEMFAIL` y `READ`; no repetir intentos.
+
 ## BOOT-DIAG-21-HTTP: medir la memoria flexible efectiva
 
 DIAG20 se copió como carpeta completa y se probó en la consola, pero el error
@@ -483,8 +503,8 @@ El dato decidirá el siguiente paso: si marca el rango alto y falla igual,
 dejamos de tocar el presupuesto y aislamos qué asignación de 247119 bytes falla;
 si marca el rango bajo, comprobamos la publicación/remontaje del `param.json`.
 Probar solo una vez, con Tube5 completamente cerrada antes de copiar.
-Build nativa y FSELF válidas; SHA-256 del eboot DIAG21:
-`b7abbc01363da1205f5a1f832918565115a6c2d3e1ea354d3cfa0a01d87f6025`.
+Build nativa y FSELF válidas; import de memoria flexible presente en el ELF.
+SHA-256 del eboot DIAG22: `2b10660bb3f3fcd7bb91c76bb24e368261046f7d5b60f9579d4b3378aec4d86d`.
 
 ## BOOT-DIAG-20-HTTP: aumentar la memoria flexible del título
 
@@ -565,7 +585,7 @@ error/MEMFAIL/READ y no insistir. No cambiar servidor durante la reproducción.
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-21-HTTP \
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-22-HTTP \
   APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign Kit_LockVideoDecoderRaw Kit_BeginPacketBufferRead Kit_FinishPacketBufferRead Kit_CancelPacketBufferRead Kit_GetTimerElapsed av_frame_ref"
 ```
 
