@@ -7,6 +7,11 @@
 #include "network_source.hpp"
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
+extern "C"
+{
+#include <libavutil/error.h>
+}
 
 namespace tube5
 {
@@ -21,12 +26,83 @@ bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
 {
     close();
     error_[0] = '\0';
+    begin_network_session();
+    network_ = path && std::strncmp(path, "http://", 7) == 0;
     reset_memory_diagnostic();
     source_ = Kit_CreateSourceFromUrl(path);
     tube5::finish_network_open();
     if (!source_)
         return fail("SOURCE",
                     tube5::network_open_error()[0] ? tube5::network_open_error() : Kit_GetError());
+    return complete_open(renderer);
+}
+
+int MediaPlayer::open_source_worker(void *userdata) noexcept
+{
+    auto *self = static_cast<MediaPlayer *>(userdata);
+    self->source_ = Kit_CreateSourceFromUrl(self->opening_path_);
+    finish_network_open();
+    if (!self->source_)
+    {
+        const char *detail = network_open_error();
+        if (!detail[0])
+            detail = Kit_GetError();
+        std::snprintf(self->error_, sizeof(self->error_), "SOURCE: %s",
+                      detail ? detail : "unknown error");
+    }
+    // Publish all source/error writes before the UI thread adopts them.
+    self->opening_done_.store(true, std::memory_order_release);
+    return 0;
+}
+
+bool MediaPlayer::begin_open(const char *path) noexcept
+{
+    close();
+    error_[0] = '\0';
+    if (!path || std::strlen(path) >= sizeof(opening_path_))
+        return fail("SOURCE", "invalid or oversized URL");
+    std::snprintf(opening_path_, sizeof(opening_path_), "%s", path);
+    network_ = std::strncmp(path, "http://", 7) == 0;
+    begin_network_session();
+    reset_memory_diagnostic();
+    opening_cancelled_ = false;
+    opening_done_ = false;
+    opening_thread_ = SDL_CreateThread(open_source_worker, "tube5-open", this);
+    if (!opening_thread_)
+        return fail("OPEN THREAD", SDL_GetError());
+    return true;
+}
+
+void MediaPlayer::cancel_open() noexcept
+{
+    if (!opening())
+        return;
+    opening_cancelled_ = true;
+    cancel_network_session();
+}
+
+MediaPlayer::OpenResult MediaPlayer::poll_open(SDL_Renderer *renderer) noexcept
+{
+    if (!opening_thread_ || !opening_done_.load(std::memory_order_acquire))
+        return OpenResult::pending;
+    SDL_WaitThread(opening_thread_, nullptr);
+    opening_thread_ = nullptr;
+    if (opening_cancelled_)
+    {
+        close();
+        error_[0] = '\0';
+        return OpenResult::cancelled;
+    }
+    if (!source_)
+    {
+        close();
+        return OpenResult::failed;
+    }
+    return complete_open(renderer) ? OpenResult::ready : OpenResult::failed;
+}
+
+bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
+{
     const int video = Kit_GetBestSourceStream(source_, KIT_STREAMTYPE_VIDEO);
     const int audio = Kit_GetBestSourceStream(source_, KIT_STREAMTYPE_AUDIO);
     if (video < 0 || audio < 0)
@@ -83,6 +159,7 @@ bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
     if (thread_diagnostic()[0])
         return fail("THREAD", thread_diagnostic());
     SDL_PauseAudioDevice(audio_, 0);
+    last_frame_at_ = SDL_GetTicks();
     return true;
 }
 
@@ -104,6 +181,14 @@ void MediaPlayer::audio_callback(void *userdata, Uint8 *stream, int length) noex
 
 void MediaPlayer::close() noexcept
 {
+    // Interrupt blocked HTTP reads before joining any worker. UI cancellation
+    // uses poll_open so it never joins a still-running opening thread.
+    cancel_network_session();
+    if (opening_thread_)
+        SDL_WaitThread(opening_thread_, nullptr);
+    opening_thread_ = nullptr;
+    opening_done_ = false;
+    opening_cancelled_ = false;
     // Stop and join the callback before releasing the decoder it reads.
     if (audio_)
         SDL_CloseAudioDevice(audio_);
@@ -131,6 +216,7 @@ void MediaPlayer::close() noexcept
     paused_position_ = 0.0;
     pending_seek_ = -1.0;
     seek_dispatched_at_ = 0;
+    network_ = false;
 }
 
 void MediaPlayer::toggle_pause() noexcept
@@ -148,7 +234,10 @@ void MediaPlayer::toggle_pause() noexcept
     }
     paused_ = !was_paused;
     if (was_paused)
+    {
+        last_frame_at_ = SDL_GetTicks();
         SDL_PauseAudioDevice(audio_, 0);
+    }
 }
 
 void MediaPlayer::seek(double delta) noexcept
@@ -161,6 +250,7 @@ void MediaPlayer::seek(double delta) noexcept
     const double target = std::clamp(base + delta, 0.0, std::max(0.0, duration() - 0.1));
     pending_seek_ = target;
     seek_requested_at_ = SDL_GetTicks();
+    last_frame_at_ = seek_requested_at_;
     if (was_paused)
         paused_position_ = target;
 }
@@ -209,6 +299,7 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
             {
                 frame_area_ = area;
                 ++frames_uploaded_;
+                last_frame_at_ = now;
                 // Do not sleep for a diagnostic notification here. The boot
                 // checkpoint waits 700 ms, making following frames late.
             }
@@ -229,6 +320,31 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
     }
     if (frames_uploaded_ && SDL_RenderCopy(renderer, texture_, &frame_area_, &target) != 0)
         std::snprintf(error_, sizeof(error_), "VIDEO DRAW: %s", SDL_GetError());
+}
+
+bool MediaPlayer::check_network_failure() noexcept
+{
+    if (!network_ || !player_ || opening())
+        return false;
+    const int read_error = network_playback_error();
+    if (read_error < 0)
+    {
+        char detail[AV_ERROR_MAX_STRING_SIZE]{};
+        av_strerror(read_error, detail, sizeof(detail));
+        fail("HTTP READ", detail);
+        return true;
+    }
+    if (finished() && position() + 2.0 < duration())
+    {
+        fail("HTTP", "video ended before expected duration");
+        return true;
+    }
+    if (!paused_ && !finished() && SDL_GetTicks() - last_frame_at_ >= 8000)
+    {
+        fail("HTTP", "no video frames for 8 seconds - retry");
+        return true;
+    }
+    return false;
 }
 
 void MediaPlayer::diagnostic_status(char *text, std::size_t capacity) const noexcept

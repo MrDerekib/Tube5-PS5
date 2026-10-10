@@ -1,6 +1,6 @@
 # Prueba HTTP en la red local
 
-BOOT-DIAG-15-HTTP conserva la reproducción local de DIAG12 y permite elegir HTTP
+BOOT-DIAG-16-HTTP conserva la reproducción local de DIAG12 y permite elegir HTTP
 en Ajustes. No es aún integración con YouTube, HTTPS, DASH ni buffering adaptativo.
 
 ## Servidor del PC
@@ -58,7 +58,7 @@ Cerrar Tube5. Si ya está instalada DIAG12 completa, copiar estos tres archivos 
 - `dist/PPSA99999/build-label.txt`
 - `dist/PPSA99999/network-test-url.txt`
 
-Arrancar Tube5 y comprobar BOOT-DIAG-15-HTTP. Por defecto usa LOCAL para preservar
+Arrancar Tube5 y comprobar BOOT-DIAG-16-HTTP. Por defecto usa LOCAL para preservar
 la comparación. En Ajustes, X alterna LOCAL/HTTP; se muestra la URL configurada.
 Círculo vuelve al menú y la tarjeta cambia a VIDEO EN RED. X abre el clip HTTP.
 La selección no persiste al reiniciar la app.
@@ -76,9 +76,10 @@ La apertura HTTP añade `rw_timeout=5000000` (5 s por operación de E/S) y limit
 protocolos a `http,tcp`. No cambia las aperturas de archivos locales ni sobrescribe
 opciones explícitas del llamador. La unidad es la documentada en
 [FFmpeg Protocols](https://ffmpeg.org/ffmpeg-protocols.html#Protocol-Options).
-No es un límite global de apertura: la preparación/probing sigue siendo síncrona
-y puede detener temporalmente la interfaz. Recuperación de cortes y apertura
-asíncrona quedan para una fase posterior; todavía no hay rebuffering propio.
+DIAG15 añade además un plazo cooperativo global de apertura/probing de 8 s.
+Desde DIAG16, la apertura y probing HTTP ocurren en un hilo auxiliar; la creación
+del decodificador, textura y dispositivo de audio permanece en el hilo de UI.
+Esa finalización todavía puede causar una breve pausa. No hay rebuffering propio.
 
 DIAG13 se bloqueó en PS5 al abrir HTTP, aunque el modo local siguió funcionando.
 El ELF importaba funciones de resolución desde libScePosixForWebKit. La plantilla
@@ -171,6 +172,51 @@ reproduce HTTP. En el PC se encontró UFW activo, política de entrada DROP y
 ninguna excepción para 8080. Se añadió una regla TCP limitada a las IP actuales
 de consola y servidor; falta repetir la prueba física tras esa corrección. No
 se considera confirmado que el cortafuegos fuera el único problema.
+
+La repetición física tras abrir esa excepción funcionó sin cambiar DIAG15:
+IMG_4260.MOV (24,752 s, privada y excluida de Git) muestra H02=0, el clip completo
+y retorno al menú. El servidor registra GET 206 desde la IP de la PS5. En las
+muestras se leen LOOP 16–17 ms, MEMFAIL 0, SYNC DROP 0 y YUV FAIL/DROP/ERR 0.
+A los 16,767 s del clip se observan FR=503, READ=1340/1340 y VSEND/VDEC=506,
+sin errores. Pausa, seeks y reapertura se confirman por el usuario fuera de
+cámara, no por esa grabación. El firewall explica el timeout de DIAG15, no
+demuestra la causa del crash previo de DIAG13.
+
+## DIAG16: carga cancelable y fallos durante reproducción
+
+La pantalla muestra `ABRIENDO VIDEO HTTP...` y mantiene el bucle de dibujo/eventos
+mientras Kit_CreateSourceFromUrl abre y analiza la fuente. Círculo pide cancelar
+mediante el callback de interrupción y muestra `CANCELANDO...` hasta que termina
+el hilo. No se libera la fuente ni se inicia otro player antes de unir ese hilo.
+Solo después se crean los recursos SDL de presentación en el hilo principal,
+de acuerdo con las [restricciones de render de SDL](https://wiki.libsdl.org/SDL2/CategoryRender).
+El modo LOCAL conserva su apertura síncrona anterior.
+
+El callback de interrupción sigue disponible durante reproducción/cierre, pero
+sin el plazo de apertura. Un wrapper de av_read_frame comunica errores HTTP de
+lectura al hilo principal; EOF normal y EAGAIN no se tratan como errores. Un
+final mucho antes de la duración esperada o 8 s sin subir frames mientras se
+reproduce también devuelven un error. Pausa y seek reinician el reloj de espera.
+Al cerrar se pide interrupción antes de unir lectores y liberar sus recursos.
+Se conserva el timeout de E/S de 5 s. Son límites cooperativos, no una garantía
+ante una syscall bloqueada en el backend nativo.
+
+No reconecta ni retoma automáticamente: muestra el error en el menú y permite
+reintentar con X. El clip pequeño puede quedar descargado antes de acabar;
+detener el servidor después no necesariamente simula un corte observable.
+
+Validación PC con sanitizadores: fuente HTTP que no envía cabeceras, cancelación
+repetida antes/después de arrancar la conexión y servidor que entrega cabeceras
+y parte de un MP4 válido antes de dejar de responder. Se verifica UI actualizable,
+retorno acotado, frames visibles antes del corte y recuperación al clip local.
+La validación física de DIAG16 sigue pendiente. DIAG15 tiene copia del ejecutable
+y etiqueta en `.local/boot-diag-15/` para recuperar la referencia HTTP validada.
+
+Prueba PS5: copiar eboot.bin y build-label.txt con Tube5 cerrada, reproducir HTTP
+normal (incluidos pausa/seek/reapertura), y abrir con el servidor detenido para
+comprobar animación de carga y cancelación con Círculo. Repetir sin cancelar para
+ver el error de timeout y volver a LOCAL. Reiniciar el servidor antes de reintentar
+HTTP. No cambiar IP, permisos de carpeta, DNS, payloads ni firmware.
 
 DIAG12 permanece respaldada en `.local/boot-diag-12/`, con su eboot, etiqueta y
 ZIP, para recuperar la referencia local si aparece una regresión.

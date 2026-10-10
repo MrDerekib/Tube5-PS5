@@ -155,7 +155,7 @@ if [[ $app_source_dir == src && -f $root/src/video_conversion.cpp ]]; then
 fi
 if [[ $app_source_dir == src && -f $root/src/network_source.cpp ]]; then
     definitions+=(TUBE5_NETWORK_WRAP)
-    app_wrap_symbols+=" avformat_open_input"
+    app_wrap_symbols+=" avformat_open_input av_read_frame"
 fi
 if [[ $app_source_dir == src && -f $root/src/native_network.c ]]; then
     app_wrap_symbols+=" getaddrinfo freeaddrinfo gai_strerror getnameinfo gethostbyname fcntl connect strcasestr isatty"

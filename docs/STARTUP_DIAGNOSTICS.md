@@ -390,10 +390,27 @@ Ese callback no puede cancelar una syscall bloqueada; la corrección física est
 pendiente. H03/H10/H11/H12 son traces sin usleep, para localizar la fase y retorno
 de connect. Detalles y pruebas de servidor que no responde: [HTTP_TEST.md](HTTP_TEST.md).
 
+La prueba física de DIAG15 inicialmente devolvió timeout: UFW bloqueaba el puerto
+8080 del PC. Tras añadir una excepción limitada a la PS5, sin cambiar la build,
+IMG_4260.MOV confirma reproducción HTTP completa y retorno al menú. El usuario
+confirma los controles y reapertura fuera de cámara. No demuestra que el crash
+de DIAG13 o el bloqueo de DIAG14 tuvieran la misma causa.
+
+## BOOT-DIAG-16-HTTP: apertura auxiliar y recuperación manual
+
+HTTP abre/probea la fuente en un hilo SDL auxiliar y conserva presentación SDL
+en el hilo principal. Muestra carga animada y permite pedir cancelación con
+Círculo; solo une el hilo en el bucle de UI cuando ya publicó su finalización.
+El cierre final pide interrupción a FFmpeg antes de unir los lectores. Añade
+propagación de errores de lectura HTTP, detección de final prematuro y watchdog
+de 8 s sin frames (excluye pausa y reinicia tras seek/resume). No añade reconexión
+automática. LOCAL conserva su apertura anterior. Casos y límites: [HTTP_TEST.md](HTTP_TEST.md).
+Prueba física de esta variante pendiente; DIAG15 respaldada localmente.
+
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-15-HTTP \
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-16-HTTP \
   APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign Kit_LockVideoDecoderRaw Kit_BeginPacketBufferRead Kit_FinishPacketBufferRead Kit_CancelPacketBufferRead Kit_GetTimerElapsed av_frame_ref"
 ```
 

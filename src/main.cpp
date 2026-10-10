@@ -103,6 +103,17 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
     else
     {
         canvas.rectangle(350, 260, 1220, 620, static_cast<Color>(0xff000000));
+        if (media.opening())
+        {
+            const unsigned dots = (SDL_GetTicks() / 350) % 4;
+            char loading[64]{};
+            std::snprintf(loading, sizeof(loading), "%s%.*s",
+                          media.cancelling() ? "CANCELANDO" : "ABRIENDO VIDEO HTTP",
+                          static_cast<int>(dots), "...");
+            canvas.text(450, 500, loading, 5, Color::white);
+            canvas.text(450, 620, "CIRCULO CANCELAR", 3, muted);
+            return;
+        }
         char status[96]{};
         std::snprintf(
             status, sizeof(status), "%s  %02d:%02d / %02d:%02d",
@@ -312,6 +323,12 @@ int main()
         }
         if (nav.screen == tube5::Screen::player)
         {
+            if (media.opening())
+            {
+                if (action == tube5::Command::back)
+                    media.cancel_open();
+                return;
+            }
             if (action == tube5::Command::select)
             {
                 if (static_cast<Sint32>(SDL_GetTicks() - select_ready_at) >= 0)
@@ -339,7 +356,7 @@ int main()
                 !network_test ||
                 (std::string_view{network_url.data()}.starts_with("http://") && network_url[7]);
             if (!kit_ready || !configured ||
-                !media.open(renderer, network_test ? network_url.data() : clip))
+                !(network_test ? media.begin_open(network_url.data()) : media.open(renderer, clip)))
             {
                 std::snprintf(error, sizeof(error), "%s",
                               !kit_ready    ? "PLAYER INIT FAILED"
@@ -440,6 +457,28 @@ int main()
             if (opening_player)
                 break;
         }
+        if (media.opening())
+        {
+            const auto result = media.poll_open(renderer);
+            if (result == tube5::MediaPlayer::OpenResult::failed)
+            {
+                std::snprintf(error, sizeof(error), "%s", media.error());
+                nav.screen = tube5::Screen::home;
+            }
+            else if (result == tube5::MediaPlayer::OpenResult::cancelled)
+                nav.screen = tube5::Screen::home;
+            else if (result == tube5::MediaPlayer::OpenResult::ready)
+            {
+                SDL_FlushEvent(SDL_CONTROLLERBUTTONDOWN);
+                SDL_FlushEvent(SDL_KEYDOWN);
+                select_ready_at = SDL_GetTicks() + 350;
+            }
+        }
+        if (nav.screen == tube5::Screen::player && media.check_network_failure())
+        {
+            std::snprintf(error, sizeof(error), "%s", media.error());
+            nav.screen = tube5::Screen::home;
+        }
         if (nav.screen == tube5::Screen::player && media.finished())
         {
             media.close();
@@ -461,7 +500,7 @@ int main()
         if (nav.screen == tube5::Screen::player)
         {
             media.draw(renderer, SDL_Rect{350, 260, 1220, 620});
-            if (media.error()[0])
+            if (!media.opening() && media.error()[0])
                 std::snprintf(error, sizeof(error), "%s", media.error());
         }
         const Uint32 video_end = SDL_GetTicks();

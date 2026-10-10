@@ -19,6 +19,26 @@ class MediaPlayer final
     MediaPlayer &operator=(const MediaPlayer &) = delete;
 
     bool open(SDL_Renderer *renderer, const char *path) noexcept;
+    enum class OpenResult
+    {
+        pending,
+        ready,
+        failed,
+        cancelled
+    };
+    bool begin_open(const char *path) noexcept;
+    OpenResult poll_open(SDL_Renderer *renderer) noexcept;
+    void cancel_open() noexcept;
+    bool opening() const noexcept
+    {
+        return opening_thread_ != nullptr;
+    }
+    bool cancelling() const noexcept
+    {
+        return opening_cancelled_;
+    }
+    // Called on the UI thread; stops playback on a network error or stalled frames.
+    bool check_network_failure() noexcept;
     void close() noexcept;
     void toggle_pause() noexcept;
     void seek(double delta) noexcept;
@@ -38,6 +58,14 @@ class MediaPlayer final
     }
 
   private:
+    static int open_source_worker(void *userdata) noexcept;
+    bool complete_open(SDL_Renderer *renderer) noexcept;
+    SDL_Thread *opening_thread_ = nullptr;
+    std::atomic<bool> opening_done_{false};
+    bool opening_cancelled_ = false;
+    bool network_ = false;
+    Uint32 last_frame_at_ = 0;
+    char opening_path_[256]{};
     static void audio_callback(void *userdata, Uint8 *stream, int length) noexcept;
     bool fail(const char *stage, const char *detail) noexcept;
     Kit_Source *source_ = nullptr;

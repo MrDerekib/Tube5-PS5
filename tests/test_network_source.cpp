@@ -13,6 +13,7 @@ static unsigned calls = 0;
 static const char *timeout = "5000000";
 static Uint64 ticks = 100;
 static bool exceed_deadline = false;
+static bool succeed = false;
 extern "C" Uint64 __wrap_SDL_GetTicks64()
 {
     return ticks;
@@ -35,6 +36,8 @@ extern "C" int __real_avformat_open_input(AVFormatContext **context, const char 
             ticks += 8001;
             assert(callback.callback(callback.opaque) == 1);
         }
+        if (succeed)
+            return 0;
         avformat_free_context(*context);
         *context = nullptr; // Match real avformat_open_input's failure contract.
     }
@@ -45,6 +48,7 @@ extern "C" int __real_avformat_open_input(AVFormatContext **context, const char 
 int main()
 {
     AVFormatContext *context = nullptr;
+    tube5::begin_network_session();
     assert(__wrap_avformat_open_input(&context, "assets/test-clip.mp4", nullptr, nullptr) == -5);
     assert(__wrap_avformat_open_input(&context, "http://127.0.0.1/test.mp4", nullptr, nullptr) ==
            -5);
@@ -66,4 +70,26 @@ int main()
     assert(__wrap_avformat_open_input(&context, "assets/test-clip.mp4", nullptr, nullptr) == -5);
     tube5::finish_network_open();
     assert(!tube5::network_open_error()[0]);
+    exceed_deadline = false;
+    succeed = true;
+    tube5::begin_network_session();
+    assert(__wrap_avformat_open_input(&context, "http://127.0.0.1/test.mp4", nullptr, nullptr) ==
+           0);
+    // Probe reads must not be mistaken for playback failures.
+    tube5::record_network_read(context, AVERROR(EIO), 0);
+    assert(tube5::network_playback_error() == 0);
+    tube5::finish_network_open();
+    tube5::record_network_read(context, AVERROR(EAGAIN), 0);
+    tube5::record_network_read(context, AVERROR_EOF, 0);
+    assert(tube5::network_playback_error() == 0);
+    tube5::record_network_read(context, AVERROR_EOF, AVERROR(EIO));
+    assert(tube5::network_playback_error() == AVERROR(EIO));
+    tube5::cancel_network_session();
+    auto callback = context->interrupt_callback;
+    assert(callback.callback(callback.opaque) == 1);
+    tube5::record_network_read(context, AVERROR_EXIT, 0);
+    assert(tube5::network_playback_error() == AVERROR(EIO));
+    avformat_free_context(context);
+    tube5::begin_network_session();
+    assert(tube5::network_playback_error() == 0);
 }

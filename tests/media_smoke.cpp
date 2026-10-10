@@ -37,12 +37,47 @@ int main(int argc, char **argv)
         SDL_UnlockSurface(output);
     };
     tube5::MediaPlayer player;
+    const auto async_open = [&](const char *path, bool cancel, unsigned cancel_delay = 0)
+    {
+        const Uint64 started = SDL_GetTicks64();
+        require(player.begin_open(path), "launch source worker");
+        require(SDL_GetTicks64() - started < 250, "opening returns without waiting for network");
+        if (cancel)
+        {
+            for (unsigned elapsed = 0; elapsed < cancel_delay; elapsed += 16)
+            {
+                frame();
+                SDL_PumpEvents();
+                SDL_RenderPresent(renderer);
+                SDL_Delay(16);
+            }
+            player.cancel_open();
+        }
+        unsigned responsive_frames = 0;
+        tube5::MediaPlayer::OpenResult result;
+        do
+        {
+            const Uint64 tick = SDL_GetTicks64();
+            frame();
+            SDL_PumpEvents();
+            result = player.poll_open(renderer);
+            SDL_RenderPresent(renderer);
+            if (result == tube5::MediaPlayer::OpenResult::pending)
+                require(SDL_GetTicks64() - tick < 250, "UI tick does not wait for opening worker");
+            ++responsive_frames;
+            require(SDL_GetTicks64() - started < 11000, "async open is bounded");
+            SDL_Delay(16);
+        } while (result == tube5::MediaPlayer::OpenResult::pending);
+        require(responsive_frames > 0, "UI updates while source opens");
+        return result;
+    };
     require(!player.open(renderer, "assets/does-not-exist.mp4"), "missing file rejected");
     require(player.error()[0] != '\0', "missing file diagnostic");
     if (argc > 2 && std::strcmp(argv[2], "--expect-open-failure") == 0)
     {
         const Uint64 start = SDL_GetTicks64();
-        require(!player.open(renderer, clip), "stalled HTTP source rejected");
+        require(async_open(clip, false) == tube5::MediaPlayer::OpenResult::failed,
+                "stalled HTTP source rejected");
         require(SDL_GetTicks64() - start < 11000, "HTTP failure returns within deadline");
         require(std::strstr(player.error(), "HTTP") != nullptr, "HTTP failure detail preserved");
         require(player.open(renderer, "assets/test-clip.mp4"), "local recovery after HTTP failure");
@@ -54,7 +89,57 @@ int main(int argc, char **argv)
         std::puts("HTTP stall passed: bounded failure and local recovery.");
         return 0;
     }
-    require(player.open(renderer, clip), player.error());
+    if (argc > 2 && std::strcmp(argv[2], "--expect-cancel") == 0)
+    {
+        for (int attempt = 0; attempt < 3; ++attempt)
+        {
+            require(async_open(clip, true, attempt ? 200 : 0) ==
+                        tube5::MediaPlayer::OpenResult::cancelled,
+                    "cancel wins even before worker starts");
+            require(!player.opening() && !player.error()[0], "cancel clears opening and error");
+        }
+        require(player.open(renderer, "assets/test-clip.mp4"), "local recovery after cancel");
+        player.close();
+        Kit_Quit();
+        SDL_DestroyRenderer(renderer);
+        SDL_FreeSurface(output);
+        SDL_Quit();
+        std::puts("HTTP cancel passed: repeated cancellation and local recovery.");
+        return 0;
+    }
+    if (std::strncmp(clip, "http://", 7) == 0)
+        require(async_open(clip, false) == tube5::MediaPlayer::OpenResult::ready, player.error());
+    else
+        require(player.open(renderer, clip), player.error());
+    if (argc > 2 && std::strcmp(argv[2], "--expect-read-failure") == 0)
+    {
+        const Uint64 started = SDL_GetTicks64();
+        unsigned frames_seen = 0;
+        bool failed = false;
+        while (SDL_GetTicks64() - started < 15000)
+        {
+            frame();
+            player.draw(renderer, SDL_Rect{0, 0, 640, 360});
+            frames_seen = std::max(frames_seen, player.frames_uploaded());
+            SDL_RenderPresent(renderer);
+            if (player.check_network_failure())
+            {
+                failed = true;
+                break;
+            }
+            SDL_Delay(16);
+        }
+        require(frames_seen > 10, "network cut occurs after visible playback");
+        require(failed && std::strstr(player.error(), "HTTP"), "network cut reports an HTTP error");
+        require(player.open(renderer, "assets/test-clip.mp4"), "local recovery after network cut");
+        player.close();
+        Kit_Quit();
+        SDL_DestroyRenderer(renderer);
+        SDL_FreeSurface(output);
+        SDL_Quit();
+        std::puts("HTTP cut passed: visible playback, bounded failure and local recovery.");
+        return 0;
+    }
     require(Kit_GetHint(KIT_HINT_THREAD_COUNT) == 1, "explicit single-thread codec baseline");
     require(std::abs(player.duration() - 20.0) < 0.2, "clip duration");
     // Exercise uninterrupted playback beyond the ~7s PS5 crash observed in
@@ -63,6 +148,7 @@ int main(int argc, char **argv)
     {
         frame();
         player.draw(renderer, SDL_Rect{20, 20, 600, 320});
+        require(!player.check_network_failure(), "healthy HTTP playback is not a network failure");
         SDL_RenderPresent(renderer);
         SDL_Delay(33);
     }

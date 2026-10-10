@@ -2,6 +2,7 @@
 #include "pipeline_diagnostics.hpp"
 #include "video_sync_diagnostics.hpp"
 #include "video_conversion.hpp"
+#include "network_source.hpp"
 #include <atomic>
 #include <cstdio>
 
@@ -42,15 +43,16 @@ void pipeline_diagnostic_status(unsigned row, char *text, std::size_t capacity) 
 }
 } // namespace tube5
 
-#if defined(TUBE5_DIAGNOSTICS) && (!defined(TUBE5_HOST) || defined(TUBE5_PIPELINE_WRAP))
 extern "C"
 {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+}
+#if defined(TUBE5_NETWORK_WRAP) ||                                                                 \
+    (defined(TUBE5_DIAGNOSTICS) && (!defined(TUBE5_HOST) || defined(TUBE5_PIPELINE_WRAP)))
+extern "C"
+{
     int __real_av_read_frame(AVFormatContext *, AVPacket *);
-    int __real_avcodec_send_packet(AVCodecContext *, const AVPacket *);
-    int __real_avcodec_receive_frame(AVCodecContext *, AVFrame *);
-    int __real_avformat_seek_file(AVFormatContext *, int, int64_t, int64_t, int64_t, int);
 }
 extern "C" int __wrap_av_read_frame(AVFormatContext *context, AVPacket *packet)
 {
@@ -58,6 +60,9 @@ extern "C" int __wrap_av_read_frame(AVFormatContext *context, AVPacket *packet)
     if (track)
         ++reads;
     const int result = __real_av_read_frame(context, packet);
+#ifdef TUBE5_NETWORK_WRAP
+    tube5::record_network_read(context, result, context && context->pb ? context->pb->error : 0);
+#endif
     if (track)
     {
         read_result = result;
@@ -74,6 +79,14 @@ extern "C" int __wrap_av_read_frame(AVFormatContext *context, AVPacket *packet)
         }
     }
     return result;
+}
+#endif
+#if defined(TUBE5_DIAGNOSTICS) && (!defined(TUBE5_HOST) || defined(TUBE5_PIPELINE_WRAP))
+extern "C"
+{
+    int __real_avcodec_send_packet(AVCodecContext *, const AVPacket *);
+    int __real_avcodec_receive_frame(AVCodecContext *, AVFrame *);
+    int __real_avformat_seek_file(AVFormatContext *, int, int64_t, int64_t, int64_t, int);
 }
 extern "C" int __wrap_avcodec_send_packet(AVCodecContext *context, const AVPacket *packet)
 {

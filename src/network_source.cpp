@@ -19,6 +19,9 @@ namespace
 {
 // One active player; previous AVIO readers are joined before the next open.
 std::atomic<Uint64> deadline{0};
+std::atomic<bool> cancelled{false}, playing{false};
+std::atomic<const void *> network_context{nullptr};
+std::atomic<int> playback_error{0};
 AVIOInterruptCB original_interrupt{};
 int open_error = 0;
 char error_text[128]{};
@@ -29,17 +32,46 @@ bool expired() noexcept
 }
 int interrupt_open(void *)
 {
-    return expired() ||
+    return cancelled.load() || expired() ||
            (original_interrupt.callback && original_interrupt.callback(original_interrupt.opaque));
 }
 } // namespace
 namespace tube5
 {
+void begin_network_session() noexcept
+{
+    cancelled = false;
+    playing = false;
+    network_context = nullptr;
+    playback_error = 0;
+    deadline = 0;
+    open_error = 0;
+}
+void cancel_network_session() noexcept
+{
+    cancelled = true;
+}
+void record_network_read(const void *context, int result, int io_error) noexcept
+{
+    if (!context || !playing.load() || context != network_context.load() || cancelled.load())
+        return;
+    const int error = result == AVERROR_EOF ? io_error : result;
+    if (error < 0 && error != AVERROR(EAGAIN) && error != AVERROR_EOF)
+    {
+        int expected = 0;
+        playback_error.compare_exchange_strong(expected, error);
+    }
+}
+int network_playback_error() noexcept
+{
+    return playback_error.load();
+}
 void finish_network_open() noexcept
 {
     if (expired())
         open_error = AVERROR(ETIMEDOUT);
     deadline = 0;
+    playing = true;
 }
 const char *network_open_error() noexcept
 {
@@ -69,6 +101,7 @@ extern "C" int __wrap_avformat_open_input(AVFormatContext **context, const char 
     if (!*context)
         return AVERROR(ENOMEM);
     original_interrupt = (*context)->interrupt_callback;
+    network_context = *context;
     (*context)->interrupt_callback = {interrupt_open, nullptr};
     deadline = SDL_GetTicks64() + 8000;
     AVDictionary *local = nullptr;
