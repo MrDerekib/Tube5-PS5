@@ -2,6 +2,7 @@
 #pragma once
 #include <SDL.h>
 #include <kitchensink2/kitchensink.h>
+#include <cstddef>
 
 namespace tube5
 {
@@ -25,6 +26,11 @@ class MediaPlayer final
     double duration() const noexcept;
     bool paused() const noexcept;
     bool finished() const noexcept;
+    void diagnostic_status(char *text, std::size_t capacity) const noexcept;
+    unsigned frames_uploaded() const noexcept
+    {
+        return frames_uploaded_;
+    }
     const char *error() const noexcept
     {
         return error_;
@@ -39,6 +45,10 @@ class MediaPlayer final
     SDL_AudioDeviceID audio_ = 0;
     int width_ = 0;
     int height_ = 0;
+    SDL_Rect frame_area_{};
+    unsigned frames_uploaded_ = 0;
+    unsigned seek_requests_ = 0;
+    unsigned seek_dispatches_ = 0;
     bool paused_ = false;
     double paused_position_ = 0.0;
     double pending_seek_ = -1.0;

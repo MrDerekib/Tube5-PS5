@@ -23,11 +23,15 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5
     -Isrc "${cflags[@]}" tests/test_codec_diagnostics.cpp src/codec_diagnostics.cpp \
     "${libs[@]}" -o build/codec-diagnostics-test
 build/codec-diagnostics-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_DIAGNOSTICS \
+    -Isrc "${cflags[@]}" tests/test_thread_diagnostics.cpp src/thread_diagnostics.cpp \
+    "${libs[@]}" -o build/thread-diagnostics-test
+build/thread-diagnostics-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
-    -Isrc -I"$source_root/include" "${cflags[@]}" tests/media_smoke.cpp src/media_player.cpp src/codec_diagnostics.cpp \
+    -DTUBE5_HOST -Isrc -I"$source_root/include" "${cflags[@]}" tests/media_smoke.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp \
     build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" -o build/media-smoke
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/media-smoke
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_HOST -DTUBE5_OFFSCREEN -ffunction-sections -fdata-sections \
-    -Isrc -I"$source_root/include" "${cflags[@]}" src/main.cpp src/demo_renderer.cpp src/media_player.cpp src/codec_diagnostics.cpp src/boot_diagnostics.cpp src/native_sdl.cpp \
+    -Isrc -I"$source_root/include" "${cflags[@]}" src/main.cpp src/demo_renderer.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/native_sdl.cpp \
     build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" -Wl,--gc-sections -o build/tube5-host
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy TUBE5_PREVIEW=build/ui-preview.bmp build/tube5-host

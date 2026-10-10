@@ -83,11 +83,44 @@ incluye el detalle al principio del mensaje amarillo del menú. Se borra antes
 de cada intento para no mostrar errores antiguos. Los tests simulan éxito,
 fallo y reinicio, comprobando que los argumentos y el retorno no se modifican.
 
+## BOOT-DIAG-6: frames, hilos y saltos
+
+Con BOOT-DIAG-5 el propietario ya puede entrar en la pantalla del reproductor y
+usar pausa, pero el área de vídeo permanece negra y los saltos de 5 segundos no
+funcionan según su prueba. Esto confirma que se supera la apertura de codecs,
+textura y dispositivo de audio, no que se hayan decodificado frames ni que haya
+salida física de sonido. Sonido y progreso del contador quedan por confirmar.
+
+La build 6 usa `Kit_LockPlayerVideoRawFrame` para copiar explícitamente RGBA con
+`SDL_UpdateTexture`, comprobando formato/tamaño/pitch y su resultado; mantiene
+la textura anterior en pausa y fuerza mezcla `NONE`. Antes, el helper de
+Kitchensink ignoraba los errores de subida de textura, y Tube5 ignoraba los de
+dibujo. Ahora los errores de subida, dibujo y seek aparecen en amarillo.
+
+Se diagnostica `SDL_CreateThread_REAL` y el retorno de `pthread_create`.
+Kitchensink marca el estado de los workers como activo incluso si SDL devuelve
+un hilo nulo. Si sucede durante el arranque del reproductor, la build de
+diagnóstico rechaza la apertura en lugar de anunciar reproducción inexistente.
+No se atribuye todavía el negro a estos hilos: los wrappers sólo registran y
+preservan el resultado original, sin sustituir la implementación.
+
+La pantalla de reproducción muestra `FRAMES` (subidas exitosas), `BUF` (frames
+decodificados en cola), `PKT` (paquetes en cola) y `SEEK enviados/solicitados`.
+Un envío no garantiza que el demuxer haya ejecutado el salto: a2 puede descartar
+peticiones pendientes. Anotar esos valores tras unos segundos y después de
+pulsar izquierda/derecha permite localizar el punto detenido. Un aviso
+`Tube5 VIDEO: primer frame subido` confirma la primera copia RGBA exitosa.
+
+Los tests de PC comprueban imagen real no negra, contadores de subida, pausa,
+saltos hacia delante y atrás DURANTE reproducción, seek en pausa y EOF. Los
+tests de hilos inyectan fallo y verifican los argumentos, resultado y conservación
+del primer error.
+
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-5 \
-  APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2"
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-6 \
+  APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create"
 ```
 
 Cerrar Tube5 y sustituir la carpeta completa `dist/PPSA99999/` en la consola,
@@ -119,6 +152,8 @@ Grabar los avisos y comunicar el último código Dxx visible.
 | D13 | Primer frame presentado; evaluar el fallo posterior |
 | TEXTURE: fallo original | Constructor de superficie para vídeo; anotar el mensaje siguiente y sus dimensiones |
 | CODEC: apertura fallida | Apertura de codec FFmpeg; anotar codec y mensaje `FFmpeg -N: ...` |
+| THREAD: no se pudo crear | Worker SDL fallido; anotar nombre, error SDL y retorno de pthread_create |
+| VIDEO: primer frame subido | Copia RGBA a textura correcta; todavía hay que confirmar imagen visible |
 
 Los avisos se pueden encolar: el último visible es una pista, no una traza de
 crash. Si SDL devuelve un error, se muestran etapa y detalle y la app permanece

@@ -47,6 +47,8 @@ int main()
         SDL_Delay(33);
     }
     require(player.position() > 0.4, "playback advances");
+    require(player.frames_uploaded() > 0, "decoded RGBA frames explicitly uploaded");
+    require(!player.error()[0], "no hidden frame upload/draw errors");
     // Capture pixels and prove actual decoded frames are being displayed.
     SDL_Surface *capture = SDL_CreateRGBSurfaceWithFormat(0, 640, 360, 32, SDL_PIXELFORMAT_RGBA32);
     require(capture != nullptr, "capture allocation");
@@ -67,6 +69,11 @@ int main()
     const double paused_at = player.position();
     SDL_Delay(150);
     require(std::abs(player.position() - paused_at) < 0.05, "paused clock remains still");
+    const unsigned paused_frames = player.frames_uploaded();
+    frame();
+    player.draw(renderer, SDL_Rect{20, 20, 600, 320});
+    SDL_RenderPresent(renderer);
+    require(player.frames_uploaded() == paused_frames, "pause retains the previous frame");
     player.seek(5.0);
     require(player.paused(), "seek preserves pause");
     require(std::abs(player.position() - paused_at - 5.0) < 0.3, "forward seek");
@@ -80,6 +87,26 @@ int main()
         SDL_Delay(33);
     }
     require(player.position() < 2.0, "paused seek applied on resume");
+    const double forward_from = player.position();
+    player.seek(5.0);
+    for (int i = 0; i < 60 && player.position() < forward_from + 4.0; ++i)
+    {
+        player.draw(renderer, SDL_Rect{0, 0, 640, 360});
+        SDL_RenderPresent(renderer);
+        SDL_Delay(33);
+    }
+    require(player.position() >= forward_from + 4.0, "playing forward seek actually changes clock");
+    const double backward_from = player.position();
+    player.seek(-5.0);
+    for (int i = 0; i < 60 && player.position() > backward_from - 4.0; ++i)
+    {
+        player.draw(renderer, SDL_Rect{0, 0, 640, 360});
+        SDL_RenderPresent(renderer);
+        SDL_Delay(33);
+    }
+    require(player.position() <= backward_from - 4.0,
+            "playing backward seek actually changes clock");
+    require(!player.error()[0], "no hidden seek errors");
     player.seek(100.0);
     for (int i = 0; i < 90 && !player.finished(); ++i)
     {

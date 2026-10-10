@@ -23,9 +23,11 @@ Este nuevo prototipo pasó las pruebas en PC con sanitizadores. La primera build
 de reproducción falló con CE-108255-1; cargar Keyboard eliminó ese crash, pero
 el renderer de ventana SDL devolvió un error. El menú dibujado directamente en
 la superficie propia con VideoOut nativo ya funciona en esa consola: cruceta,
-X, Ajustes, Acerca de y Options confirmados. El vídeo local falla al abrir el
-decodificador de stream 0. La nueva prueba fija un hilo de decodificación y
-conserva el error exacto de FFmpeg; pendiente de validar en PS5. Está en
+X, Ajustes, Acerca de y Options confirmados. Con un hilo de decodificación el
+vídeo local ya abre la pantalla del reproductor y responde a pausa, pero el área
+de vídeo permanece negra y los saltos no funcionan en PS5. La nueva prueba
+comprueba la subida explícita de frames, errores de dibujo y workers, y muestra
+contadores de diagnóstico; pendiente de validar en PS5. Está en
 diagnóstico; no se garantiza
 compatibilidad con otros firmwares. Consulta [el diagnóstico de arranque](docs/STARTUP_DIAGNOSTICS.md)
 para compilar la variante con puntos de control.

@@ -91,6 +91,11 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             static_cast<int>(media.position()) % 60, static_cast<int>(media.duration()) / 60,
             static_cast<int>(media.duration()) % 60);
         canvas.text(350, 900, status, 4, Color::white);
+#ifdef TUBE5_DIAGNOSTICS
+        char diagnostics[128]{};
+        media.diagnostic_status(diagnostics, sizeof(diagnostics));
+        canvas.text(350, 950, diagnostics, 2, muted);
+#endif
     }
     if (error[0])
     {
@@ -98,7 +103,10 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         for (std::size_t i = 0; error[i] && i < line.size() - 1; ++i)
             line[i] = error[i] >= 'a' && error[i] <= 'z' ? static_cast<char>(error[i] - 'a' + 'A')
                                                          : error[i];
-        canvas.text(120, 865, line.data(), 3, Color::yellow);
+        // Keep runtime errors below the video overlay, not underneath it.
+        const bool playing_screen = nav.screen == tube5::Screen::player;
+        canvas.text(playing_screen ? 350 : 120, playing_screen ? 930 : 865, line.data(),
+                    playing_screen ? 2 : 3, Color::yellow);
     }
     canvas.text(120, 995,
                 nav.screen == tube5::Screen::player
@@ -364,7 +372,11 @@ int main()
                 fatal("UI UPLOAD");
         }
         if (nav.screen == tube5::Screen::player)
+        {
             media.draw(renderer, SDL_Rect{350, 260, 1220, 620});
+            if (media.error()[0])
+                std::snprintf(error, sizeof(error), "%s", media.error());
+        }
         SDL_RenderPresent(renderer);
 #ifdef TUBE5_HOST
         static bool first_frame = true;

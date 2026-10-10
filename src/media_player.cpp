@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "media_player.hpp"
 #include "codec_diagnostics.hpp"
+#include "thread_diagnostics.hpp"
+#include "boot_diagnostics.hpp"
 #include <algorithm>
 #include <cstdio>
 
@@ -45,14 +47,19 @@ bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
         return fail("DECODER", codec_diagnostic()[0] ? codec_diagnostic() : Kit_GetError());
     Kit_PlayerInfo info{};
     Kit_GetPlayerInfo(player_, &info);
+    if (info.video_format.format != SDL_PIXELFORMAT_RGBA32)
+        return fail("VIDEO", "raw frame path requires RGBA32");
     width_ = info.video_format.width;
     height_ = info.video_format.height;
+    frame_area_ = SDL_Rect{0, 0, width_, height_};
     if (width_ <= 0 || height_ <= 0 || width_ > 1920 || height_ > 1080)
         return fail("VIDEO", "unsupported test frame size");
     texture_ = SDL_CreateTexture(renderer, info.video_format.format, SDL_TEXTUREACCESS_STATIC,
                                  width_, height_);
     if (!texture_)
         return fail("TEXTURE", SDL_GetError());
+    if (SDL_SetTextureBlendMode(texture_, SDL_BLENDMODE_NONE) != 0)
+        return fail("TEXTURE BLEND", SDL_GetError());
     SDL_AudioSpec desired{};
     desired.freq = info.audio_format.sample_rate;
     desired.format = static_cast<SDL_AudioFormat>(info.audio_format.format);
@@ -63,7 +70,10 @@ bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
     audio_ = SDL_OpenAudioDevice(nullptr, 0, &desired, nullptr, 0);
     if (!audio_)
         return fail("AUDIO", SDL_GetError());
+    reset_thread_diagnostic();
     Kit_PlayerPlay(player_);
+    if (thread_diagnostic()[0])
+        return fail("THREAD", thread_diagnostic());
     SDL_PauseAudioDevice(audio_, 0);
     return true;
 }
@@ -92,6 +102,10 @@ void MediaPlayer::close() noexcept
         Kit_CloseSource(source_);
     source_ = nullptr;
     paused_ = false;
+    frames_uploaded_ = 0;
+    seek_requests_ = 0;
+    seek_dispatches_ = 0;
+    frame_area_ = {};
     paused_position_ = 0.0;
     pending_seek_ = -1.0;
     seek_dispatched_at_ = 0;
@@ -119,6 +133,7 @@ void MediaPlayer::seek(double delta) noexcept
 {
     if (!player_)
         return;
+    ++seek_requests_;
     const bool was_paused = paused();
     const double base = pending_seek_ >= 0.0 ? pending_seek_ : position();
     const double target = std::clamp(base + delta, 0.0, std::max(0.0, duration() - 0.1));
@@ -141,12 +156,38 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
         SDL_PauseAudioDevice(audio_, 1);
         if (Kit_PlayerSeek(player_, pending_seek_) != 0)
             std::snprintf(error_, sizeof(error_), "SEEK: %s", Kit_GetError());
+        else
+            ++seek_dispatches_;
         pending_seek_ = -1.0;
         seek_dispatched_at_ = now;
         SDL_PauseAudioDevice(audio_, 0);
     }
-    SDL_Rect source{0, 0, width_, height_};
-    (void)Kit_GetPlayerVideoSDLTexture(player_, texture_, &source);
+    // Kitchensink's SDL texture helper ignores SDL_UpdateTexture's result.
+    // Read the RGBA frame ourselves and keep it locked until the copy finishes.
+    if (!paused_ && Kit_GetPlayerState(player_) == KIT_PLAYING)
+    {
+        unsigned char **data = nullptr;
+        int *pitch = nullptr;
+        SDL_Rect area{};
+        if (Kit_LockPlayerVideoRawFrame(player_, &data, &pitch, &area) == 0)
+        {
+            const bool valid = data && pitch && data[0] && area.x == 0 && area.y == 0 &&
+                               area.w > 0 && area.h > 0 && area.w <= width_ && area.h <= height_ &&
+                               pitch[0] >= area.w * 4;
+            if (!valid)
+                std::snprintf(error_, sizeof(error_), "VIDEO FRAME: invalid RGBA layout");
+            else if (SDL_UpdateTexture(texture_, &area, data[0], pitch[0]) != 0)
+                std::snprintf(error_, sizeof(error_), "VIDEO UPLOAD: %s", SDL_GetError());
+            else
+            {
+                frame_area_ = area;
+                ++frames_uploaded_;
+                if (frames_uploaded_ == 1)
+                    tube5_boot_checkpoint("Tube5 VIDEO: primer frame subido");
+            }
+            Kit_UnlockPlayerVideoRawFrame(player_);
+        }
+    }
     SDL_Rect target = destination;
     // Letterbox instead of stretching non-16:9 content.
     if (width_ * destination.h > height_ * destination.w)
@@ -159,7 +200,19 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
         target.w = destination.h * width_ / height_;
         target.x += (destination.w - target.w) / 2;
     }
-    (void)SDL_RenderCopy(renderer, texture_, &source, &target);
+    if (frames_uploaded_ && SDL_RenderCopy(renderer, texture_, &frame_area_, &target) != 0)
+        std::snprintf(error_, sizeof(error_), "VIDEO DRAW: %s", SDL_GetError());
+}
+
+void MediaPlayer::diagnostic_status(char *text, std::size_t capacity) const noexcept
+{
+    unsigned frames = 0, frame_capacity = 0, packets = 0, packet_capacity = 0;
+    if (player_)
+        Kit_GetPlayerVideoBufferState(player_, &frames, &frame_capacity, &packets,
+                                      &packet_capacity);
+    std::snprintf(text, capacity, "FRAMES %u  BUF %u/%u  PKT %u/%u  SEEK %u/%u", frames_uploaded_,
+                  frames, frame_capacity, packets, packet_capacity, seek_dispatches_,
+                  seek_requests_);
 }
 
 double MediaPlayer::position() const noexcept
