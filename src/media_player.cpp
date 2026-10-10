@@ -89,8 +89,8 @@ void MediaPlayer::audio_callback(void *userdata, Uint8 *stream, int length) noex
     if (self->player_)
     {
         ++self->audio_callbacks_;
-        const int result = Kit_GetPlayerAudioData(self->player_, 0, stream,
-                                                  static_cast<std::size_t>(length));
+        const int result =
+            Kit_GetPlayerAudioData(self->player_, 0, stream, static_cast<std::size_t>(length));
         if (result > 0)
             self->audio_bytes_ += static_cast<std::size_t>(result);
         else if (result < 0)
