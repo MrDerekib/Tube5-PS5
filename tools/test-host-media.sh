@@ -58,6 +58,11 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc tests/test_native_framebuffer.cpp src/native_framebuffer.cpp -o build/native-framebuffer-test
 build/native-framebuffer-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
+    -DTUBE5_SURFACE_BUFFER_WRAP -Isrc "${cflags[@]}" tests/test_native_surface_buffers.cpp \
+    src/native_surface_buffers.cpp src/native_framebuffer.cpp "${libs[@]}" \
+    -Wl,--wrap=SDL_CreateRGBSurfaceFrom -o build/native-surface-buffers-test
+build/native-surface-buffers-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -DTUBE5_MEDIA_BUFFER_WRAP -Isrc "${cflags[@]}" \
     tests/test_native_media_buffers.cpp src/native_media_buffers.cpp src/native_framebuffer.cpp \
     -Wl,--wrap=av_buffer_alloc,--wrap=av_buffer_allocz,--wrap=av_buffer_create \

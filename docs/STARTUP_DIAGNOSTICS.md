@@ -464,6 +464,60 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-29-HTTP: píxeles de superficies SDL en memoria directa
+
+El ensayo de 1080p vuelve al menú durante la creación de textura. La captura
+privada IMG_4284.HEIC (sin etiqueta de build visible en el recorte) muestra
+`TEXTURE: PARAMETER SURFACE IS INVALID`, `MEMFAIL 1 MALLOC 8294440B ERR 0`,
+`W 0/0/0 READ 0/0 ERR 0`, `FMEM BEFORE OPEN 963 MIB`, `DBUF 0/32 ALLOC 3
+FAIL 0 ERR 0`, `TEXTURE CREATE AUDIO 0 VIDEO 0`, `FIRSTFAIL MALLOC 8294440B
+A0 REL 0X67BA4`, `FFALLOC NONE`.
+Los workers todavía no arrancaron; no es un fallo de lectura HTTP observado.
+ERR 0 es lo registrado por el hook de malloc, no indica reserva correcta.
+
+Con el ELF de DIAG28, el caller se resuelve a SDL_malloc_REAL+0x13, retorno
+0x6d1a4. El tamaño es 1920x1080x4 más 40 bytes, compatible con la superficie
+RGB persistente y el padding de SDL_SIMDAlloc. SW_CreateTexture llama al
+constructor de superficies RGB y sus setters ocultan el error original si
+reciben NULL. DIAG27 evitaba el RGB temporal de cada update, pero no esta
+reserva persistente necesaria para crear la textura software.
+
+DIAG29 intercepta SDL_CreateRGBSurface_REAL para superficies flags=0, 32 bits,
+dimensiones válidas hasta 1920x1080 y al menos 1 MiB. Reserva únicamente los
+píxeles en memoria directa CPU cached tipo 12, páginas de 16 KiB; conserva
+metadatos y máscaras SDL con SDL_CreateRGBSurfaceFrom y SDL_PREALLOC.
+Inicializa los píxeles a cero. Cuatro slots, máximo 32 MiB simultáneos,
+separados del pool AVBuffer de FFmpeg y del framebuffer de UI/VideoOut.
+No reemplaza globalmente malloc ni el allocator de SDL.
+
+SDL_FreeSurface_REAL conserva los píxeles mientras refcount>1. Al soltar la
+última referencia, SDL libera sus metadatos sin liberar los píxeles externos;
+después se desmapea y libera la reserva directa. Error de limpieza: slot en
+cuarentena, sin reutilizarlo. Fallo de reserva nativa o pool lleno: fallback
+al constructor original. Fallo de metadatos: limpieza de la reserva y NULL.
+No sustituye todos los allocators de SDL: las llamadas internas del mismo
+objeto pueden evitar wraps. El ELF nuevo confirma que SW_DestroyTexture
+llama a __wrap_SDL_FreeSurface_REAL, verificando la ruta del player.
+
+`SBUF vivos/4 ALLOC total FAIL total ERR código` aparece en el player y tras
+un fallo. FAIL/ERR cuentan reserva y limpieza nativas, no errores de metadatos
+ni pool lleno. Tras cerrar, vivos debe volver a cero; con FAIL de limpieza,
+no prueba que toda la memoria se haya liberado.
+El test usa SDL real y syscalls de memoria simuladas: 1080p con constructor
+original forzado a NULL, formato/pitch/píxeles, referencias extra, limpieza,
+reutilización con relleno cero, fallo de metadatos, reserva y mapeo, límite
+de slots, fallback y cuarentena. La validación física queda pendiente.
+Pasan la batería host con ASan/UBSan/LSan y el smoke HTTP de 1080p: imagen,
+diez segundos continuos, pausa, seek, EOF, reapertura y limpieza. Ese smoke
+usa el allocator host de SDL; el almacenamiento directo se valida por
+separado con las syscalls simuladas, no con el kernel real de PS5.
+
+Build/FSELF válidos. Servidor y clip de 1080p/30 fps sin cambios.
+Con Tube5 cerrada, copiar dist/PPSA99999 y verificar BOOT-DIAG-29-HTTP.
+Abrir una vez; si falla, capturar SBUF, FIRSTFAIL y MEMFAIL sin insistir.
+Eboot SHA-256:
+`fc4bda1edbe35845b8987c309230bed2d0afa173739e187644c45e59f244ad2e`.
+
 ## BOOT-DIAG-28-HTTP: descartar preroll y probar 1080p
 
 El propietario informa que DIAG27 reproduce 720p correctamente con imagen y
