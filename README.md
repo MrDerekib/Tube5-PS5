@@ -1,5 +1,7 @@
 # Tube5
 
+Nombre de la aplicación: **Tube5**. Repositorio público: **Tube5-PS5**.
+
 Aplicación multimedia homebrew nativa para PlayStation 5, diseñada para una
 experiencia de salón y preparada para integrar saltos de segmentos mediante
 SponsorBlock.
