@@ -6,6 +6,8 @@
 #include "navigation.hpp"
 #include "native_sdl.hpp"
 #include "pipeline_diagnostics.hpp"
+#include "memory_diagnostics.hpp"
+#include "native_framebuffer.hpp"
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -101,6 +103,8 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             tube5::pipeline_diagnostic_status(row, diagnostics, sizeof(diagnostics));
             canvas.text(800, 185 + row * 30, diagnostics, 2, muted);
         }
+        tube5::memory_diagnostic_status(diagnostics, sizeof(diagnostics));
+        canvas.text(800, 155, diagnostics, 2, muted);
 #endif
     }
     if (error[0])
@@ -184,6 +188,9 @@ int main()
     SDL_Window *window = nullptr;
     SDL_Surface *output = nullptr;
     SDL_Renderer *renderer = nullptr;
+#ifndef TUBE5_HOST
+    tube5::NativeFramebuffer native_pixels;
+#endif
 #if defined(TUBE5_HOST) && !defined(TUBE5_OFFSCREEN)
     tube5_boot_checkpoint("Tube5 D08: MANDO OK - crear ventana");
     window = SDL_CreateWindow("Tube5", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1920, 1080,
@@ -194,7 +201,24 @@ int main()
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
 #else
     tube5_boot_checkpoint("Tube5 D08: MANDO OK - superficie RGBA");
-    output = SDL_CreateRGBSurfaceWithFormat(0, 1920, 1080, 32, SDL_PIXELFORMAT_RGBA32);
+#ifdef TUBE5_HOST
+    // Exercise SDL's externally-owned surface path on the host too.
+    auto host_pixels = std::unique_ptr<std::uint32_t[]>{new std::uint32_t[1920 * 1080]};
+    output = SDL_CreateRGBSurfaceWithFormatFrom(host_pixels.get(), 1920, 1080, 32, 1920 * 4,
+                                                SDL_PIXELFORMAT_RGBA32);
+#else
+    const int allocation = native_pixels.allocate(1920 * 1080 * 4);
+    if (allocation != 0)
+    {
+        tube5_boot_result("Tube5 D08: memoria directa error",
+                          static_cast<std::uint32_t>(allocation));
+        (void)SDL_SetError("unable to allocate direct-memory UI framebuffer");
+        fatal("DIRECT UI MEMORY");
+    }
+    // SDL owns only the surface metadata, not this external pixel buffer.
+    output = SDL_CreateRGBSurfaceWithFormatFrom(native_pixels.data(), 1920, 1080, 32, 1920 * 4,
+                                                SDL_PIXELFORMAT_RGBA32);
+#endif
     if (!output)
         fatal("OUTPUT SURFACE");
     tube5_boot_checkpoint("Tube5 D09: superficie OK - renderer directo");

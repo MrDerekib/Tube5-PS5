@@ -4,6 +4,7 @@
 #include "thread_diagnostics.hpp"
 #include "boot_diagnostics.hpp"
 #include "pipeline_diagnostics.hpp"
+#include "memory_diagnostics.hpp"
 #include <algorithm>
 #include <cstdio>
 
@@ -20,6 +21,7 @@ bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
 {
     close();
     error_[0] = '\0';
+    reset_memory_diagnostic();
     source_ = Kit_CreateSourceFromUrl(path);
     if (!source_)
         return fail("SOURCE", Kit_GetError());

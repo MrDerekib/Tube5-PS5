@@ -143,18 +143,55 @@ Los tests simulan etapas, errores, EAGAIN normal, audio excluido y reinicio por
 sesión. La prueba de vídeo real en PC también enlaza los wrappers de FFmpeg y
 comprueba paquetes enviados, frames recibidos y seeks realmente ejecutados.
 Los hooks internos SDL se verifican en el ejecutable nativo; su comportamiento
-en PS5 sigue pendiente de una foto de los contadores, tras unos segundos y seek.
+en PS5 se ha contrastado con los contadores indicados a continuación.
+
+## BOOT-DIAG-8: memoria de la aplicación
+
+El propietario comunica en la build 7: workers preparados `3/3`,
+`READ 45/46 ERR -12`, `VSEND 18 VDEC 1 ERR -1094995529/0`,
+`LOCKFAIL 0 SEEKEXEC 0 ERR 0`. No se conoce el tercer contador de workers
+(salidas). FFmpeg interpreta `-12` como ENOMEM y `-1094995529` como datos no
+válidos. Hubo lectura de paquetes y un frame decodificado, pero ninguno llegó
+a subirse a la textura. No se ha confirmado sonido ni progreso del reloj.
+
+Esto orienta hacia asignaciones fallidas, sin demostrar aún su causa: no implica
+que falte RAM física en la PS5, ni descarta un problema posterior de conversión.
+No se cambia el runtime `libc.prx`, la configuración de hilos ni el formato del clip.
+
+La build 8 reserva el framebuffer RGBA de 1920×1080 en memoria directa nativa,
+redondeada a 8 MiB, y crea una superficie SDL que utiliza ese almacenamiento
+externo. Antes esos 8.294.400 bytes se reservaban en el heap de SDL. La superficie
+se destruye antes de liberar la memoria externa. El backend VideoOut y el dibujo
+siguen iguales; esto no configura un heap global ni cambia los allocators.
+
+Los wrappers de `malloc`, `calloc`, `realloc` y `posix_memalign` preservan sus
+argumentos y resultados. Sólo cuentan fallos con tamaño solicitado distinto de
+cero, sin nuevas reservas ni notificaciones dentro del hook. El HUD añade
+`MEMFAIL cantidad tipo bytesB ERR código`: indica la última asignación fallida,
+no memoria libre ni consumo total. `ERR` sólo contiene un retorno de error para
+`ALIGN`; para los otros allocators es cero porque no se captura errno. Las
+instantáneas atómicas pueden mezclar dos fallos concurrentes. Se reinician al
+abrir cada clip.
+
+Los tests verifican redondeo, límites, fallo de mapeo, liberación, dirección física
+cero válida y paso intacto de los allocators. En PC se prueba además la ruta
+offscreen con superficie de memoria externa, reproducción, pausa y seek con
+sanitizadores. El comportamiento de la reserva directa y la reproducción en
+esta build siguen pendientes de validación en PS5.
 
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-7 \
-  APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file"
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-8 \
+  APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign"
 ```
 
 Cerrar Tube5 y sustituir la carpeta completa `dist/PPSA99999/` en la consola,
 incluyendo `sce_module/`. No cambiar los payloads ni el firmware para esta prueba.
 Grabar los avisos y comunicar el último código Dxx visible.
+Si ya está instalada la build 7 completa, para esta actualización sólo cambian
+`eboot.bin` y `build-label.txt`; basta con sustituir esos dos archivos con Tube5
+cerrado. Si el vídeo sigue negro, comunicar `MEMFAIL` y las tres líneas del pipeline.
 
 | Último aviso | La siguiente operación pendiente |
 | --- | --- |
