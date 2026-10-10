@@ -218,5 +218,20 @@ comprobar animación de carga y cancelación con Círculo. Repetir sin cancelar 
 ver el error de timeout y volver a LOCAL. Reiniciar el servidor antes de reintentar
 HTTP. No cambiar IP, permisos de carpeta, DNS, payloads ni firmware.
 
+Para probar timeout/cancelación con una conexión TCP aceptada, detener primero
+el servidor normal y arrancarlo en modo de fallo explícito:
+
+```bash
+python3 tools/http-test-server.py --bind IP_DEL_PC --port 8080 --stall-headers
+```
+
+Este modo registra la solicitud y retiene todas las cabeceras/bytes durante
+30 s antes de cerrar: la app debe cancelar o agotar su propio plazo antes.
+Probar una apertura sin botones y otra con Círculo tras aproximadamente 1 s.
+No cambiar la URL. Después detener este proceso y arrancar el comando normal
+sin `--stall-headers` para recuperar la reproducción. No confundir esta prueba
+con apagar el servidor: un puerto cerrado puede rechazar inmediatamente la
+conexión y no ejercita una espera HTTP real.
+
 DIAG12 permanece respaldada en `.local/boot-diag-12/`, con su eboot, etiqueta y
 ZIP, para recuperar la referencia local si aparece una regresión.

@@ -5,6 +5,7 @@ import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import re
+import threading
 
 
 def byte_range(header, size):
@@ -26,7 +27,7 @@ def byte_range(header, size):
     return start, min(end, size - 1)
 
 
-def handler_for(clip):
+def handler_for(clip, stall_headers=False):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -43,6 +44,14 @@ def handler_for(clip):
         def send_clip(self, body):
             if self.path != "/test-clip.mp4":
                 self.send_error(404, "Only /test-clip.mp4 is served")
+                return
+            if stall_headers:
+                print(f"Tube5 STALL: {self.client_address[0]} {self.command} {self.path}; "
+                      "connection accepted, withholding headers", flush=True)
+                # Explicit fault injection. No file bytes or HTTP response are
+                # sent; FFmpeg must interrupt or time out before this guard ends.
+                threading.Event().wait(30)
+                self.close_connection = True
                 return
             try:
                 source = clip.open("rb")
@@ -93,16 +102,21 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bind", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--stall-headers", action="store_true",
+                        help="Timeout/cancel test: accept requests but send no response for 30 s")
     parser.add_argument("--clip", type=Path,
                         default=Path(__file__).resolve().parents[1] / "assets/test-clip.mp4")
     args = parser.parse_args()
     clip = args.clip.resolve(strict=True)
     if not clip.is_file() or clip.stat().st_size == 0:
         parser.error("clip must be a nonempty file")
-    server = ThreadingHTTPServer((args.bind, args.port), handler_for(clip))
+    server = ThreadingHTTPServer((args.bind, args.port), handler_for(clip, args.stall_headers))
     server.daemon_threads = True
     print(f"Tube5 HTTP: http://{args.bind}:{server.server_port}/test-clip.mp4", flush=True)
     print("Only the test clip is exposed. Ctrl+C stops the server.", flush=True)
+    if args.stall_headers:
+        print("FAULT TEST: connections accepted, HTTP headers withheld for 30 s. "
+              "Video playback intentionally unavailable.", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
