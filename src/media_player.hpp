@@ -2,6 +2,7 @@
 #pragma once
 #include <SDL.h>
 #include <kitchensink2/kitchensink.h>
+#include <atomic>
 #include <cstddef>
 
 namespace tube5
@@ -47,6 +48,12 @@ class MediaPlayer final
     int height_ = 0;
     SDL_Rect frame_area_{};
     unsigned frames_uploaded_ = 0;
+    unsigned raw_attempts_ = 0;
+    unsigned raw_successes_ = 0;
+    int raw_result_ = 0;
+    std::atomic<unsigned> audio_callbacks_{0};
+    std::atomic<std::size_t> audio_bytes_{0};
+    std::atomic<int> audio_error_{0};
     unsigned seek_requests_ = 0;
     unsigned seek_dispatches_ = 0;
     bool paused_ = false;

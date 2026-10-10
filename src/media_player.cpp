@@ -87,7 +87,15 @@ void MediaPlayer::audio_callback(void *userdata, Uint8 *stream, int length) noex
     SDL_memset(stream, 0, static_cast<std::size_t>(length));
     auto *self = static_cast<MediaPlayer *>(userdata);
     if (self->player_)
-        (void)Kit_GetPlayerAudioData(self->player_, 0, stream, static_cast<std::size_t>(length));
+    {
+        ++self->audio_callbacks_;
+        const int result = Kit_GetPlayerAudioData(self->player_, 0, stream,
+                                                  static_cast<std::size_t>(length));
+        if (result > 0)
+            self->audio_bytes_ += static_cast<std::size_t>(result);
+        else if (result < 0)
+            self->audio_error_ = result;
+    }
 }
 
 void MediaPlayer::close() noexcept
@@ -108,6 +116,11 @@ void MediaPlayer::close() noexcept
     source_ = nullptr;
     paused_ = false;
     frames_uploaded_ = 0;
+    raw_attempts_ = raw_successes_ = 0;
+    raw_result_ = 0;
+    audio_callbacks_ = 0;
+    audio_bytes_ = 0;
+    audio_error_ = 0;
     seek_requests_ = 0;
     seek_dispatches_ = 0;
     frame_area_ = {};
@@ -174,8 +187,11 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
         unsigned char **data = nullptr;
         int *pitch = nullptr;
         SDL_Rect area{};
-        if (Kit_LockPlayerVideoRawFrame(player_, &data, &pitch, &area) == 0)
+        ++raw_attempts_;
+        raw_result_ = Kit_LockPlayerVideoRawFrame(player_, &data, &pitch, &area);
+        if (raw_result_ == 0)
         {
+            ++raw_successes_;
             const bool valid = data && pitch && data[0] && area.x == 0 && area.y == 0 &&
                                area.w > 0 && area.h > 0 && area.w <= width_ && area.h <= height_ &&
                                pitch[0] >= area.w * 4;
@@ -215,9 +231,12 @@ void MediaPlayer::diagnostic_status(char *text, std::size_t capacity) const noex
     if (player_)
         Kit_GetPlayerVideoBufferState(player_, &frames, &frame_capacity, &packets,
                                       &packet_capacity);
-    std::snprintf(text, capacity, "FRAMES %u  BUF %u/%u  PKT %u/%u  SEEK %u/%u", frames_uploaded_,
-                  frames, frame_capacity, packets, packet_capacity, seek_dispatches_,
-                  seek_requests_);
+    std::snprintf(text, capacity,
+                  "FR %u BUF %u/%u PKT %u/%u SEEK %u/%u RAW %u/%u RC%d S%d AUD %u/%zu E%d",
+                  frames_uploaded_, frames, frame_capacity, packets, packet_capacity,
+                  seek_dispatches_, seek_requests_, raw_successes_, raw_attempts_, raw_result_,
+                  player_ ? Kit_GetPlayerState(player_) : KIT_CLOSED, audio_callbacks_.load(),
+                  audio_bytes_.load(), audio_error_.load());
 }
 
 double MediaPlayer::position() const noexcept

@@ -95,7 +95,7 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             static_cast<int>(media.duration()) % 60);
         canvas.text(350, 900, status, 4, Color::white);
 #ifdef TUBE5_DIAGNOSTICS
-        char diagnostics[128]{};
+        char diagnostics[192]{};
         media.diagnostic_status(diagnostics, sizeof(diagnostics));
         canvas.text(350, 950, diagnostics, 2, muted);
         for (unsigned row = 0; row < 3; ++row)

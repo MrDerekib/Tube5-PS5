@@ -176,20 +176,28 @@ abrir cada clip.
 Los tests verifican redondeo, límites, fallo de mapeo, liberación, dirección física
 cero válida y paso intacto de los allocators. En PC se prueba además la ruta
 offscreen con superficie de memoria externa, reproducción, pausa y seek con
-sanitizadores. El comportamiento de la reserva directa y la reproducción en
-esta build siguen pendientes de validación en PS5.
+sanitizadores. Tras la prueba en PS5, la lectura y decodificación progresan
+(`READ 241/241`, `VDEC 77/77`) y el buffer de salida se llena (`BUF 2/2`), pero
+no se sube ningún frame (`FRAMES 0`). `MEMFAIL 1 ALIGN 983168B ERR 12` indica una
+asignación fallida de `posix_memalign`; no impide que este clip se decodifique.
+La build 9 añade el número de lecturas de frame raw aceptadas/rechazadas (`RAW`),
+el último retorno de esa API (`RC`), el estado del player (`S`) y las llamadas,
+bytes entregados y errores del callback de audio (`AUD`). KitchenSink rechaza
+una lectura raw si no hay frame disponible o aún no corresponde mostrarlo; esos
+campos ayudan a distinguir sincronización y entrega de audio. La causa aún no
+está confirmada.
 
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-8 \
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-9 \
   APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign"
 ```
 
 Cerrar Tube5 y sustituir la carpeta completa `dist/PPSA99999/` en la consola,
 incluyendo `sce_module/`. No cambiar los payloads ni el firmware para esta prueba.
 Grabar los avisos y comunicar el último código Dxx visible.
-Si ya está instalada la build 7 completa, para esta actualización sólo cambian
+Si ya está instalada la build 8 completa, para esta actualización sólo cambian
 `eboot.bin` y `build-label.txt`; basta con sustituir esos dos archivos con Tube5
 cerrado. Si el vídeo sigue negro, comunicar `MEMFAIL` y las tres líneas del pipeline.
 

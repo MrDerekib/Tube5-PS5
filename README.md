@@ -29,8 +29,9 @@ de vídeo permanece negra y los saltos no funcionan en PS5. En la build 6 los
 contadores de frames y colas permanecen en cero; la cruceta registra peticiones
 de seek. En la build 7 los workers completan su preparación, pero la lectura
 devuelve `-12` (ENOMEM), el codec registra datos no válidos y sólo recibe un
-frame. La build 8 mueve el framebuffer UI a memoria directa y registra las
-asignaciones fallidas; pendiente de validar en PS5. Está en diagnóstico; no se garantiza
+frame. En la build 8 se leen 241 paquetes y el codec entrega 77 frames, pero el
+buffer se llena y la app no sube ninguno. La build 9 mide la lectura raw y el
+callback de audio; pendiente de validar en PS5. Está en diagnóstico; no se garantiza
 compatibilidad con otros firmwares. Consulta [el diagnóstico de arranque](docs/STARTUP_DIAGNOSTICS.md)
 para compilar la variante con puntos de control.
 
