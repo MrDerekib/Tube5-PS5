@@ -15,8 +15,8 @@ extern "C"
 namespace
 {
 constexpr std::size_t page = 0x4000;
-constexpr std::size_t minimum = 128 * 1024, maximum = 2 * 1024 * 1024;
-constexpr unsigned slot_count = 32; // At most 64 MiB, even with every slot occupied.
+constexpr std::size_t minimum = 128 * 1024, maximum = 4 * 1024 * 1024;
+constexpr unsigned slot_count = 32; // At most 128 MiB; covers planar 1080p frames.
 struct Slot
 {
     std::atomic<bool> claimed{false};

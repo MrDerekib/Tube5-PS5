@@ -464,6 +464,41 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-26-HTTP: pruebas cortas de 720p y 1080p
+
+El propietario confirma que DIAG25 abre el MP4 completo y funcionan pausa,
+seek, salida y reapertura. No se ha validado toda su duración de 28 minutos.
+Se pasa a pruebas de resolución de un minuto, primero 720p y después 1080p.
+Las fuentes HD reales se normalizan de 60 a 30 fps y H.264 Main, sin escalado;
+el AAC se copia sin recodificar. No es una prueba del bitstream HD original.
+
+DIAG26 selecciona HTTP por defecto. Amplía el máximo por AVBuffer directo
+de 2 a 4 MiB: 32 slots, hasta 128 MiB simultáneos. El mínimo permanece en
+128 KiB y conserva callback, fallback y limpieza de DIAG25. Un test adicional
+comprueba un AVBuffer YUV420 de 3.133.568 bytes (1920x1088 con padding).
+No modifica el heap global ni activa un decoder por hardware.
+
+La build nativa genera un FSELF válido. El servidor de pruebas sirve primero
+`resolution-720p-60s.mp4`, en la URL habitual `/test-clip.mp4`; 1080p queda
+preparado para el siguiente ensayo. Falta validación física de HD en PS5.
+Copiar `dist/PPSA99999/` con la app cerrada, verificar DIAG26 y reproducir
+el minuto sin saltos. Después comprobar controles y reapertura. Ante fallo,
+guardar DBUF/FIRSTFAIL/FFALLOC/MEMFAIL y no insistir.
+
+Validación PC: batería de medios con ASan/UBSan/LSan y smoke HTTP de 720p
+(imagen, diez segundos continuos, pausa, seek, EOF, reapertura y limpieza).
+El smoke de vídeo real amplía a diez segundos el plazo de EOF: al saltar en HD,
+la prueba inicial llegó a 57,488/60 s antes de agotar el plazo anterior de tres
+segundos. No se modifica el plazo del clip sintético ni la lógica del player.
+Se corrige además el enlace del test HTTP, que omitía memory_diagnostics.cpp.
+No equivale a validar un minuto continuo ni rendimiento nativo de PS5.
+El smoke local de 1080p falla en `playing forward seek actually changes clock`,
+tanto junto a otro smoke como repetido por separado. No se da por validado
+1080p ni se atribuye la causa a la concurrencia. Investigar ese seek antes
+de pasar a la siguiente prueba de resolución; el servidor permanece en 720p.
+Eboot y ELF exacto respaldados en `.local/boot-diag-26/`. SHA-256 del eboot:
+`38fee5e49608b73950ea4d882071cac7dd6f5d674e63fc6e2401f92fb0120f19`.
+
 ## BOOT-DIAG-25-HTTP: buffers grandes de FFmpeg en memoria directa
 
 El propietario confirma apertura y reproducción correcta del extracto de

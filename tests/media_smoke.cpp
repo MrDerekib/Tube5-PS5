@@ -285,7 +285,10 @@ int main(int argc, char **argv)
                 seeks >= 3 && seek_error == 0,
             "seeks executed by the demuxer, not just requested");
     player.seek(player.duration());
-    for (int i = 0; i < 90 && !player.finished(); ++i)
+    // Arbitrary real-video GOPs can land several seconds before the target.
+    // Keep the synthetic fixture's deadline; allow bounded catch-up for HD.
+    const int eof_ticks = real_video ? 300 : 90;
+    for (int i = 0; i < eof_ticks && !player.finished(); ++i)
     {
         player.draw(renderer, SDL_Rect{0, 0, 640, 360});
         SDL_Delay(33);

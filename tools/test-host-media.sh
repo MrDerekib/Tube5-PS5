@@ -36,7 +36,7 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     "${libs[@]}" -o build/video-conversion-test
 build/video-conversion-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
-    -DTUBE5_NETWORK_WRAP -Isrc "${cflags[@]}" tests/test_network_source.cpp src/network_source.cpp src/boot_diagnostics.cpp \
+    -DTUBE5_NETWORK_WRAP -Isrc "${cflags[@]}" tests/test_network_source.cpp src/network_source.cpp src/boot_diagnostics.cpp src/memory_diagnostics.cpp \
     "${libs[@]}" -Wl,--wrap=SDL_GetTicks64 -o build/network-source-test
 build/network-source-test
 clang -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined \

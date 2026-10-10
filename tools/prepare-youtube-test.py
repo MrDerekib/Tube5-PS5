@@ -15,6 +15,15 @@ ROOT = Path(__file__).resolve().parents[1]
 FORMAT = ("bv[ext=mp4][vcodec^=avc1][height<=360][width<=640][fps<=30][protocol=https]"
           "+ba[ext=m4a][protocol=https]/"
           "b[ext=mp4][vcodec^=avc1][height<=360][width<=640][fps<=30][protocol=https]")
+WIDTHS = {360: 640, 720: 1280, 1080: 1920}
+
+
+def format_selection(height):
+    if height == 360:
+        return FORMAT
+    width = WIDTHS[height]
+    return (f"bv[ext=mp4][vcodec^=avc1][height={height}][width<={width}]"
+            "[fps<=60][protocol=https]+ba[ext=m4a][protocol=https]")
 
 
 def youtube_id(value):
@@ -33,27 +42,33 @@ def youtube_id(value):
     return identifier
 
 
-def validate_media(probe):
+def validate_media(probe, height=360):
     video = [s for s in probe["streams"] if s["codec_type"] == "video"]
     audio = [s for s in probe["streams"] if s["codec_type"] == "audio"]
     if len(video) != 1 or len(audio) != 1:
         raise ValueError("Expected one video stream and one audio stream")
     v, a = video[0], audio[0]
     if (v["codec_name"] != "h264" or v.get("pix_fmt") != "yuv420p" or
-            not 0 < v["width"] <= 640 or not 0 < v["height"] <= 360 or
+            not 0 < v["width"] <= WIDTHS[height] or not 0 < v["height"] <= height or
             not 0 < Fraction(v["r_frame_rate"]) <= 30):
-        raise ValueError("Expected H.264 YUV420, at most 640x360 and 30 fps")
+        raise ValueError(f"Expected H.264 YUV420, at most {WIDTHS[height]}x{height} and 30 fps")
+    if height != 360 and v["height"] != height:
+        raise ValueError("Resolution test must have the requested native height")
     if a["codec_name"] != "aac" or not 0 < a["channels"] <= 2:
         raise ValueError("Expected mono/stereo AAC audio")
     duration = float(probe["format"]["duration"])
     if not 20 <= duration <= 3600:
         raise ValueError("Test media must be between 20 seconds and one hour")
+    if height != 360 and not 59 <= duration <= 61:
+        raise ValueError("Resolution test must last approximately 60 seconds")
     return duration
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("url")
+    parser.add_argument("--height", type=int, choices=tuple(WIDTHS), default=360,
+                        help="720/1080 prepare a 60-second H.264 Main 30-fps resolution test")
     args = parser.parse_args()
     try:
         identifier = youtube_id(args.url)
@@ -73,36 +88,52 @@ def main():
             raise ValueError("Expected a non-live video between 20 seconds and one hour")
         cache = ROOT / ".local" / "youtube" / identifier
         cache.mkdir(parents=True, exist_ok=True)
-        final = cache / "media.mp4"
+        resolution_test = args.height != 360
+        final = cache / (f"resolution-{args.height}p-60s.mp4" if resolution_test else "media.mp4")
         if final.exists():
             raise ValueError(f"Prepared media already exists; use it without downloading again: {final}")
         print(f"Preparing: {info.get('title', identifier)} ({duration} s)", flush=True)
         with tempfile.TemporaryDirectory(prefix="prepare-", dir=cache) as temporary:
             work = Path(temporary)
             downloaded = work / "download.mp4"
-            subprocess.run(base + ["--no-progress", "--max-filesize", "128M", "-S", "lang",
-                                   "-f", FORMAT, "--merge-output-format", "mp4", "-o",
+            # For HD tests request only the first minute. Full-source filesize
+            # estimates must not reject a short section of a much larger track.
+            limits = (["--download-sections", "*0-60"] if resolution_test
+                      else ["--max-filesize", "128M"])
+            subprocess.run(base + ["--no-progress"] + limits + ["-S", "lang",
+                                   "-f", format_selection(args.height), "--merge-output-format", "mp4", "-o",
                                    str(work / "download.%(ext)s"), canonical], check=True, timeout=600)
-            if not downloaded.is_file() or downloaded.stat().st_size > 256 * 1024 * 1024:
-                raise ValueError("Download missing or exceeds the 256 MiB pilot limit")
+            byte_limit = (64 if resolution_test else 256) * 1024 * 1024
+            if not downloaded.is_file() or downloaded.stat().st_size > byte_limit:
+                raise ValueError(f"Download missing or exceeds the {byte_limit // (1024 * 1024)} MiB pilot limit")
             prepared = work / "media.mp4"
-            # Remux only: retain YouTube's H.264/AAC, put metadata before media
-            # so the PS5 can probe quickly and perform HTTP range seeks.
+            # Default pilot retains YouTube's codecs. HD tests normalize video
+            # to Main/30fps without scaling; the audio track is copied intact.
+            video_options = (["-t", "60", "-vf", "fps=30", "-c:v", "libx264",
+                              "-threads", "2", "-preset", "fast", "-crf", "23",
+                              "-profile:v", "main", "-level:v", "3.1" if args.height == 720 else "4.0",
+                              "-pix_fmt", "yuv420p", "-c:a", "copy"]
+                             if resolution_test else ["-c", "copy"])
             subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-n", "-i", str(downloaded),
-                            "-map", "0:v:0", "-map", "0:a:0", "-c", "copy", "-movflags",
+                            "-map", "0:v:0", "-map", "0:a:0"] + video_options + ["-movflags",
                             "+faststart", str(prepared)], check=True, timeout=120)
             probe = json.loads(subprocess.check_output(
                 ["ffprobe", "-v", "error", "-show_streams", "-show_format", "-of", "json",
                  str(prepared)], text=True, timeout=30))
-            validate_media(probe)
+            validate_media(probe, args.height)
+            if prepared.stat().st_size > byte_limit:
+                raise ValueError("Prepared file exceeds the pilot size limit")
             metadata = {"id": identifier, "title": info.get("title", identifier),
                         "url": canonical, "duration": float(probe["format"]["duration"]),
-                        "bytes": prepared.stat().st_size, "mode": "downloaded-remuxed-pilot"}
+                        "bytes": prepared.stat().st_size,
+                        "mode": "native-hd-reencoded-30fps-pilot" if resolution_test else "downloaded-remuxed-pilot",
+                        "height": args.height}
             # No video or extraction metadata goes into tracked assets/dist.
             # Same filesystem: publish without ever overwriting another run's
             # prepared media. TemporaryDirectory removes only its own link.
             final.hardlink_to(prepared)
-            (cache / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2)
+            metadata_file = final.with_suffix(".json") if resolution_test else cache / "metadata.json"
+            metadata_file.write_text(json.dumps(metadata, ensure_ascii=False, indent=2)
                                                 + "\n", encoding="utf-8")
         print(f"Prepared MP4: {final}", flush=True)
         print("Start the existing HTTP server with --clip pointing to this MP4. "

@@ -18,7 +18,7 @@ extern "C"
 }
 namespace
 {
-constexpr std::size_t maximum = 2 * 1024 * 1024;
+constexpr std::size_t maximum = 4 * 1024 * 1024;
 alignas(0x4000) std::uint8_t memory[32][maximum];
 std::array<bool, 32> allocated{}, mapped{};
 std::array<std::size_t, 32> lengths{};
@@ -104,6 +104,14 @@ extern "C" AVBufferRef *__wrap_av_buffer_create(std::uint8_t *data, std::size_t 
 }
 int main()
 {
+    // 1080p YUV420 with a 1088-row padded height and plane padding.
+    const unsigned hd_before = alloc_calls;
+    AVBufferRef *hd = __wrap_av_buffer_alloc(3133568);
+    assert(hd && hd->size == 3133568 && alloc_calls == hd_before + 1);
+    assert(reinterpret_cast<std::uintptr_t>(hd->data) % 64 == 0);
+    expect_live(1);
+    av_buffer_unref(&hd);
+    expect_live(0);
     AVBufferRef *buffer = __wrap_av_buffer_alloc(368768);
     assert(buffer && buffer->size == 368768);
     assert(reinterpret_cast<std::uintptr_t>(buffer->data) % 64 == 0);

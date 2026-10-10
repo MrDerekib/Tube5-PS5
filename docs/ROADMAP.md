@@ -1,6 +1,8 @@
 # Próximos hitos
 
-- [ ] Validar navegación DualSense y vídeo local con audio, pausa y seek en PS5 13.20.
+- [x] Validar navegación DualSense y vídeo local con audio, pausa y seek en PS5 13.20.
+- [x] Abrir el piloto HTTP de YouTube a 360p y comprobar pausa, seek, salida y reapertura.
+- [ ] Validar estabilidad prolongada y clips HTTP de 720p/1080p; DIAG26 preparada.
 - [ ] Elegir e integrar el proveedor de catálogo y reproducción de YouTube.
 - [ ] Integrar SponsorBlock con preferencias por categoría y atribución.
 - [ ] Sustituir los recursos visuales de la plantilla por identidad de Tube5.

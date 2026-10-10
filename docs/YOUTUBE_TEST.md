@@ -3,12 +3,50 @@
 Este piloto descarga un vídeo en el PC, une sus pistas sin recodificar y sirve
 el MP4 preparado a Tube5 por HTTP LAN. **No es streaming directo de YouTube**,
 ni una integración de catálogo/búsqueda, ni SponsorBlock. El PC necesita estar
-encendido. La candidata actual es DIAG25 con el vídeo completo, tras comprobar
-que el extracto de 600 s sí abre con DIAG23. No se modifican
-payloads ni firmware.
-Desde la próxima build posterior a DIAG25, HTTP será la fuente predeterminada
-al arrancar. LOCAL seguirá disponible en Ajustes. DIAG25 ya compilada conserva
-su selección inicial LOCAL.
+encendido. El propietario confirma apertura del vídeo completo con DIAG25,
+pausa, seek, salida y reapertura. No se considera validada su duración completa.
+La candidata actual es DIAG26 para pruebas cortas de resolución HD.
+No se modifican payloads ni firmware. HTTP es la fuente predeterminada en
+DIAG26; LOCAL sigue disponible en Ajustes.
+
+## Pruebas de resolución: DIAG26
+
+Preparar un minuto de cada resolución desde sus pistas HD reales, sin ampliar
+el vídeo de 360p:
+
+```bash
+python3 tools/prepare-youtube-test.py 'https://youtu.be/qf31PkeESoU' --height 720
+python3 tools/prepare-youtube-test.py 'https://youtu.be/qf31PkeESoU' --height 1080
+```
+
+Estas variantes descargan únicamente el primer minuto. Las pistas disponibles
+para este vídeo son H.264 a 60 fps (298/299). FFmpeg recodifica a H.264 Main,
+YUV420 y 30 fps, CRF 23, sin cambiar las dimensiones; conserva el audio AAC
+sin recodificar. No son pruebas de 60 fps ni del bitstream HD original.
+Así se aumenta primero la resolución sin duplicar también los fps respecto
+a la prueba de 360p. Archivos privados e ignorados por Git:
+`resolution-720p-60s.mp4` y `resolution-1080p-60s.mp4`.
+ffprobe verifica 1280x720 y 1920x1080, ambos a 30 fps, H.264 Main,
+AAC-LC estéreo/44,1 kHz y 60,000363 s. Tamaños: 10.459.796 y 20.000.646 bytes.
+
+DIAG26 amplía el máximo por AVBuffer directo a 4 MiB, con 32 slots y un máximo
+de 128 MiB simultáneos, para admitir frames YUV de 1080p. No activa decodificación
+por hardware. Primero se sirve el clip de 720p en la URL habitual:
+
+```bash
+python3 tools/http-test-server.py --bind IP_DEL_PC --port 8080 \
+  --clip .local/youtube/qf31PkeESoU/resolution-720p-60s.mp4
+```
+
+Con Tube5 completamente cerrada, copiar `dist/PPSA99999/` y verificar
+BOOT-DIAG-26-HTTP. Reproducir el minuto sin saltos y observar fluidez/audio;
+después probar pausa, seek, salida y reapertura. Si falla, conservar los
+contadores y no insistir. Solo después de validar 720p, cerrar la reproducción
+y resolver el fallo de seek del smoke PC de 1080p antes de cambiar el servidor
+a `resolution-1080p-60s.mp4`. La URL no cambia.
+La portada todavía menciona 20 s; el contador utiliza la duración real.
+
+El resto del documento conserva el historial de las pruebas de 360p.
 
 ## Preparación
 

@@ -39,6 +39,21 @@ class PrepareTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             prepare.validate_media(dict(probe, format=dict(duration="7200")))
 
+    def test_resolution_tests_require_native_height_30fps_and_one_minute(self):
+        audio = dict(codec_type="audio", codec_name="aac", channels=2)
+        for height, width in ((720, 1280), (1080, 1920)):
+            video = dict(codec_type="video", codec_name="h264", pix_fmt="yuv420p",
+                         width=width, height=height, r_frame_rate="30/1")
+            probe = dict(streams=[video, audio], format=dict(duration="60.02"))
+            self.assertEqual(prepare.validate_media(probe, height), 60.02)
+            for change in ({"height": 360}, {"r_frame_rate": "60/1"}, {"codec_name": "av1"}):
+                with self.assertRaises(ValueError):
+                    prepare.validate_media(dict(probe, streams=[dict(video, **change), audio]), height)
+            with self.assertRaises(ValueError):
+                prepare.validate_media(dict(probe, format=dict(duration="1701")), height)
+            self.assertIn(f"[height={height}]", prepare.format_selection(height))
+            self.assertIn("[fps<=60]", prepare.format_selection(height))
+
 
 if __name__ == "__main__":
     unittest.main()
