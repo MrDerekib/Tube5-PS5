@@ -6,6 +6,9 @@ ni una integración de catálogo/búsqueda, ni SponsorBlock. El PC necesita esta
 encendido. La candidata actual es DIAG25 con el vídeo completo, tras comprobar
 que el extracto de 600 s sí abre con DIAG23. No se modifican
 payloads ni firmware.
+Desde la próxima build posterior a DIAG25, HTTP será la fuente predeterminada
+al arrancar. LOCAL seguirá disponible en Ajustes. DIAG25 ya compilada conserva
+su selección inicial LOCAL.
 
 ## Preparación
 

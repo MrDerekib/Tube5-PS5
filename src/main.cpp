@@ -32,7 +32,7 @@ constexpr auto accent = static_cast<Color>(0xff8261ff);
 constexpr auto muted = static_cast<Color>(0xffbbaea5);
 std::array<char, 48> build_label{};
 std::array<char, 256> network_url{};
-bool network_test = false;
+bool network_test = true;
 #ifdef TUBE5_DIAGNOSTICS
 std::array<char, 128> frame_timing{};
 #endif

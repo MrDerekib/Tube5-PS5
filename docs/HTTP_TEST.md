@@ -58,8 +58,9 @@ Cerrar Tube5. Si ya está instalada DIAG12 completa, copiar estos tres archivos 
 - `dist/PPSA99999/build-label.txt`
 - `dist/PPSA99999/network-test-url.txt`
 
-Arrancar Tube5 y comprobar BOOT-DIAG-17-HTTP. Por defecto usa LOCAL para preservar
-la comparación. En Ajustes, X alterna LOCAL/HTTP; se muestra la URL configurada.
+DIAG17 hasta DIAG25 arrancan en LOCAL. A petición del propietario, desde la
+siguiente build a DIAG25 la fuente predeterminada es HTTP para las pruebas de
+red. En Ajustes, X sigue alternando LOCAL/HTTP; se muestra la URL configurada.
 Círculo vuelve al menú y la tarjeta cambia a VIDEO EN RED. X abre el clip HTTP.
 La selección no persiste al reiniciar la app.
 
