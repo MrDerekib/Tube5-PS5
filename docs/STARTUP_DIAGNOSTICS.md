@@ -464,6 +464,42 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-27-HTTP: evitar el buffer RGB temporal de SDL
+
+La captura privada IMG_4283.HEIC confirma DIAG26 y retorno al menú tras ocho
+segundos sin imagen: `MEMFAIL 237 MALLOC 3686400B ERR 0`, `READ 627/627 ERR 0`,
+`DBUF 0/32 0 KIB ALLOC 258 FAIL 0 ERR 0`, `PLAYING AUDIO 1 VIDEO 0`,
+`FIRSTFAIL MALLOC 3686400B A0 REL 0X67A14`, `FFALLOC NONE`.
+ERR 0 es el valor registrado por el hook de malloc, no prueba éxito de reserva.
+DBUF se observa después del cierre, no durante la reproducción.
+
+El ELF exacto de DIAG26 resuelve el caller a `SDL_malloc_REAL+0x13` (retorno
+0x6d014). El tamaño coincide con 1280x720x4 bytes. El desensamblado de
+SDL_UpdateTextureYUVPlanar confirma que STATIC llama a SDL_malloc para convertir
+YUV a un buffer RGB temporal, mientras STREAMING bloquea y reutiliza la textura
+nativa. Esta ruta coincide con la
+[implementación oficial SDL2](https://github.com/libsdl-org/SDL/blob/SDL2/src/render/SDL_render.c).
+La captura identifica SDL como caller; la atribución a esta reserva temporal
+se apoya además en el tamaño y la ruta verificada, no en un backtrace completo.
+
+DIAG27 cambia la textura IYUV de STATIC a STREAMING. No amplía el heap ni
+intercepta globalmente malloc/free de SDL. Conserva los buffers directos de
+FFmpeg, HTTP predeterminado, audio y servidor de 720p de DIAG26.
+El test `test_streaming_yuv.cpp` usa SDL real con un allocator controlado:
+rechaza la reserva RGB temporal exacta en 360p, 720p y 1080p; STATIC falla y
+STREAMING sube y dibuja una imagen roja sin intentar esa reserva. No rechaza
+las reservas persistentes de creación de textura, que siguen siendo necesarias.
+Validación física de la corrección pendiente en PS5.
+Pasan la batería host con ASan/UBSan/LSan y el smoke HTTP del mismo clip
+720p: imagen no negra, diez segundos continuos, pausa, seek, EOF, reapertura
+y limpieza. No prueba el minuto completo ni el allocator real de PS5.
+
+Build nativa/FSELF válida. Copiar `dist/PPSA99999/` con Tube5 cerrada, comprobar
+BOOT-DIAG-27-HTTP y repetir el mismo minuto de 720p, sin cambiar URL ni servidor.
+Si falla, conservar el diagnóstico y no insistir.
+Eboot SHA-256:
+`b61868ba54f94ef44956ac5e1575911a187872fbb8c36996223ae9342f0c2096`.
+
 ## BOOT-DIAG-26-HTTP: pruebas cortas de 720p y 1080p
 
 El propietario confirma que DIAG25 abre el MP4 completo y funcionan pausa,

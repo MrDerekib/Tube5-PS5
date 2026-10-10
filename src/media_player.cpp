@@ -157,7 +157,9 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
     if (width_ <= 0 || height_ <= 0 || width_ > 1920 || height_ > 1080)
         return fail("VIDEO", "unsupported test frame size");
     memory_set_stage("TEXTURE_CREATE");
-    texture_ = SDL_CreateTexture(renderer, info.video_format.format, SDL_TEXTUREACCESS_STATIC,
+    // SDL's software IYUV fallback allocates a full RGB scratch image for
+    // every STATIC update. STREAMING converts into the existing native pixels.
+    texture_ = SDL_CreateTexture(renderer, info.video_format.format, SDL_TEXTUREACCESS_STREAMING,
                                  width_, height_);
     if (!texture_)
         return fail("TEXTURE", SDL_GetError());

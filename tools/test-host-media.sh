@@ -19,6 +19,9 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5
     -Isrc "${cflags[@]}" tests/test_texture_diagnostics.cpp src/texture_diagnostics.cpp \
     "${libs[@]}" -o build/texture-diagnostics-test
 build/texture-diagnostics-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
+    "${cflags[@]}" tests/test_streaming_yuv.cpp "${libs[@]}" -o build/streaming-yuv-test
+build/streaming-yuv-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_DIAGNOSTICS \
     -Isrc "${cflags[@]}" tests/test_codec_diagnostics.cpp src/codec_diagnostics.cpp \
     "${libs[@]}" -o build/codec-diagnostics-test
