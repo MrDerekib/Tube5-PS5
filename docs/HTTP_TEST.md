@@ -17,6 +17,18 @@ Si el puerto no es accesible desde otro dispositivo, comprobar aislamiento Wi-Fi
 y firewall; no abrir puertos en el router ni exponer este servidor a Internet.
 Sin `--bind`, escucha solo en localhost para pruebas de PC.
 
+Si se usa UFW con entrada bloqueada, permitir únicamente la IP de la consola
+al puerto del servidor, sin desactivar el cortafuegos:
+
+```bash
+sudo ufw allow from IP_DE_LA_PS5 to IP_DEL_PC port 8080 proto tcp
+sudo ufw status verbose
+```
+
+Esta excepción es persistente y debe actualizarse si cambian las IP. Para
+retirarla al terminar, repetir la regla con `ufw delete allow` en lugar de
+`ufw allow`. El script del servidor no modifica reglas por sí mismo.
+
 Sirve únicamente `/test-clip.mp4`, desde `assets/test-clip.mp4`. No sirve la raíz
 del proyecto, listados, grabaciones MOV ni ningún otro archivo. No requiere
 dependencias Python externas. Implementa GET/HEAD, Content-Length, Accept-Ranges,
@@ -151,6 +163,14 @@ responder y la recuperación local. Pasa también el smoke HTTP normal con más 
 ocho segundos continuos, pausa, seeks, EOF y reapertura; el plazo se desactiva
 antes de reproducir. Compila DIAG15 nativa, valida el FSELF y el ELF confirma
 que ff_connect_parallel llama al nuevo wrapper de connect.
+
+Primera prueba física de DIAG15: H03, H10, H11 y H12 con connect=-1/errno=36
+(EINPROGRESS en el SDK), seguido de H02 con error de apertura y timeout. Ya
+devuelve un error en vez de quedar indefinidamente en H01, pero todavía no
+reproduce HTTP. En el PC se encontró UFW activo, política de entrada DROP y
+ninguna excepción para 8080. Se añadió una regla TCP limitada a las IP actuales
+de consola y servidor; falta repetir la prueba física tras esa corrección. No
+se considera confirmado que el cortafuegos fuera el único problema.
 
 DIAG12 permanece respaldada en `.local/boot-diag-12/`, con su eboot, etiqueta y
 ZIP, para recuperar la referencia local si aparece una regresión.
