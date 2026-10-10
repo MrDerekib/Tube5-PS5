@@ -26,19 +26,20 @@ todavía no funciona correctamente en esa PS5: la grabación de BOOT-DIAG-9 mues
 la primera reproducción negra y un único frame congelado después de reanudar.
 Leer y decodificar paquetes no garantiza que se presenten fotogramas.
 
-BOOT-DIAG-10 usa memoria con caché para el framebuffer de trabajo, escribe la
-copia tiled en orden físico, elimina un aviso bloqueante durante reproducción
-y evita pausas por pulsaciones acumuladas al abrir. Añade tiempos de dibujo y
-contadores de decisiones del sincronizador. Está compilada y comprobada en PC;
-su resultado en consola sigue pendiente. No se garantiza compatibilidad con
-otros firmwares. Consulta [el diagnóstico de arranque](docs/STARTUP_DIAGNOSTICS.md)
+BOOT-DIAG-10 consiguió imagen en movimiento desde el primer intento en esa PS5,
+pero se bloqueó sobre el segundo 7, precedido por reservas fallidas de unos
+983 KB. BOOT-DIAG-11 conserva las mejoras de memoria/dibujo y cambia los frames
+intermedios a YUV420 para reducir su tamaño. Impide encolar frames cuya conversión
+falló y añade contadores del conversor. Su resultado en consola sigue pendiente;
+el crash todavía no tiene una causa exacta confirmada. No se garantiza
+compatibilidad con otros firmwares. Consulta [el diagnóstico de arranque](docs/STARTUP_DIAGNOSTICS.md)
 para compilar la variante con puntos de control y registrar la prueba.
 
 Para actualizar la prueba: cerrar Tube5 y copiar **toda** la carpeta
 `dist/PPSA99999/` a `/data/homebrew/PPSA99999/`, sustituyendo la anterior.
 Incluye `eboot.bin`, `sce_sys/`, `sce_module/` y `assets/`; no basta con el ejecutable
 para una instalación inicial. Si ya tienes la carpeta completa de la build 8 o
-9, la prueba 10 necesita sustituir `eboot.bin` y `build-label.txt`; el paquete
+9 o 10, la prueba 11 necesita sustituir `eboot.bin` y `build-label.txt`; el paquete
 también actualiza los créditos en `THIRD_PARTY_NOTICES.md`.
 
 ## Primera arquitectura

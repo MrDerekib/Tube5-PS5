@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pipeline_diagnostics.hpp"
 #include "video_sync_diagnostics.hpp"
+#include "video_conversion.hpp"
 #include <atomic>
 #include <cstdio>
 
@@ -20,6 +21,7 @@ void begin_pipeline_diagnostic() noexcept
     entered = ready = exited = reads = packets = sends = decoded = lock_failures = seeks = 0;
     read_result = send_error = decode_error = seek_result = 0;
     reset_video_sync_diagnostic();
+    reset_video_conversion();
     active = true;
 }
 void end_pipeline_diagnostic() noexcept

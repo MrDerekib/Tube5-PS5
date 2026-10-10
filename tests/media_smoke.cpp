@@ -40,15 +40,17 @@ int main()
     require(player.open(renderer, "assets/test-clip.mp4"), player.error());
     require(Kit_GetHint(KIT_HINT_THREAD_COUNT) == 1, "explicit single-thread codec baseline");
     require(std::abs(player.duration() - 20.0) < 0.2, "clip duration");
-    for (int i = 0; i < 30; ++i)
+    // Exercise uninterrupted playback beyond the ~7s PS5 crash observed in
+    // BOOT-DIAG-10 before testing pause/seeks. The dummy backend is not PS5.
+    for (int i = 0; i < 300; ++i)
     {
         frame();
         player.draw(renderer, SDL_Rect{20, 20, 600, 320});
         SDL_RenderPresent(renderer);
         SDL_Delay(33);
     }
-    require(player.position() > 0.4, "playback advances");
-    require(player.frames_uploaded() > 0, "decoded RGBA frames explicitly uploaded");
+    require(player.position() > 8.0, "uninterrupted playback advances beyond eight seconds");
+    require(player.frames_uploaded() > 100, "IYUV frames continue uploading beyond startup");
     require(!player.error()[0], "no hidden frame upload/draw errors");
     char pipeline[128]{};
     unsigned sent = 0, decoded = 0;

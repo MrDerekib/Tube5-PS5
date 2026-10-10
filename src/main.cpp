@@ -9,6 +9,7 @@
 #include "memory_diagnostics.hpp"
 #include "native_framebuffer.hpp"
 #include "video_sync_diagnostics.hpp"
+#include "video_conversion.hpp"
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -103,6 +104,8 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(800, 125, frame_timing.data(), 2, muted);
         tube5::video_sync_diagnostic_status(diagnostics, sizeof(diagnostics));
         canvas.text(350, 980, diagnostics, 2, muted);
+        tube5::video_conversion_status(diagnostics, sizeof(diagnostics));
+        canvas.text(350, 1005, diagnostics, 2, muted);
         media.diagnostic_status(diagnostics, sizeof(diagnostics));
         canvas.text(350, 950, diagnostics, 2, muted);
         for (unsigned row = 0; row < 3; ++row)

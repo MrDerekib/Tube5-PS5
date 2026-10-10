@@ -30,7 +30,9 @@ bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
         return fail("STREAMS", "test clip must contain video and audio");
     Kit_VideoFormatRequest video_request{};
     Kit_ResetVideoFormatRequest(&video_request);
-    video_request.format = SDL_PIXELFORMAT_RGBA32;
+    // Keep decoded frames in planar YUV420. RGBA costs ~1 MiB per
+    // converted 640x360 frame, on top of the decoder and SDL texture storage.
+    video_request.format = SDL_PIXELFORMAT_IYUV;
     video_request.hw_device_types = KIT_HWDEVICE_TYPE_NONE;
     Kit_AudioFormatRequest audio_request{};
     Kit_ResetAudioFormatRequest(&audio_request);
@@ -49,8 +51,8 @@ bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
         return fail("DECODER", codec_diagnostic()[0] ? codec_diagnostic() : Kit_GetError());
     Kit_PlayerInfo info{};
     Kit_GetPlayerInfo(player_, &info);
-    if (info.video_format.format != SDL_PIXELFORMAT_RGBA32)
-        return fail("VIDEO", "raw frame path requires RGBA32");
+    if (info.video_format.format != SDL_PIXELFORMAT_IYUV)
+        return fail("VIDEO", "raw frame path requires IYUV");
     width_ = info.video_format.width;
     height_ = info.video_format.height;
     frame_area_ = SDL_Rect{0, 0, width_, height_};
@@ -180,7 +182,7 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
         SDL_PauseAudioDevice(audio_, 0);
     }
     // Kitchensink's SDL texture helper ignores SDL_UpdateTexture's result.
-    // Read the RGBA frame ourselves and keep it locked until the copy finishes.
+    // Read the three YUV planes ourselves and keep them locked until the copy finishes.
     if (!paused_ && Kit_GetPlayerState(player_) == KIT_PLAYING)
     {
         unsigned char **data = nullptr;
@@ -193,10 +195,12 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
             ++raw_successes_;
             const bool valid = data && pitch && data[0] && area.x == 0 && area.y == 0 &&
                                area.w > 0 && area.h > 0 && area.w <= width_ && area.h <= height_ &&
-                               pitch[0] >= area.w * 4;
+                               data[1] && data[2] && pitch[0] >= area.w &&
+                               pitch[1] >= (area.w + 1) / 2 && pitch[2] >= (area.w + 1) / 2;
             if (!valid)
-                std::snprintf(error_, sizeof(error_), "VIDEO FRAME: invalid RGBA layout");
-            else if (SDL_UpdateTexture(texture_, &area, data[0], pitch[0]) != 0)
+                std::snprintf(error_, sizeof(error_), "VIDEO FRAME: invalid IYUV layout");
+            else if (SDL_UpdateYUVTexture(texture_, &area, data[0], pitch[0], data[1], pitch[1],
+                                          data[2], pitch[2]) != 0)
                 std::snprintf(error_, sizeof(error_), "VIDEO UPLOAD: %s", SDL_GetError());
             else
             {

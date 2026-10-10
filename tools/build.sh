@@ -146,10 +146,18 @@ pacbrew_archives=()
 [[ -z ${PACBREW_INCLUDE_PATHS:-} ]] || read -r -a pacbrew_includes <<< "$PACBREW_INCLUDE_PATHS"
 [[ -z ${PACBREW_STATIC_ARCHIVES:-} ]] || read -r -a pacbrew_archives <<< "$PACBREW_STATIC_ARCHIVES"
 
+# Tube5's conversion guard is required even when diagnostic wrappers are off.
+# Keep it scoped to the root player, not the template's separate examples.
+app_wrap_symbols=${APP_WRAP_SYMBOLS:-}
+if [[ $app_source_dir == src && -f $root/src/video_conversion.cpp ]]; then
+    definitions+=(TUBE5_CONVERSION_WRAP)
+    app_wrap_symbols+=" sws_scale_frame Kit_WritePacketBuffer Kit_FindAVPixelFormat"
+fi
+
 # Link-time wrappers: each symbol S resolves to the app's __wrap_S, and
 # __real_S to the original (for example fcntl, which libcurl needs wrapped).
 wrap_options=()
-for symbol in ${APP_WRAP_SYMBOLS:-}; do
+for symbol in $app_wrap_symbols; do
     [[ $symbol =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || {
         echo "invalid wrap symbol: $symbol" >&2; exit 2;
     }

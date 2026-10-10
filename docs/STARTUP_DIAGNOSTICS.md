@@ -247,22 +247,78 @@ La compatibilidad y el rendimiento de esta modificación requieren la prueba
 en PS5 FW 13.20.
 La grabación privada queda excluida de Git y del paquete de la aplicación.
 
+## BOOT-DIAG-11: frames YUV y conversión fallida
+
+La siguiente grabación local (18,235 s, unos 19,6 MB) confirma que la build 10
+presenta imagen en movimiento desde el primer intento. El último frame visible
+del clip es 00:00:07.033/frame 211; a continuación aparece CE-108255-1 y el aviso
+de bloqueo antes de pausar kstuff. No hay backtrace, así que no se conoce la
+llamada exacta que termina el proceso.
+
+Justo antes se observan `MS LOOP 50 UI 2 VIDEO 1 COPY 5`, `FR 115`, `RAW 115/167`,
+`BUF 2/2`, `PKT 16/16`, `READ 594/594`, `VSEND 215 VDEC 215 ERR 0/0`,
+`LOCKFAIL 0`, `SEEK 0/0`, `SYNC PTS 7033 CLOCK 7168 DROP 97 WAIT 4 EMPTY 48`.
+La copia ya no es el cuello de botella observado antes. El frame permanece cerca
+del reloj, aunque se descartan frames entre presentaciones. `MEMFAIL` pasa de
+cero al inicio a `19 ALIGN 983168B ERR 12`: hay reservas fallidas antes del crash.
+No demuestra fuga, falta de RAM física, ni que toda reserva fallida provenga del
+conversor; el tamaño encaja con un buffer RGBA padded de 640×384 más margen.
+
+La build 11 solicita `SDL_PIXELFORMAT_IYUV` a Kitchensink y sube explícitamente
+los planos Y/U/V con `SDL_UpdateYUVTexture`. a2 no reconoce ese alias en su
+tabla de formatos; un wrapper lo asocia a `AV_PIX_FMT_YUV420P` y conserva los
+demás formatos sin cambios, igual que la corrección en el fork de BFplayer.
+Valida los tres punteros y sus
+pitches, mantiene el frame bloqueado hasta completar la subida y conserva la
+última textura en pausa. La cola ya no necesita copias RGBA completas: a igual
+resolución YUV420 utiliza aproximadamente 1,5 bytes por píxel frente a 4 en RGBA.
+El framebuffer de trabajo y VideoOut siguen siendo RGBA; SDL software hace la
+conversión final al dibujar. Esto reduce almacenamiento intermedio, no elimina
+toda conversión ni configura un nuevo heap. Se contrastó esta elección con
+[la ruta SDL de BFplayer ad3bdc9](https://github.com/ItsBlurf/BFplayer/blob/ad3bdc9d7742606913701dac035f29e2ab49b080/src/main.cpp).
+
+El código fijado de Kitchensink a2 ignora el retorno de `sws_scale_frame`.
+Un wrapper conserva ese retorno y registra el destino que falló. Si Kitchensink
+intenta escribir ese mismo frame en la cola, el guard devuelve false; el código
+existente entonces libera sus referencias. Los frames de audio y las escrituras
+normales conservan su resultado original. Un contexto de conversión nulo se
+rechaza sin llamar al scaler. No se cambia el algoritmo interno de FFmpeg ni se
+promete evitar fallos que ocurran dentro de él antes de devolver un resultado.
+
+`YUV SCALE/FAIL/DROP/ERR` muestra conversiones correctas, fallos, frames que el
+guard impidió encolar y último retorno negativo. SCALE no equivale a FR.
+El guard se añade automáticamente desde `tools/build.sh` para el reproductor
+raíz, también sin diagnóstico; no se aplica a los ejemplos independientes de
+la plantilla. La prueba de PC usa los mismos wrappers de conversión y extiende
+la reproducción inicial continua a unos diez segundos antes de probar pausa,
+saltos, EOF y reapertura. Los mocks inyectan ENOMEM, contexto nulo, recuperación
+y fallos de la propia cola. La prueba física de la build 11 sigue pendiente.
+
+Validación de build 11: pasan los mocks de formato/ENOMEM/contexto nulo y las
+pruebas de reproducción YUV con AddressSanitizer/UndefinedBehaviorSanitizer,
+incluyendo más de ocho segundos continuos y más de cien subidas antes de la
+primera pausa. Pasan también seeks, EOF, reapertura y limpieza; el preview
+offscreen compila. Se inspeccionó la captura de vídeo para confirmar imagen y
+colores, y el ELF nativo confirma que creación/decodificación llaman a los
+wrappers de formato, scaler y escritura. El FSELF valida su integridad.
+
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-10 \
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-11 \
   APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign Kit_LockVideoDecoderRaw Kit_BeginPacketBufferRead Kit_FinishPacketBufferRead Kit_CancelPacketBufferRead Kit_GetTimerElapsed av_frame_ref"
 ```
 
 Cerrar Tube5 y sustituir la carpeta completa `dist/PPSA99999/` en la consola,
 incluyendo `sce_module/`. No cambiar los payloads ni el firmware para esta prueba.
 Grabar los avisos y comunicar el último código Dxx visible.
-Si ya está instalada la build 8 o 9 completa, para esta actualización sólo cambian
+Si ya está instalada la build 8, 9 o 10 completa, para esta actualización sólo cambian
 `eboot.bin` y `build-label.txt`; basta con sustituir esos dos archivos con Tube5
 cerrado. Abrir Vídeo de prueba con una pulsación de X y esperar unos segundos.
-Grabar la primera reproducción, después pausa/reanudación y un salto de 5 s.
-Si sigue negro o congelado, capturar `MS`, `SYNC`, `FR/RAW` y `MEMFAIL` junto con
-las tres líneas del pipeline. El aviso de primer frame ya no aparece en build 10.
+Para la build 11, grabar primero el clip completo sin pulsar nada. Si llega a
+20 segundos sin crash, volver a abrirlo y probar pausa/reanudación y un salto de
+5 s. Capturar `MS`, `SYNC`, `FR/RAW`, `MEMFAIL` y `YUV SCALE` junto con las tres
+líneas del pipeline. El aviso de primer frame ya no aparece desde la build 10.
 
 | Último aviso | La siguiente operación pendiente |
 | --- | --- |
