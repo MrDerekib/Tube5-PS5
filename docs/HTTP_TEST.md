@@ -233,5 +233,13 @@ sin `--stall-headers` para recuperar la reproducción. No confundir esta prueba
 con apagar el servidor: un puerto cerrado puede rechazar inmediatamente la
 conexión y no ejercita una espera HTTP real.
 
+Resultado físico de DIAG16 comunicado por el usuario: servidor apagado devuelve
+H02=0xFFFFFFC3 (ECONNREFUSED, -61 en PS5) y regresa al menú. Con el servidor que
+retiene cabeceras, timeout en aproximadamente 6 s y cancelación con Círculo
+funcionan. Tras restaurar el servidor normal, vuelve a reproducir correctamente.
+Esto valida los casos básicos, no garantiza reconexión automática ni estabilidad
+de toda fuente. El [piloto YouTube preparado en PC](YOUTUBE_TEST.md) reutiliza
+esta build y el servidor con `--clip`, manteniendo aparte el clip sintético.
+
 DIAG12 permanece respaldada en `.local/boot-diag-12/`, con su eboot, etiqueta y
 ZIP, para recuperar la referencia local si aparece una regresión.

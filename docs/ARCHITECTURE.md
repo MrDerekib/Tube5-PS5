@@ -1,7 +1,10 @@
 # Arquitectura de Tube5
 
 Tube5 es una aplicación multimedia nativa para PS5. El prototipo actual reproduce
-un clip local; no conecta todavía con YouTube ni modifica su cliente oficial.
+vídeo local y HTTP LAN con apertura de red cancelable y manejo de fallos. No
+modifica el cliente oficial ni resuelve enlaces YouTube desde la consola.
+El [primer piloto de YouTube](YOUTUBE_TEST.md) prepara un MP4 en el PC y lo sirve
+por LAN: no es streaming directo ni el proveedor definitivo de catálogo.
 
 ## Implementado
 

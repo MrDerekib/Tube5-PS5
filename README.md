@@ -65,8 +65,13 @@ confirma pausa, seeks y reapertura fuera de cámara.
 **BOOT-DIAG-16-HTTP** abre/probea la fuente HTTP en un hilo auxiliar, muestra
 carga cancelable con Círculo y devuelve al menú ante un error de lectura o
 ausencia prolongada de frames. Sin reconexión automática ni rebuffering todavía;
-la prueba física de esta nueva variante sigue pendiente.
+Su prueba física confirma timeout en unos 6 s, cancelación y reproducción de
+nuevo tras restaurar el servidor. Sigue pendiente estabilidad prolongada.
 Ver [configuración del servidor y prueba HTTP](docs/HTTP_TEST.md).
+
+El [primer piloto con contenido de YouTube](docs/YOUTUBE_TEST.md) prepara un
+MP4 privado en el PC y lo sirve por la misma ruta LAN, sin nueva build PS5.
+No es streaming directo: se descarga previamente; validación física pendiente.
 
 Para actualizar la prueba: cerrar Tube5 y copiar **toda** la carpeta
 `dist/PPSA99999/` a `/data/homebrew/PPSA99999/`, sustituyendo la anterior.

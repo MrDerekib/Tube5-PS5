@@ -20,6 +20,7 @@ static void require(bool value, const char *message)
 int main(int argc, char **argv)
 {
     const char *clip = argc > 1 ? argv[1] : "assets/test-clip.mp4";
+    const bool real_video = argc > 2 && std::strcmp(argv[2], "--real-video") == 0;
     SDL_SetMainReady();
     require(SDL_Init(SDL_INIT_EVENTS | SDL_INIT_AUDIO) == 0, "SDL init without video driver");
     require(Kit_Init(KIT_INIT_NETWORK) == 0, "Kit init with network");
@@ -141,7 +142,9 @@ int main(int argc, char **argv)
         return 0;
     }
     require(Kit_GetHint(KIT_HINT_THREAD_COUNT) == 1, "explicit single-thread codec baseline");
-    require(std::abs(player.duration() - 20.0) < 0.2, "clip duration");
+    require(real_video ? player.duration() >= 20 && player.duration() <= 3600
+                       : std::abs(player.duration() - 20.0) < 0.2,
+            "clip duration");
     // Exercise uninterrupted playback beyond the ~7s PS5 crash observed in
     // BOOT-DIAG-10 before testing pause/seeks. The dummy backend is not PS5.
     for (int i = 0; i < 300; ++i)
@@ -229,7 +232,7 @@ int main(int argc, char **argv)
                         &seek_error) == 3 &&
                 seeks >= 3 && seek_error == 0,
             "seeks executed by the demuxer, not just requested");
-    player.seek(100.0);
+    player.seek(player.duration());
     for (int i = 0; i < 90 && !player.finished(); ++i)
     {
         player.draw(renderer, SDL_Rect{0, 0, 640, 360});
