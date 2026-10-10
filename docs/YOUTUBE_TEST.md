@@ -3,7 +3,7 @@
 Este piloto descarga un vídeo en el PC, une sus pistas sin recodificar y sirve
 el MP4 preparado a Tube5 por HTTP LAN. **No es streaming directo de YouTube**,
 ni una integración de catálogo/búsqueda, ni SponsorBlock. El PC necesita estar
-encendido. La candidata actual es DIAG19; no se modifican sus payloads ni firmware.
+encendido. La siguiente candidata es DIAG20; no se modifican payloads ni firmware.
 
 ## Preparación
 
@@ -47,8 +47,10 @@ La URL de la consola sigue siendo `http://IP_DEL_PC:8080/test-clip.mp4`; el nomb
 de esa ruta es un alias de pruebas, no indica que siga siendo el clip sintético.
 El servidor sigue exponiendo un solo MP4, con rangos HTTP para seeks, sin mostrar
 la caché, directorios ni metadatos. Se conserva la excepción del cortafuegos
-limitada a la PS5. En Tube5, seleccionar HTTP y abrir VIDEO EN RED con DIAG19.
-No hay que copiar el vídeo a la consola ni cambiar eboot.bin o la configuración.
+limitada a la PS5. En Tube5, seleccionar HTTP y abrir VIDEO EN RED con DIAG20.
+No hay que copiar el vídeo a la consola. Esta candidata actualiza `eboot.bin`,
+`build-label.txt` y `sce_sys/param.json`, con Tube5 completamente cerrada; ese
+último archivo solicita 1 GiB de memoria flexible al título.
 El texto de portada aún menciona el clip de 20 s; el contador usa la duración
 real del archivo. La identidad/metadatos de la fuente en la UI quedan pendientes.
 

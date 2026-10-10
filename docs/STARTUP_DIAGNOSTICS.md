@@ -464,6 +464,30 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-20-HTTP: aumentar la memoria flexible del título
+
+DIAG19 se instaló en PS5 Fat 13.20, pero la apertura del MP4 completo sigue
+fallando antes de reproducir: `MEMORY: ENOMEM`, `MEMFAIL 16 ALIGN 247119B ERR
+12`, `W 3/3/3`, `READ 45/45 ERR 0`. Las lecturas terminan sin error de red; el
+dato nuevo sigue apuntando a una reserva local fallida. El tamaño de la reserva
+no identifica al llamador y no prueba que se agotara la memoria flexible.
+
+La revisión de `sce_sys/param.json` encontró que Tube5 no pedía un presupuesto
+flexible explícito. La plantilla de referencia documenta el valor por defecto
+como 448 MiB y la opción de solicitar hasta 1 GiB mediante
+`kernel.flexibleMemorySize`; ese presupuesto se toma de memoria directa, no
+aumenta la memoria total. DIAG20 solicita 1 GiB para dar margen a FFmpeg,
+SDL_kitchensink y las asignaciones alineadas durante la apertura. Es una
+hipótesis comprobable, no una causa confirmada: si el error continúa, la próxima
+captura deberá separar fallo durante el escaneo de fuente y durante la creación
+del player/codec antes de ajustar otros límites.
+
+La build conserva el código DIAG19; el único cambio funcional es el presupuesto
+del título. Para esta prueba hay que copiar también `sce_sys/param.json` a la
+carpeta de la consola, además de `eboot.bin` y `build-label.txt`, siempre con
+Tube5 completamente cerrada. Probar una apertura del vídeo y, si llega a entrar,
+30–60 segundos. No insistir si vuelve a marcar ENOMEM.
+
 ## BOOT-DIAG-19-HTTP: presupuesto de probing y colas
 
 Prueba física DIAG18: el extracto reproduce con mejora audible reportada;
@@ -518,12 +542,13 @@ error/MEMFAIL/READ y no insistir. No cambiar servidor durante la reproducción.
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-19-HTTP \
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-20-HTTP \
   APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign Kit_LockVideoDecoderRaw Kit_BeginPacketBufferRead Kit_FinishPacketBufferRead Kit_CancelPacketBufferRead Kit_GetTimerElapsed av_frame_ref"
 ```
 
 Cerrar Tube5 y sustituir la carpeta completa `dist/PPSA99999/` en la consola,
-incluyendo `sce_module/`. No cambiar los payloads ni el firmware para esta prueba.
+incluyendo `sce_module/` y el nuevo `sce_sys/param.json`. No cambiar los payloads
+ni el firmware para esta prueba.
 Grabar los avisos y comunicar el último código Dxx visible. Para DIAG13-HTTP,
 añadir también `network-test-url.txt` y seguir la guía HTTP enlazada arriba.
 Si ya está instalada la build 8, 9, 10 u 11 completa, para esta actualización sólo cambian
