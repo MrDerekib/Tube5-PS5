@@ -32,8 +32,8 @@ pero se bloqueó sobre el segundo 7, precedido por reservas fallidas de unos
 intermedios a YUV420 para reducir su tamaño. Impide encolar frames cuya conversión
 falló y añade contadores del conversor. La grabación local IMG_4279 confirma una
 reproducción completa de 20 segundos y regreso al menú sin crash en esa PS5,
-con MEMFAIL en cero cerca del final. Quedan descartes de frames y trabajo de
-fluidez; pausa, saltos y reapertura todavía necesitan validación en consola.
+con MEMFAIL en cero cerca del final. Esa build todavía presentaba numerosos
+descartes de frames; la prueba de cadencia siguiente usa DIAG12.
 El crash anterior todavía no tiene una causa exacta confirmada. No se garantiza
 compatibilidad con otros firmwares. Consulta [el diagnóstico de arranque](docs/STARTUP_DIAGNOSTICS.md)
 para compilar la variante con puntos de control y registrar la prueba.
@@ -41,8 +41,12 @@ para compilar la variante con puntos de control y registrar la prueba.
 BOOT-DIAG-12 elimina la espera adicional de 33 ms en el callback PS5: VideoOut
 ya espera al refresco después de presentar. Añade `MS WORK` para distinguir
 trabajo del callback del intervalo total y separa los controles del HUD.
-No cambia el reloj, el audio ni las colas de DIAG11; su resultado físico está
-pendiente. La build 11 probada queda respaldada localmente en
+No cambia el reloj, el audio ni las colas de DIAG11. La grabación IMG_4280
+confirma reproducción, saltos atrás/adelante y regreso al menú sin crash:
+las muestras muestran LOOP 16–17 ms, SYNC DROP 0, MEMFAIL 0 y dos seeks
+ejecutados sin error. El usuario confirma además pausa/reanudación y reapertura;
+la sincronización audible y estabilidad prolongada no quedan validadas.
+La build 11 probada queda respaldada localmente en
 `.local/boot-diag-11/` (no publicada).
 
 Para actualizar la prueba: cerrar Tube5 y copiar **toda** la carpeta

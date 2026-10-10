@@ -339,7 +339,20 @@ compara la cadencia con DIAG11 manteniendo el mismo clip y resto del pipeline.
 Antes de construir DIAG12 se respaldaron el eboot, etiqueta y ZIP de DIAG11 en
 `.local/boot-diag-11/`. El eboot de referencia conserva SHA-256
 `d774978bf00a8f94660288c7809f226564c8f5290201a1d0592f7a94f1aadfa6`.
-Los resultados físicos de DIAG12 siguen pendientes.
+Prueba física de DIAG12: IMG_4280.MOV (24,770 s, privada y excluida de Git)
+muestra reproducción, un salto hacia atrás, otro hacia adelante y regreso al
+menú sin crash. A los 11 s de grabación, antes de los saltos: `MS LOOP 17 WORK
+14 UI 3 VIDEO 6 COPY 5`, `MEMFAIL 0`, `FR 296`, `RAW 296/598`, `SYNC PTS 9833
+CLOCK 9980 DROP 0 WAIT 301 EMPTY 0`, `YUV SCALE 299 FAIL 0 DROP 0 ERR 0`.
+A los 19 s, tras ambos saltos: `LOOP 16 WORK 14`, `SEEK 2/2`, `SEEKEXEC 2 ERR 0`,
+`FR 525`, `SYNC PTS 15800 CLOCK 15883 DROP 0 WAIT 551 EMPTY 0` y conversión
+sin fallos. A los 22 s, `FR 615`, `DROP 0`, `MEMFAIL 0`, lectura/decodificación
+sin errores y ambos seeks ejecutados. WAIT no es descarte: el lector conserva
+el frame hasta su instante de presentación. Estas muestras respaldan la mejora
+de cadencia sin aumentar tolerancias ni alterar el reloj.
+El usuario confirma además pausa/reanudación y reapertura con la misma build;
+esas operaciones no aparecen en este vídeo. No se afirma estabilidad prolongada,
+sincronización audible ni rendimiento equivalente a mayor resolución.
 
 ## Build con puntos de control
 
