@@ -11,7 +11,8 @@ class NativeFramebuffer final
     NativeFramebuffer() = default;
     NativeFramebuffer(const NativeFramebuffer &) = delete;
     NativeFramebuffer &operator=(const NativeFramebuffer &) = delete;
-    int allocate(std::size_t bytes) noexcept;
+    int allocate(std::size_t bytes, std::size_t alignment = 0x200000) noexcept;
+    int release() noexcept;
     void *data() const noexcept
     {
         return mapped_;

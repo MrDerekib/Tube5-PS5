@@ -464,6 +464,67 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-25-HTTP: buffers grandes de FFmpeg en memoria directa
+
+El propietario confirma apertura y reproducción correcta del extracto de
+10 minutos con DIAG23. No se considera una validación de diez minutos continuos.
+El completo vuelve a fallar con DIAG24. La captura privada IMG_4282.HEIC muestra
+`MEMFAIL 16 ALIGN 247119B ERR 12`, `W 3/3/3 READ 45/45 ERR 0`, `FMEM BEFORE OPEN
+963 MiB`, `PLAYING AUDIO 0 VIDEO 0`, `FIRSTFAIL ALIGN 368768B A64` y
+`FFALLOC MALLOC 368768B A0 REL 0x1172532`.
+
+Con el ELF exacto de DIAG24, FFALLOC se resuelve a `av_buffer_alloc+0x11`
+(llamada a av_malloc). El primer caller alineado es `av_malloc+0x30`: retorno
+0x118f761, REL 0x118a1f1. La fuente bitmap de la app omitía '+', 'x' y las letras
+hexadecimales minúsculas; ese segundo offset se reconstruye con la llamada
+verificada en el ELF y los dígitos visibles, no con una lectura íntegra de la
+foto. DIAG25 imprime hexadecimales en mayúsculas y omite el signo positivo.
+
+El primer buffer rechazado pide 368.768 bytes, no los 247.119 del último fallo.
+Se localiza una reserva AVBuffer en FFmpeg; no demuestra qué caller de
+av_buffer_alloc la solicitó ni un límite exacto del heap. La memoria flexible
+se midió ANTES de abrir, no durante el fallo. No se atribuye el problema a RAM
+física agotada ni a que el archivo se cargue entero en memoria.
+
+DIAG25 intercepta las llamadas externas a `av_buffer_alloc`/`av_buffer_allocz`
+para tamaños de 128 KiB a 2 MiB. Usa memoria directa CPU cached tipo 12,
+protección 0x33, alineada/redondeada a páginas de 16 KiB. Conserva la alineación
+del framebuffer principal a 2 MiB. Hay 32 slots, como máximo 64 MiB simultáneos.
+`av_buffer_create` adopta el almacenamiento con una callback que lo desmapea y
+libera cuando FFmpeg suelta su última referencia. Nunca se pasa esa dirección
+a free/realloc de libc. El API AVBuffer copia al crecer buffers con callbacks
+personalizadas. Si falla la reserva nativa o no quedan slots, se prueba el
+allocator original; si falla la creación de metadatos, se libera la reserva.
+Un error de liberación pone el slot en cuarentena para evitar reutilizarlo.
+
+Esta es una corrección candidata, no estabilidad confirmada en PS5. El wrap no
+intercepta llamadas resueltas internamente en el mismo objeto de FFmpeg; por
+eso no sustituye todos sus allocators. El ELF confirma que la ruta de vídeo de
+av_frame_get_buffer llama al wrapper nuevo. El runtime libc.prx no se modifica.
+El caso de heap privado agotado documentado por
+[PS5_Vulkan](https://github.com/mihawk-99/PS5_Vulkan/blob/5b5e4fc2d80fdb67a4f61ba9e6a8a424026bb8a5/docs/RADV_PHASE.md)
+sirve de antecedente, no de prueba de la causa en Tube5.
+
+`DBUF vivos/32 KIB ALLOC total FAIL total ERR código` muestra reservas directas
+actuales, número de buffers creados y fallos de la vía nativa. Los totales son
+acumulados desde el arranque de la app. FAIL puede crecer sin un error de
+reproducción si funciona el allocator original. Tras cerrar, vivos/KIB deben
+volver a cero si todas las referencias se liberaron y las syscalls tuvieron éxito.
+
+Validación focalizada de PC: redondeo de 16 KiB, errores de reserva/mapeo y
+liberación, limpieza y reutilización, vida de referencias AVBuffer reales,
+relleno cero, realloc por copia, límite de 32 slots, fallback al original,
+fallo de creación de metadatos y cuatro workers concurrentes. Build nativa y
+FSELF válidos. Las pruebas usan syscalls nativas simuladas y no confirman
+rendimiento ni reproducción en PS5. Eboot y ELF exacto respaldados en
+`.local/boot-diag-25/`. Eboot DIAG25 SHA-256:
+`4daac4db6d866bb5ee84d1fcd0a80dfe06f7e0b55dc595944f4788cc853bd57a`.
+
+Con Tube5 cerrada, copiar `dist/PPSA99999/` a la consola y verificar DIAG25.
+El servidor ya sirve el vídeo completo en la URL habitual. Abrir una vez: si
+falla, fotografiar DBUF, FIRSTFAIL, FFALLOC y MEMFAIL; no repetir. Si reproduce,
+observar primero 30–60 s sin saltos antes de probar controles y reapertura.
+
 ## BOOT-DIAG-24-HTTP: localizar el origen sin recorrer la pila
 
 DIAG23 falla con el MP4 completo y conserva los contadores anteriores más

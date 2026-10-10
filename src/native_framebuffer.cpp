@@ -14,15 +14,31 @@ namespace tube5
 {
 NativeFramebuffer::~NativeFramebuffer()
 {
-    if (mapped_)
-        (void)sceKernelMunmap(mapped_, bytes_);
-    if (bytes_)
-        (void)sceKernelReleaseDirectMemory(physical_, bytes_);
+    (void)release();
 }
-int NativeFramebuffer::allocate(std::size_t bytes) noexcept
+int NativeFramebuffer::release() noexcept
 {
-    constexpr std::size_t alignment = 0x200000;
-    if (bytes_ || !bytes || bytes > std::numeric_limits<std::size_t>::max() - (alignment - 1))
+    if (mapped_)
+    {
+        const int result = sceKernelMunmap(mapped_, bytes_);
+        if (result != 0)
+            return result;
+        mapped_ = nullptr;
+    }
+    if (bytes_)
+    {
+        const int result = sceKernelReleaseDirectMemory(physical_, bytes_);
+        if (result != 0)
+            return result;
+        bytes_ = 0;
+        physical_ = 0;
+    }
+    return 0;
+}
+int NativeFramebuffer::allocate(std::size_t bytes, std::size_t alignment) noexcept
+{
+    if (bytes_ || !bytes || alignment < 0x4000 || (alignment & (alignment - 1)) != 0 ||
+        bytes > std::numeric_limits<std::size_t>::max() - (alignment - 1))
         return -22;
     const std::size_t rounded = (bytes + alignment - 1) & ~(alignment - 1);
     const std::size_t pool = sceKernelGetDirectMemorySize();

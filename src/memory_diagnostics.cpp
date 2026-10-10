@@ -82,7 +82,7 @@ void flexible_memory_status(char *text, std::size_t capacity) noexcept
 {
     const int result = flexible_query_result.load();
     if (result == 0)
-        std::snprintf(text, capacity, "FMEM BEFORE OPEN %zu MiB",
+        std::snprintf(text, capacity, "FMEM BEFORE OPEN %zu MIB",
                       flexible_bytes_before_open.load() / (1024 * 1024));
     else if (result == -1)
         std::snprintf(text, capacity, "FMEM QUERY UNAVAILABLE");
@@ -104,8 +104,9 @@ void memory_allocation_origin_status(unsigned row, char *text, std::size_t capac
     const auto magnitude = origin.relative < 0
                                ? std::uintptr_t{0} - static_cast<std::uintptr_t>(origin.relative)
                                : static_cast<std::uintptr_t>(origin.relative);
-    std::snprintf(text, capacity, "%s %s %zuB A%zu REL %c0x%zx", ffmpeg ? "FFALLOC" : "FIRSTFAIL",
-                  name, origin.bytes, origin.alignment, origin.relative < 0 ? '-' : '+',
+    // The bitmap UI supports uppercase and '-', but neither '+' nor lowercase.
+    std::snprintf(text, capacity, "%s %s %zuB A%zu REL %s0X%zX", ffmpeg ? "FFALLOC" : "FIRSTFAIL",
+                  name, origin.bytes, origin.alignment, origin.relative < 0 ? "-" : "",
                   static_cast<std::size_t>(magnitude));
 }
 } // namespace tube5

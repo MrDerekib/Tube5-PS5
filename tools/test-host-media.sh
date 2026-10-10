@@ -52,6 +52,12 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc tests/test_native_framebuffer.cpp src/native_framebuffer.cpp -o build/native-framebuffer-test
 build/native-framebuffer-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
+    -DTUBE5_MEDIA_BUFFER_WRAP -Isrc "${cflags[@]}" \
+    tests/test_native_media_buffers.cpp src/native_media_buffers.cpp src/native_framebuffer.cpp \
+    -Wl,--wrap=av_buffer_alloc,--wrap=av_buffer_allocz,--wrap=av_buffer_create \
+    "${libs[@]}" -pthread -o build/native-media-buffers-test
+build/native-media-buffers-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -DTUBE5_DIAGNOSTICS -DTUBE5_ALLOC_CALLER_WRAP \
     -Isrc tests/test_memory_diagnostics.cpp src/memory_diagnostics.cpp -o build/memory-diagnostics-test
 build/memory-diagnostics-test

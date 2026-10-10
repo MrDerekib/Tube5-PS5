@@ -5,6 +5,8 @@
 namespace
 {
 int allocation_result = 0, mapping_result = 0;
+int release_result = 0, unmap_result = 0;
+std::size_t expected_bytes = 0x800000, expected_alignment = 0x200000;
 unsigned allocations = 0, maps = 0, releases = 0, unmaps = 0;
 std::size_t pool = 0x4000000;
 char mapping;
@@ -18,7 +20,7 @@ extern "C" int sceKernelAllocateDirectMemory(std::int64_t start, std::int64_t en
                                              std::int64_t *physical)
 {
     assert(start == 0 && end == static_cast<std::int64_t>(pool));
-    assert(bytes == 0x800000 && alignment == 0x200000 && type == 12);
+    assert(bytes == expected_bytes && alignment == expected_alignment && type == 12);
     ++allocations;
     *physical = 0; // Physical address zero is valid and must still be released.
     return allocation_result;
@@ -26,8 +28,8 @@ extern "C" int sceKernelAllocateDirectMemory(std::int64_t start, std::int64_t en
 extern "C" int sceKernelMapDirectMemory(void **address, std::size_t bytes, int protection,
                                         int flags, std::int64_t physical, std::size_t alignment)
 {
-    assert(bytes == 0x800000 && protection == 0x33 && flags == 0 && physical == 0 &&
-           alignment == 0x200000);
+    assert(bytes == expected_bytes && protection == 0x33 && flags == 0 && physical == 0 &&
+           alignment == expected_alignment);
     ++maps;
     if (mapping_result == 0)
         *address = &mapping;
@@ -35,15 +37,15 @@ extern "C" int sceKernelMapDirectMemory(void **address, std::size_t bytes, int p
 }
 extern "C" int sceKernelReleaseDirectMemory(std::int64_t physical, std::size_t bytes)
 {
-    assert(physical == 0 && bytes == 0x800000);
+    assert(physical == 0 && bytes == expected_bytes);
     ++releases;
-    return 0;
+    return release_result;
 }
 extern "C" int sceKernelMunmap(void *address, std::size_t bytes)
 {
-    assert(address == &mapping && bytes == 0x800000);
+    assert(address == &mapping && bytes == expected_bytes);
     ++unmaps;
-    return 0;
+    return unmap_result;
 }
 int main()
 {
@@ -64,4 +66,22 @@ int main()
         assert(framebuffer.allocate(1920 * 1080 * 4) == -22);
     }
     assert(allocations == 3 && maps == 2 && unmaps == 1 && releases == 2);
+    expected_bytes = 0x5c000;
+    expected_alignment = 0x4000;
+    tube5::NativeFramebuffer buffer;
+    assert(buffer.allocate(368768, 0) == -22);
+    assert(buffer.allocate(368768, 0x2000) == -22);
+    assert(buffer.allocate(368768, 0x6000) == -22);
+    assert(buffer.allocate(368768, 0x4000) == 0);
+    unmap_result = -90;
+    assert(buffer.release() == -90 && buffer.data() == &mapping);
+    unmap_result = 0;
+    release_result = -91;
+    assert(buffer.release() == -91 && buffer.data() == nullptr);
+    assert(buffer.allocate(368768, 0x4000) == -22);
+    release_result = 0;
+    assert(buffer.release() == 0);
+    const unsigned released = releases;
+    assert(buffer.release() == 0 && releases == released);
+    assert(buffer.allocate(368768, 0x4000) == 0);
 }

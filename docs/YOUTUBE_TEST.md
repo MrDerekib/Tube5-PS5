@@ -3,8 +3,8 @@
 Este piloto descarga un vídeo en el PC, une sus pistas sin recodificar y sirve
 el MP4 preparado a Tube5 por HTTP LAN. **No es streaming directo de YouTube**,
 ni una integración de catálogo/búsqueda, ni SponsorBlock. El PC necesita estar
-encendido. La prueba actual usa DIAG23 y el extracto de 600 s; DIAG24 está
-preparada para localizar el origen de reservas fallidas. No se modifican
+encendido. La candidata actual es DIAG25 con el vídeo completo, tras comprobar
+que el extracto de 600 s sí abre con DIAG23. No se modifican
 payloads ni firmware.
 
 ## Preparación
@@ -36,8 +36,8 @@ Usar únicamente contenido al que se tenga acceso autorizado.
 
 ## Servirlo a la PS5
 
-Prueba actual: el servidor del puerto 8080 sirve `diagnostic-600s.mp4` y la
-consola conserva DIAG23. Extracto de 600,033 s y 25.013.038 bytes, H.264 Main
+Prueba anterior: el propietario confirma reproducción correcta con DIAG23 del
+extracto `diagnostic-600s.mp4`. Extracto de 600,033 s y 25.013.038 bytes, H.264 Main
 640×360/YUV420/30 fps y AAC-LC estéreo/44,1 kHz, obtenido con stream copy:
 
 ```bash
@@ -48,16 +48,21 @@ python3 tools/http-test-server.py --bind IP_DEL_PC --port 8080 \
   --clip .local/youtube/qf31PkeESoU/diagnostic-600s.mp4
 ```
 
-Reiniciar Tube5 para liberar el bloqueo por ENOMEM de una prueba anterior.
-Seleccionar HTTP y abrir una sola vez, manteniendo la misma URL. Si abre,
+Para repetir aquella comparación, reiniciar Tube5 para liberar el bloqueo por
+ENOMEM de una prueba anterior. Seleccionar HTTP con DIAG23 y abrir una sola vez,
+manteniendo la misma URL. Si abre,
 observar 30–60 s sin saltos; no hace falta reproducir los 10 minutos completos.
 Si falla, conservar los datos del menú y no insistir. Este resultado compara
 archivos, no prueba aún estabilidad prolongada ni una causa concreta.
 
-DIAG24 está compilada en `dist/PPSA99999/`, pero se instala después de registrar
-el resultado anterior. Añade `FIRSTFAIL` y `FFALLOC` con offsets `REL` que se
-resuelven con el ELF exacto respaldado en `.local/boot-diag-24/`. Procedimiento
-y límites: [diagnóstico de reservas](STARTUP_DIAGNOSTICS.md#boot-diag-24-http-localizar-el-origen-sin-recorrer-la-pila).
+DIAG24 falla con el completo y localiza el primer fallo en la ruta
+av_buffer_alloc → av_malloc → posix_memalign, con una reserva de 368.768 bytes.
+DIAG25 está compilada en `dist/PPSA99999/` y usa memoria directa para buffers
+AVBuffer grandes. El servidor del puerto 8080 ya sirve `media.mp4`. Copiar la
+carpeta con Tube5 cerrada, verificar DIAG25 y abrir una sola vez. Si falla,
+fotografiar DBUF, FIRSTFAIL, FFALLOC y MEMFAIL; si reproduce, observar primero
+30–60 s sin saltos. Procedimiento y límites:
+[buffers directos](STARTUP_DIAGNOSTICS.md#boot-diag-25-http-buffers-grandes-de-ffmpeg-en-memoria-directa).
 
 Cerrar primero la reproducción en Tube5 y después detener el servidor anterior
 del puerto 8080. No cambiar archivos/servidor con una sesión HTTP abierta.
@@ -72,12 +77,12 @@ La URL de la consola sigue siendo `http://IP_DEL_PC:8080/test-clip.mp4`; el nomb
 de esa ruta es un alias de pruebas, no indica que siga siendo el clip sintético.
 El servidor sigue exponiendo un solo MP4, con rangos HTTP para seeks, sin mostrar
 la caché, directorios ni metadatos. Se conserva la excepción del cortafuegos
-limitada a la PS5. En Tube5, seleccionar HTTP y abrir VIDEO EN RED con DIAG23.
+limitada a la PS5. En Tube5, seleccionar HTTP y abrir VIDEO EN RED con DIAG25.
 No hay que copiar el vídeo a la consola. Esta candidata actualiza `eboot.bin`,
 `build-label.txt` y `sce_sys/param.json`, con Tube5 completamente cerrada; ese
-último archivo solicita 1 GiB de memoria flexible al título. Si vuelve a fallar,
-si falla, la pantalla mostrará `FMEM BEFORE OPEN`, `ALLOC FAIL STAGE`,
-`AUDIO` y `VIDEO`.
+último archivo conserva la solicitud de 1 GiB de memoria flexible al título.
+Si falla, la pantalla mostrará `FMEM BEFORE OPEN`, `ALLOC FAIL STAGE`,
+`AUDIO`, `VIDEO`, `FIRSTFAIL`, `FFALLOC` y `DBUF`.
 El texto de portada aún menciona el clip de 20 s; el contador usa la duración
 real del archivo. La identidad/metadatos de la fuente en la UI quedan pendientes.
 
