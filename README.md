@@ -49,12 +49,18 @@ la sincronización audible y estabilidad prolongada no quedan validadas.
 La build 11 probada queda respaldada localmente en
 `.local/boot-diag-11/` (no publicada).
 
+La siguiente prueba, **BOOT-DIAG-13-HTTP**, añade un servidor LAN que expone solo
+el clip sintético y permite alternar LOCAL/HTTP con X en Ajustes. La reproducción
+local sigue siendo el modo inicial; no hay integración con YouTube todavía.
+Ver [configuración del servidor y prueba HTTP](docs/HTTP_TEST.md).
+
 Para actualizar la prueba: cerrar Tube5 y copiar **toda** la carpeta
 `dist/PPSA99999/` a `/data/homebrew/PPSA99999/`, sustituyendo la anterior.
 Incluye `eboot.bin`, `sce_sys/`, `sce_module/` y `assets/`; no basta con el ejecutable
 para una instalación inicial. Si ya tienes la carpeta completa de la build 8 o
-9, 10 u 11, la prueba 12 necesita sustituir `eboot.bin` y `build-label.txt`; el paquete
-también actualiza los créditos en `THIRD_PARTY_NOTICES.md`.
+9, 10, 11 o 12, la prueba 13 necesita sustituir `eboot.bin`, `build-label.txt` y
+añadir `network-test-url.txt` siguiendo la guía HTTP; el paquete también incluye
+los créditos en `THIRD_PARTY_NOTICES.md`.
 
 ## Primera arquitectura
 

@@ -16,11 +16,12 @@ static void require(bool value, const char *message)
     }
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    const char *clip = argc > 1 ? argv[1] : "assets/test-clip.mp4";
     SDL_SetMainReady();
     require(SDL_Init(SDL_INIT_EVENTS | SDL_INIT_AUDIO) == 0, "SDL init without video driver");
-    require(Kit_Init(0) == 0, "Kit init");
+    require(Kit_Init(KIT_INIT_NETWORK) == 0, "Kit init with network");
     SDL_Surface *output = SDL_CreateRGBSurfaceWithFormat(0, 640, 360, 32, SDL_PIXELFORMAT_RGBA32);
     require(output != nullptr, "offscreen surface");
     SDL_Renderer *renderer = SDL_CreateSoftwareRenderer(output);
@@ -37,7 +38,7 @@ int main()
     tube5::MediaPlayer player;
     require(!player.open(renderer, "assets/does-not-exist.mp4"), "missing file rejected");
     require(player.error()[0] != '\0', "missing file diagnostic");
-    require(player.open(renderer, "assets/test-clip.mp4"), player.error());
+    require(player.open(renderer, clip), player.error());
     require(Kit_GetHint(KIT_HINT_THREAD_COUNT) == 1, "explicit single-thread codec baseline");
     require(std::abs(player.duration() - 20.0) < 0.2, "clip duration");
     // Exercise uninterrupted playback beyond the ~7s PS5 crash observed in
@@ -135,7 +136,7 @@ int main()
     std::printf("EOF position %.3f / %.3f\n", player.position(), player.duration());
     require(player.finished(), "end of video");
     player.close();
-    require(player.open(renderer, "assets/test-clip.mp4"), "reopen after end");
+    require(player.open(renderer, clip), "reopen after end");
     player.close();
     player.close();
     Kit_Quit();

@@ -36,17 +36,21 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     "${libs[@]}" -o build/video-conversion-test
 build/video-conversion-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
+    -DTUBE5_NETWORK_WRAP "${cflags[@]}" tests/test_network_source.cpp src/network_source.cpp \
+    "${libs[@]}" -o build/network-source-test
+build/network-source-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc tests/test_native_framebuffer.cpp src/native_framebuffer.cpp -o build/native-framebuffer-test
 build/native-framebuffer-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_DIAGNOSTICS \
     -Isrc tests/test_memory_diagnostics.cpp src/memory_diagnostics.cpp -o build/memory-diagnostics-test
 build/memory-diagnostics-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
-    -DTUBE5_HOST -DTUBE5_DIAGNOSTICS -DTUBE5_PIPELINE_WRAP -DTUBE5_CONVERSION_WRAP -Isrc -I"$source_root/include" "${cflags[@]}" tests/media_smoke.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp \
+    -DTUBE5_HOST -DTUBE5_DIAGNOSTICS -DTUBE5_PIPELINE_WRAP -DTUBE5_CONVERSION_WRAP -DTUBE5_NETWORK_WRAP -Isrc -I"$source_root/include" "${cflags[@]}" tests/media_smoke.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
     build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" \
-    -Wl,--wrap=av_read_frame,--wrap=avcodec_send_packet,--wrap=avcodec_receive_frame,--wrap=avformat_seek_file,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat -o build/media-smoke
+    -Wl,--wrap=av_read_frame,--wrap=avcodec_send_packet,--wrap=avcodec_receive_frame,--wrap=avformat_seek_file,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat,--wrap=avformat_open_input -o build/media-smoke
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/media-smoke
-clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_HOST -DTUBE5_OFFSCREEN -DTUBE5_CONVERSION_WRAP -ffunction-sections -fdata-sections \
-    -Isrc -I"$source_root/include" "${cflags[@]}" src/main.cpp src/demo_renderer.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/native_sdl.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp \
-    build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" -Wl,--gc-sections,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat -o build/tube5-host
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_HOST -DTUBE5_OFFSCREEN -DTUBE5_CONVERSION_WRAP -DTUBE5_NETWORK_WRAP -ffunction-sections -fdata-sections \
+    -Isrc -I"$source_root/include" "${cflags[@]}" src/main.cpp src/demo_renderer.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/native_sdl.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
+    build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" -Wl,--gc-sections,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat,--wrap=avformat_open_input -o build/tube5-host
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy TUBE5_PREVIEW=build/ui-preview.bmp build/tube5-host

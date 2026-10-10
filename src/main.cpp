@@ -30,6 +30,8 @@ constexpr auto panel = static_cast<Color>(0xff382c21);
 constexpr auto accent = static_cast<Color>(0xff8261ff);
 constexpr auto muted = static_cast<Color>(0xffbbaea5);
 std::array<char, 48> build_label{};
+std::array<char, 256> network_url{};
+bool network_test = false;
 #ifdef TUBE5_DIAGNOSTICS
 std::array<char, 128> frame_timing{};
 #endif
@@ -47,8 +49,10 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
     if (nav.screen == tube5::Screen::home)
     {
         canvas.text(120, 310, "VAMOS A PROBARLO", 6, Color::white);
-        const char *titles[] = {"VIDEO DE PRUEBA", "AJUSTES", "ACERCA DE"};
-        const char *details[] = {"IMAGEN Y SONIDO", "PRUEBA CON DUALSENSE", "PROYECTO Y CREDITOS"};
+        const char *titles[] = {network_test ? "VIDEO EN RED" : "VIDEO DE PRUEBA", "AJUSTES",
+                                "ACERCA DE"};
+        const char *details[] = {network_test ? "HTTP DESDE TU PC" : "IMAGEN Y SONIDO",
+                                 "PRUEBA CON DUALSENSE", "PROYECTO Y CREDITOS"};
         for (unsigned i = 0; i < 3; ++i)
         {
             const unsigned x = 120 + i * 570;
@@ -68,7 +72,10 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             canvas.text(x + 30, 650, titles[i], 4, Color::white);
             canvas.text(x + 30, 715, details[i], 3, muted);
         }
-        canvas.text(120, 830, "CLIP LOCAL DE 20 SEGUNDOS. NO REQUIERE INTERNET.", 3, muted);
+        canvas.text(120, 830,
+                    network_test ? "CLIP HTTP DE 20 SEGUNDOS. PC EN LA MISMA RED."
+                                 : "CLIP LOCAL DE 20 SEGUNDOS. NO REQUIERE INTERNET.",
+                    3, muted);
     }
     else if (nav.screen == tube5::Screen::settings)
     {
@@ -78,7 +85,11 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(120, 560, "SPONSORBLOCK", 4, muted);
         canvas.text(650, 560, "PROXIMAMENTE", 4, Color::white);
         canvas.text(120, 660, "REPRODUCCION", 4, muted);
-        canvas.text(650, 660, "VIDEO LOCAL CON AUDIO", 4, Color::white);
+        canvas.text(650, 660, network_test ? "HTTP - X CAMBIAR" : "LOCAL - X CAMBIAR", 4,
+                    Color::white);
+        canvas.text(120, 765,
+                    network_url[0] ? network_url.data() : "HTTP: CONFIGURA NETWORK-TEST-URL.TXT", 2,
+                    muted);
     }
     else if (nav.screen == tube5::Screen::about)
     {
@@ -162,6 +173,11 @@ int main()
     for (char &character : build_label)
         if (character >= 'a' && character <= 'z')
             character = static_cast<char>(character - 'a' + 'A');
+#ifdef TUBE5_HOST
+    ps5::demo::read_asset_text(".local/network-test-url.txt", std::span{network_url}, "");
+#else
+    ps5::demo::read_asset_text("/app0/network-test-url.txt", std::span{network_url}, "");
+#endif
 #ifndef TUBE5_HOST
     tube5_boot_checkpoint("Tube5 D04: iniciar UserService");
     (void)sceUserServiceInitialize(nullptr);
@@ -281,7 +297,7 @@ int main()
     tube5::Navigation nav;
     tube5::MediaPlayer media;
     char error[256]{};
-    const bool kit_ready = Kit_Init(0) == 0;
+    const bool kit_ready = Kit_Init(KIT_INIT_NETWORK) == 0;
     if (!kit_ready)
         std::snprintf(error, sizeof(error), "PLAYER INIT: %s", Kit_GetError());
     tube5_boot_checkpoint("Tube5 D12: iniciar bucle de eventos");
@@ -289,6 +305,11 @@ int main()
     bool opening_player = false;
     const auto command = [&](tube5::Command action)
     {
+        if (nav.screen == tube5::Screen::settings && action == tube5::Command::select)
+        {
+            network_test = !network_test;
+            return;
+        }
         if (nav.screen == tube5::Screen::player)
         {
             if (action == tube5::Command::select)
@@ -314,10 +335,16 @@ int main()
 #else
             constexpr const char *clip = "/app0/assets/test-clip.mp4";
 #endif
-            if (!kit_ready || !media.open(renderer, clip))
+            const bool configured =
+                !network_test ||
+                (std::string_view{network_url.data()}.starts_with("http://") && network_url[7]);
+            if (!kit_ready || !configured ||
+                !media.open(renderer, network_test ? network_url.data() : clip))
             {
                 std::snprintf(error, sizeof(error), "%s",
-                              kit_ready ? media.error() : "PLAYER INIT FAILED");
+                              !kit_ready    ? "PLAYER INIT FAILED"
+                              : !configured ? "HTTP: CONFIGURA NETWORK-TEST-URL.TXT"
+                                            : media.error());
                 std::fprintf(stderr, "Tube5: %s\n", error);
                 nav.screen = tube5::Screen::home;
             }

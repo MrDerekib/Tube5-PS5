@@ -354,16 +354,27 @@ El usuario confirma además pausa/reanudación y reapertura con la misma build;
 esas operaciones no aparecen en este vídeo. No se afirma estabilidad prolongada,
 sincronización audible ni rendimiento equivalente a mayor resolución.
 
+## BOOT-DIAG-13-HTTP: misma reproducción, fuente de red
+
+Añade elección LOCAL/HTTP en Ajustes y URL configurable en
+`/app0/network-test-url.txt`. Por defecto mantiene LOCAL. Inicializa Kitchensink
+con KIT_INIT_NETWORK y limita esperas por operación HTTP a 5 s mediante un
+wrapper de avformat_open_input. No altera sincronización, conversión ni cadencia
+de DIAG12. Servidor y procedimiento: [HTTP_TEST.md](HTTP_TEST.md).
+DIAG12 queda respaldada localmente antes de construir esta variante. Su prueba
+física HTTP está pendiente; las pruebas de PC no validan sockets del backend PS5.
+
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-12 \
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-13-HTTP \
   APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign Kit_LockVideoDecoderRaw Kit_BeginPacketBufferRead Kit_FinishPacketBufferRead Kit_CancelPacketBufferRead Kit_GetTimerElapsed av_frame_ref"
 ```
 
 Cerrar Tube5 y sustituir la carpeta completa `dist/PPSA99999/` en la consola,
 incluyendo `sce_module/`. No cambiar los payloads ni el firmware para esta prueba.
-Grabar los avisos y comunicar el último código Dxx visible.
+Grabar los avisos y comunicar el último código Dxx visible. Para DIAG13-HTTP,
+añadir también `network-test-url.txt` y seguir la guía HTTP enlazada arriba.
 Si ya está instalada la build 8, 9, 10 u 11 completa, para esta actualización sólo cambian
 `eboot.bin` y `build-label.txt`; basta con sustituir esos dos archivos con Tube5
 cerrado. Abrir Vídeo de prueba con una pulsación de X y esperar unos segundos.

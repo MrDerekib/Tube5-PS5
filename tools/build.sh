@@ -153,6 +153,10 @@ if [[ $app_source_dir == src && -f $root/src/video_conversion.cpp ]]; then
     definitions+=(TUBE5_CONVERSION_WRAP)
     app_wrap_symbols+=" sws_scale_frame Kit_WritePacketBuffer Kit_FindAVPixelFormat"
 fi
+if [[ $app_source_dir == src && -f $root/src/network_source.cpp ]]; then
+    definitions+=(TUBE5_NETWORK_WRAP)
+    app_wrap_symbols+=" avformat_open_input"
+fi
 
 # Link-time wrappers: each symbol S resolves to the app's __wrap_S, and
 # __real_S to the original (for example fcntl, which libcurl needs wrapped).
@@ -276,6 +280,9 @@ mkdir -p "$app/sce_sys" "$app/sce_module"
 cp "$param" "$app/sce_sys/param.json"
 # The app reads this file to say which build it is; a release has none.
 [[ -z ${BUILD_LABEL:-} ]] || printf '%s\n' "$BUILD_LABEL" > "$app/build-label.txt"
+if [[ $app_source_dir == src && -f $root/.local/network-test-url.txt ]]; then
+    cp "$root/.local/network-test-url.txt" "$app/network-test-url.txt"
+fi
 for asset in icon0.png pic0.dds pic1.dds snd0.at9; do
     [[ -f $root/$app_sce_sys/$asset ]] && cp "$root/$app_sce_sys/$asset" "$app/sce_sys/$asset"
 done
