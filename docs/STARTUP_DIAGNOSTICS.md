@@ -362,12 +362,26 @@ con KIT_INIT_NETWORK y limita esperas por operación HTTP a 5 s mediante un
 wrapper de avformat_open_input. No altera sincronización, conversión ni cadencia
 de DIAG12. Servidor y procedimiento: [HTTP_TEST.md](HTTP_TEST.md).
 DIAG12 queda respaldada localmente antes de construir esta variante. Su prueba
-física HTTP está pendiente; las pruebas de PC no validan sockets del backend PS5.
+física falló al abrir HTTP mientras LOCAL seguía funcionando.
+
+## BOOT-DIAG-14-HTTP: adaptador de red nativo
+
+Se confirmó en el SDK que getaddrinfo/freeaddrinfo/gai_strerror enlazaban a
+libScePosixForWebKit y que tcp_open los invocaba incluso con IP numérica. Se
+adaptaron las funciones de resolución al caso LAN IPv4 numérico y fcntl al
+SO_NBIO de PS5, siguiendo el adaptador de la propia plantilla. También se
+evitan los imports strcasestr/isatty. La revisión del ELF confirma que esas
+funciones ya no están indefinidas; fcntl original sigue importado desde libkernel
+para conservar llamadas a archivos. Quedan imports de directorios de otras
+rutas de las bibliotecas: no se afirma que toda la app esté libre de WebKit.
+Detalles, límites y checkpoints H01/H02: [HTTP_TEST.md](HTTP_TEST.md).
+La causa exacta del crash anterior y el resultado físico de DIAG14 siguen
+pendientes de confirmación.
 
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-13-HTTP \
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-14-HTTP \
   APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign Kit_LockVideoDecoderRaw Kit_BeginPacketBufferRead Kit_FinishPacketBufferRead Kit_CancelPacketBufferRead Kit_GetTimerElapsed av_frame_ref"
 ```
 

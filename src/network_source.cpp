@@ -2,6 +2,7 @@
 // Scoped to Tube5, not the standalone template examples.
 #ifdef TUBE5_NETWORK_WRAP
 #include <cstring>
+#include "boot_diagnostics.hpp"
 extern "C"
 {
 #include <libavformat/avformat.h>
@@ -14,6 +15,7 @@ extern "C" int __wrap_avformat_open_input(AVFormatContext **context, const char 
 {
     if (!url || std::strncmp(url, "http://", 7) != 0)
         return __real_avformat_open_input(context, url, format, options);
+    tube5_boot_checkpoint("Tube5 HTTP H01: abrir conexion");
     AVDictionary *local = nullptr;
     AVDictionary **settings = options ? options : &local;
     // FFmpeg defines rw_timeout in microseconds. Preserve explicit caller values.
@@ -22,6 +24,7 @@ extern "C" int __wrap_avformat_open_input(AVFormatContext **context, const char 
         result = av_dict_set(settings, "protocol_whitelist", "http,tcp", AV_DICT_DONT_OVERWRITE);
     if (result >= 0)
         result = __real_avformat_open_input(context, url, format, settings);
+    tube5_boot_result("Tube5 HTTP H02: apertura retorno", static_cast<unsigned>(result));
     av_dict_free(&local);
     return result;
 }

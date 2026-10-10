@@ -1,6 +1,6 @@
 # Prueba HTTP en la red local
 
-BOOT-DIAG-13-HTTP conserva la reproducción local de DIAG12 y permite elegir HTTP
+BOOT-DIAG-14-HTTP conserva la reproducción local de DIAG12 y permite elegir HTTP
 en Ajustes. No es aún integración con YouTube, HTTPS, DASH ni buffering adaptativo.
 
 ## Servidor del PC
@@ -46,7 +46,7 @@ Cerrar Tube5. Si ya está instalada DIAG12 completa, copiar estos tres archivos 
 - `dist/PPSA99999/build-label.txt`
 - `dist/PPSA99999/network-test-url.txt`
 
-Arrancar Tube5 y comprobar BOOT-DIAG-13-HTTP. Por defecto usa LOCAL para preservar
+Arrancar Tube5 y comprobar BOOT-DIAG-14-HTTP. Por defecto usa LOCAL para preservar
 la comparación. En Ajustes, X alterna LOCAL/HTTP; se muestra la URL configurada.
 Círculo vuelve al menú y la tarjeta cambia a VIDEO EN RED. X abre el clip HTTP.
 La selección no persiste al reiniciar la app.
@@ -67,6 +67,29 @@ opciones explícitas del llamador. La unidad es la documentada en
 No es un límite global de apertura: la preparación/probing sigue siendo síncrona
 y puede detener temporalmente la interfaz. Recuperación de cortes y apertura
 asíncrona quedan para una fase posterior; todavía no hay rebuffering propio.
+
+DIAG13 se bloqueó en PS5 al abrir HTTP, aunque el modo local siguió funcionando.
+El ELF importaba funciones de resolución desde libScePosixForWebKit. La plantilla
+ya documenta que esas funciones necesitan adaptación en un título nativo:
+`examples/update-check/console_curl.c`. Sin backtrace, sigue siendo una causa
+probable, no una identificación confirmada de la instrucción del crash.
+
+DIAG14 aplica un adaptador derivado de esa plantilla: getaddrinfo/freeaddrinfo,
+gai_strerror, getnameinfo y gethostbyname dejan de ser imports de WebKit. Para
+esta fase admite **solo IPv4 numérico y puerto numérico**; los nombres de dominio
+se rechazan sin consultar DNS. No cambiar los DNS de la consola para esta prueba.
+Conserva el layout sockaddr_in del SDK (incluido sin_len) y la ABI FreeBSD de
+getnameinfo. El wrapper fcntl respeta llamadas sin argumento y, únicamente ante
+EINVAL en un socket comprobado, usa SO_NBIO de PS5 para flags no bloqueantes.
+Errores de archivos normales y EBADF no se convierten en éxitos. También adapta
+strcasestr (tokens ASCII) e isatty para evitar imports auxiliares de WebKit.
+
+Al abrir HTTP, los avisos `HTTP H01: abrir conexion` y `HTTP H02: apertura retorno`
+delimitan avformat_open_input. H02 muestra su retorno hexadecimal: cero significa
+apertura correcta, no que el posterior probing o la reproducción ya hayan
+terminado. Solo se notifican al abrir, no durante lecturas ni seeks; los avisos
+de diagnóstico añaden una breve espera antes de iniciar el reloj del vídeo.
+Si vuelve a bloquearse, grabar el último aviso además del error de la consola.
 
 Pruebas:
 
@@ -89,6 +112,14 @@ LAN, con AddressSanitizer/UndefinedBehaviorSanitizer. El servidor registra nueva
 peticiones 206 durante los seeks y la reapertura. Compilan el preview offscreen
 y la build nativa; la integridad del FSELF valida y el ELF confirma que
 Kit_CreateSourceFromUrl llama al wrapper de apertura.
+
+Validación de DIAG14: pasan mocks de dirección/puerto, rechazo de dominios/IPv6,
+reverse numérico, flags de sockets y propagación de errores, con sanitizadores.
+El smoke local y HTTP pasa enlazando el mismo adaptador de resolución y fcntl
+(con layout Linux en PC); incluye pausa, saltos, EOF, reapertura y limpieza.
+Compila la variante nativa y valida la integridad del FSELF. La auditoría del ELF
+confirma que las siete funciones de resolución/texto corregidas ya no son imports;
+ff_socket_nonblock llama a __wrap_fcntl. La prueba física PS5 sigue pendiente.
 
 DIAG12 permanece respaldada en `.local/boot-diag-12/`, con su eboot, etiqueta y
 ZIP, para recuperar la referencia local si aparece una regresión.
