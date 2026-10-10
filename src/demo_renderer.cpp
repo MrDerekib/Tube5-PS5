@@ -349,6 +349,21 @@ void Canvas::clear(Color color) noexcept
     fill_rect(pixels_, 0, 0, frame_width, frame_height, color, linear_);
 }
 
+bool Canvas::blit_linear(std::span<const std::uint32_t> source, unsigned pitch_pixels) noexcept
+{
+    const std::size_t required =
+        static_cast<std::size_t>(frame_height - 1) * pitch_pixels + frame_width;
+    if (pitch_pixels < frame_width || source.size() < required)
+        return false;
+    for (unsigned y = 0; y < frame_height; ++y)
+        for (unsigned x = 0; x < frame_width; ++x)
+            put_pixel_unchecked(
+                pixels_, x, y,
+                static_cast<Color>(source[static_cast<std::size_t>(y) * pitch_pixels + x]),
+                linear_);
+    return true;
+}
+
 void Canvas::rectangle(unsigned x, unsigned y, unsigned width, unsigned height,
                        Color color) noexcept
 {
@@ -400,13 +415,26 @@ void read_asset_text(const char *path, std::span<char> destination,
     detail::present(draw, ready_message, true);
 }
 
-[[noreturn]] void detail::present(DrawScene draw, std::string_view ready_message,
-                                  bool every_frame) noexcept
+[[noreturn]] void run_frames(DrawSceneWithState draw, void *state,
+                             std::string_view ready_message) noexcept
+{
+    detail::present(nullptr, ready_message, true, draw, state);
+}
+
+[[noreturn]] void detail::present(DrawScene draw, std::string_view ready_message, bool every_frame,
+                                  DrawSceneWithState stateful, void *state) noexcept
 {
     if (!verify_unique_ownership())
         halt("Hello World: unique ownership failed");
-    if (draw == nullptr)
+    if (draw == nullptr && stateful == nullptr)
         halt("Hello World: scene callback missing");
+    const auto draw_frame = [&](Canvas &canvas)
+    {
+        if (draw)
+            draw(canvas);
+        else
+            stateful(canvas, state);
+    };
 
     (void)sceSystemServiceHideSplashScreen();
     const int video = sceVideoOutOpen(0xff, 0, 0, nullptr);
@@ -433,8 +461,8 @@ void read_asset_text(const char *path, std::span<char> destination,
     Canvas first{static_cast<std::uint32_t *>(mapped)};
     auto *second_frame = static_cast<std::uint8_t *>(mapped) + frame_bytes;
     Canvas second{reinterpret_cast<std::uint32_t *>(second_frame)};
-    draw(first);
-    draw(second);
+    draw_frame(first);
+    draw_frame(second);
     flush_range(mapped, memory_bytes);
 
     std::array<VideoBuffer, 2> buffers{{
@@ -463,7 +491,7 @@ void read_asset_text(const char *path, std::span<char> destination,
         {
             const std::size_t back = static_cast<std::size_t>(frame & 1) ^ 1U;
             Canvas canvas{static_cast<std::uint32_t *>(buffers[back].data)};
-            draw(canvas);
+            draw_frame(canvas);
             flush_range(buffers[back].data, frame_bytes);
             if (sceVideoOutSubmitFlip(video, static_cast<std::int32_t>(back), 1, frame) < 0)
                 (void)sceKernelUsleep(4000); // the previous flip is still queued

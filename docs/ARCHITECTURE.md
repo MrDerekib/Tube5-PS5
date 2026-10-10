@@ -5,9 +5,12 @@ un clip local; no conecta todavía con YouTube ni modifica su cliente oficial.
 
 ## Implementado
 
-- `main.cpp`: ventana y eventos SDL2, interfaz 1080p y mando/teclado.
+- `main.cpp`: eventos SDL2, interfaz 1080p y mando. En PS5 compone sobre una
+  superficie RGBA con renderer software directo, sin ventana ni driver de vídeo SDL.
 - `navigation.hpp`: navegación independiente del hardware, con pruebas unitarias.
-- `demo_renderer`: dibujo CPU; framebuffer lineal para SDL y modo tiled de la plantilla.
+- `demo_renderer`: dibujo CPU; framebuffer lineal para SDL, conversión acotada
+  a tiled y presentación VideoOut nativa de la plantilla.
+- `native_sdl`: carga comprobada de Keyboard y wrappers optativos de diagnóstico.
 - `media_player`: propiedad y limpieza del decodificador, textura y dispositivo de
   audio. SDL_kitchensink 2.0.0-a2 sobre FFmpeg 7.0.1 del port PacBrew.
 - `native_compat.c`: `dladdr` sin información para el código de bibliotecas que lo

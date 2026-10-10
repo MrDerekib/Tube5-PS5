@@ -20,12 +20,30 @@ inicializar VideoOut. Estas llamadas no cargan el módulo Keyboard.
 BOOT-DIAG-2 carga y comprueba el módulo nativo Keyboard `0x0106` antes de SDL.
 El ID y la obligación de cargarlo antes de inicializar están documentados en
 [la investigación de input nativo](https://github.com/blackbearreloaded/ps5-native-gamepad-input-research).
-La causa exacta del crash sigue pendiente de confirmar en hardware.
+Con BOOT-DIAG-2 el propietario confirma que desaparece el crash inicial:
+se alcanza D09, SDL devuelve "Couldn't find matching render driver" y la app
+permanece en negro por el bucle controlado de error. Esto apoya la corrección
+del módulo Keyboard, sin atribuirle todavía todos los posibles fallos.
+
+## BOOT-DIAG-3: composición offscreen y VideoOut nativo
+
+El archivo `SDL_ps5video.c.o` del sysroot fijado contiene un callback de
+framebuffer que crea una superficie pero no escribe los parámetros de salida
+`format`, `pixels` y `pitch`. La creación de un renderer software asociado a
+esa ventana no es una ruta viable para este prototipo.
+
+Tube5 crea ahora su superficie RGBA de 1080p y un renderer con
+[`SDL_CreateSoftwareRenderer`](https://wiki.libsdl.org/SDL2/SDL_CreateSoftwareRenderer),
+sin inicializar el subsistema de vídeo SDL en PS5. Conserva SDL para eventos,
+mando, composición y audio. La salida usa el VideoOut nativo de la plantilla,
+con copia acotada de la superficie lineal a sus buffers tiled. No abre un segundo
+VideoOut mediante SDL. Las pruebas de vídeo en PC también usan superficie sin
+ventana ni driver de vídeo.
 
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-2 \
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-3 \
   APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen"
 ```
 
@@ -43,17 +61,18 @@ Grabar los avisos y comunicar el último código Dxx visible.
 | D04 | UserService |
 | D04K | Carga/comprobación del módulo Keyboard; un retorno distinto de cero detiene el arranque |
 | D05 | `SDL_SetMainReady()` |
-| D05A | `SDL_Init(SDL_INIT_VIDEO)` |
+| D05A | `SDL_Init(SDL_INIT_EVENTS)` en la ruta nativa offscreen |
 | D05K1 | Inicialización de Keyboard; el aviso de retorno contiene su resultado |
 | D05K2 | Apertura de Keyboard; el aviso de retorno contiene su resultado |
 | D05V | Apertura de VideoOut; el aviso de retorno contiene su resultado |
 | D06 | SDL audio |
 | D07 | SDL mando |
-| D08 | Ventana |
-| D09 | Renderer software |
+| D08 | Superficie RGBA offscreen |
+| D09 | Renderer software directo sobre esa superficie |
 | D10 | Textura, framebuffer y conexión del mando |
 | D11 | SDL_kitchensink |
 | D12 | Eventos, dibujo y presentación |
+| D12V | Configuración y primer flip de VideoOut nativo |
 | D13 | Primer frame presentado; evaluar el fallo posterior |
 
 Los avisos se pueden encolar: el último visible es una pista, no una traza de

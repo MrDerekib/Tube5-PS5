@@ -17,10 +17,11 @@ static void require(bool value, const char *message)
 int main()
 {
     SDL_SetMainReady();
-    require(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) == 0, "SDL init");
+    require(SDL_Init(SDL_INIT_EVENTS | SDL_INIT_AUDIO) == 0, "SDL init without video driver");
     require(Kit_Init(0) == 0, "Kit init");
-    SDL_Window *window = SDL_CreateWindow("test", 0, 0, 640, 360, SDL_WINDOW_HIDDEN);
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    SDL_Surface *output = SDL_CreateRGBSurfaceWithFormat(0, 640, 360, 32, SDL_PIXELFORMAT_RGBA32);
+    require(output != nullptr, "offscreen surface");
+    SDL_Renderer *renderer = SDL_CreateSoftwareRenderer(output);
     require(renderer != nullptr, "renderer");
     tube5::MediaPlayer player;
     require(!player.open(renderer, "assets/does-not-exist.mp4"), "missing file rejected");
@@ -79,7 +80,7 @@ int main()
     player.close();
     Kit_Quit();
     SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
+    SDL_FreeSurface(output);
     SDL_Quit();
     std::puts("Media smoke passed: open, decode, pause, seek, EOF, reopen, cleanup.");
 }

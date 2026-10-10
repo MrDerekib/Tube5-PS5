@@ -26,16 +26,19 @@ enum class Color : std::uint32_t
 
 class Canvas;
 using DrawScene = void (*)(Canvas &) noexcept;
+using DrawSceneWithState = void (*)(Canvas &, void *) noexcept;
 // Draws the scene once and keeps it on screen.
 [[noreturn]] void run(DrawScene draw, std::string_view ready_message) noexcept;
 // Calls draw for every frame, for a scene that changes. The callback redraws the whole
 // frame; drawing on the CPU, a full 1920x1080 frame takes longer than one display refresh.
 [[noreturn]] void run_frames(DrawScene draw, std::string_view ready_message) noexcept;
+[[noreturn]] void run_frames(DrawSceneWithState draw, void *state,
+                             std::string_view ready_message) noexcept;
 
 namespace detail
 {
-[[noreturn]] void present(DrawScene draw, std::string_view ready_message,
-                          bool every_frame) noexcept;
+[[noreturn]] void present(DrawScene draw, std::string_view ready_message, bool every_frame,
+                          DrawSceneWithState stateful = nullptr, void *state = nullptr) noexcept;
 }
 
 class Canvas final
@@ -48,6 +51,9 @@ class Canvas final
     }
 
     void clear(Color color) noexcept;
+    // Copy a full RGBA frame into either linear or native tiled storage.
+    [[nodiscard]] bool blit_linear(std::span<const std::uint32_t> source,
+                                   unsigned pitch_pixels = 1920) noexcept;
     void rectangle(unsigned x, unsigned y, unsigned width, unsigned height, Color color) noexcept;
     void circle(unsigned center_x, unsigned center_y, unsigned radius, Color color) noexcept;
     void triangle(unsigned center_x, unsigned top, unsigned half_width, unsigned height,
@@ -58,8 +64,8 @@ class Canvas final
     std::uint32_t *pixels_;
     bool linear_;
 
-    friend void detail::present(DrawScene draw, std::string_view ready_message,
-                                bool every_frame) noexcept;
+    friend void detail::present(DrawScene draw, std::string_view ready_message, bool every_frame,
+                                DrawSceneWithState stateful, void *state) noexcept;
 };
 
 void read_asset_text(const char *path, std::span<char> destination,

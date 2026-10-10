@@ -18,6 +18,40 @@
 
 namespace
 {
+TEST(CanvasTest, BlitAcceptsRowPitchAndRejectsShortSources)
+{
+    constexpr unsigned pitch = 1928;
+    constexpr std::uint32_t guard = 0x12345678;
+    std::vector<std::uint32_t> source(pitch * 1080, 0);
+    for (unsigned y = 0; y < 1080; ++y)
+        for (unsigned x = 0; x < 1920; ++x)
+            source[y * pitch + x] = 0xff000000 | (y << 11) | x;
+    std::vector<std::uint32_t> linear(1920 * 1080 + 2, guard);
+    ps5::demo::Canvas canvas{linear.data() + 1, true};
+    EXPECT_FALSE(canvas.blit_linear(std::span{source}.first(100), pitch));
+    EXPECT_FALSE(canvas.blit_linear(source, 1919));
+    EXPECT_EQ(linear[1], guard);
+    ASSERT_TRUE(canvas.blit_linear(source, pitch));
+    EXPECT_EQ(linear[1], source[0]);
+    EXPECT_EQ(linear[1920 + 1], source[pitch]);
+    EXPECT_EQ(linear[1920 * 1080], source[1079 * pitch + 1919]);
+    EXPECT_EQ(linear.front(), guard);
+    EXPECT_EQ(linear.back(), guard);
+
+    std::vector<std::uint32_t> tiled(0x1000000 / 4 + 2, guard);
+    ps5::demo::Canvas native{tiled.data() + 1};
+    ASSERT_TRUE(native.blit_linear(source, pitch));
+    // Fixed address fixtures for the existing PS5 tiled layout.
+    EXPECT_EQ(tiled[1], source[0]);
+    EXPECT_EQ(tiled[1 + 1], source[1]);
+    EXPECT_EQ(tiled[4 + 1], source[pitch]);
+    EXPECT_EQ(tiled[15423 + 1], source[127 * pitch + 127]);
+    EXPECT_EQ(tiled[16384 + 1], source[128]);
+    EXPECT_EQ(tiled[2206335 + 1], source[1079 * pitch + 1919]);
+    EXPECT_EQ(tiled.front(), guard);
+    EXPECT_EQ(tiled.back(), guard);
+}
+
 TEST(CanvasTest, LinearFramebufferStaysInsideBounds)
 {
     constexpr std::size_t width = 1920, height = 1080;

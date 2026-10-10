@@ -19,8 +19,11 @@ SDL_kitchensink y FFmpeg, con decodificación por software.
 - X: abrir o pausar/reanudar. Círculo: volver. Options: ajustes fuera del vídeo.
 
 La versión inicial arrancó en una PS5 Fat con FW 13.20 y kstuff activo.
-Este nuevo prototipo pasó las pruebas en PC con sanitizadores, pero en la consola
-falla antes del menú con CE-108255-1. Está en diagnóstico; no se garantiza
+Este nuevo prototipo pasó las pruebas en PC con sanitizadores. La primera build
+de reproducción falló con CE-108255-1; cargar Keyboard eliminó ese crash, pero
+el renderer de ventana SDL devolvió un error. La nueva ruta compone en una
+superficie propia y presenta mediante VideoOut nativo, pendiente de validar
+en consola. Está en diagnóstico; no se garantiza
 compatibilidad con otros firmwares. Consulta [el diagnóstico de arranque](docs/STARTUP_DIAGNOSTICS.md)
 para compilar la variante con puntos de control.
 

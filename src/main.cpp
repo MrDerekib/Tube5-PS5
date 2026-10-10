@@ -148,24 +148,44 @@ int main()
         return 1;
 #endif
     }
-    tube5_boot_checkpoint("Tube5 D05: iniciar SDL VIDEO");
+    tube5_boot_checkpoint("Tube5 D05: iniciar SDL API");
     SDL_SetMainReady();
-    tube5_boot_checkpoint("Tube5 D05A: SDL API lista - iniciar VIDEO");
+    tube5_boot_checkpoint("Tube5 D05A: SDL API lista - iniciar eventos/video");
+#if defined(TUBE5_HOST) && !defined(TUBE5_OFFSCREEN)
     if (SDL_Init(SDL_INIT_VIDEO) != 0)
         fatal("SDL VIDEO");
-    tube5_boot_checkpoint("Tube5 D06: VIDEO OK - iniciar AUDIO");
+#else
+    // SDL's PS5 window framebuffer callback does not supply its format/pixels/
+    // pitch outputs. Use SDL only as an offscreen compositor; native VideoOut
+    // owns the display, so no second SDL VideoOut handle is opened.
+    if (SDL_Init(SDL_INIT_EVENTS) != 0)
+        fatal("SDL EVENTS");
+#endif
+    tube5_boot_checkpoint("Tube5 D06: eventos/video OK - iniciar AUDIO");
     if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0)
         fatal("SDL AUDIO");
     tube5_boot_checkpoint("Tube5 D07: AUDIO OK - iniciar MANDO");
     if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0)
         fatal("SDL MANDO");
+    SDL_Window *window = nullptr;
+    SDL_Surface *output = nullptr;
+    SDL_Renderer *renderer = nullptr;
+#if defined(TUBE5_HOST) && !defined(TUBE5_OFFSCREEN)
     tube5_boot_checkpoint("Tube5 D08: MANDO OK - crear ventana");
-    SDL_Window *window = SDL_CreateWindow("Tube5", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                          1920, 1080, SDL_WINDOW_SHOWN);
+    window = SDL_CreateWindow("Tube5", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1920, 1080,
+                              SDL_WINDOW_SHOWN);
     if (!window)
         fatal("WINDOW");
     tube5_boot_checkpoint("Tube5 D09: ventana OK - crear renderer");
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+#else
+    tube5_boot_checkpoint("Tube5 D08: MANDO OK - superficie RGBA");
+    output = SDL_CreateRGBSurfaceWithFormat(0, 1920, 1080, 32, SDL_PIXELFORMAT_RGBA32);
+    if (!output)
+        fatal("OUTPUT SURFACE");
+    tube5_boot_checkpoint("Tube5 D09: superficie OK - renderer directo");
+    renderer = SDL_CreateSoftwareRenderer(output);
+#endif
     if (!renderer)
         fatal("RENDERER");
     tube5_boot_checkpoint("Tube5 D10: renderer OK - framebuffer");
@@ -232,8 +252,10 @@ int main()
 #ifndef TUBE5_HOST
     (void)sceSystemServiceHideSplashScreen();
 #endif
+#ifdef TUBE5_HOST
     bool running = true;
-    while (running)
+#endif
+    auto render_frame = [&](Canvas *destination) noexcept
     {
         const Uint32 frame_start = SDL_GetTicks();
         SDL_Event event{};
@@ -316,13 +338,13 @@ int main()
         if (nav.screen == tube5::Screen::player)
             media.draw(renderer, SDL_Rect{350, 260, 1220, 620});
         SDL_RenderPresent(renderer);
+#ifdef TUBE5_HOST
         static bool first_frame = true;
         if (first_frame)
         {
             tube5_boot_checkpoint("Tube5 D13: primer frame presentado");
             first_frame = false;
         }
-#ifdef TUBE5_HOST
         if (const char *preview = std::getenv("TUBE5_PREVIEW"))
         {
             SDL_Surface *capture =
@@ -334,10 +356,32 @@ int main()
             running = false;
         }
 #endif
+        if (destination && output)
+        {
+            const unsigned pitch = static_cast<unsigned>(output->pitch / 4);
+            const std::span<const std::uint32_t> frame{
+                static_cast<const std::uint32_t *>(output->pixels),
+                static_cast<std::size_t>(pitch) * output->h};
+            if (!destination->blit_linear(frame, pitch))
+            {
+                (void)SDL_SetError("invalid native frame dimensions");
+                fatal("NATIVE BLIT");
+            }
+        }
         const Uint32 elapsed = SDL_GetTicks() - frame_start;
         if (elapsed < 33)
             SDL_Delay(33 - elapsed);
-    }
+    };
+#ifdef TUBE5_HOST
+    while (running)
+        render_frame(nullptr);
+#else
+    tube5_boot_checkpoint("Tube5 D12V: iniciar presentacion VideoOut nativa");
+    using Frame = decltype(render_frame);
+    ps5::demo::run_frames([](Canvas &destination, void *state) noexcept
+                          { (*static_cast<Frame *>(state))(&destination); }, &render_frame,
+                          "Tube5 D13: primer frame nativo presentado");
+#endif
     media.close();
     if (controller)
         SDL_GameControllerClose(controller);
@@ -345,7 +389,9 @@ int main()
         Kit_Quit();
     SDL_DestroyTexture(ui);
     SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
+    if (window)
+        SDL_DestroyWindow(window);
+    SDL_FreeSurface(output);
     SDL_Quit();
     return 0;
 }
