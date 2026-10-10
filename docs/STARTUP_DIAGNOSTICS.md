@@ -9,10 +9,24 @@ La app añade SDL, FFmpeg y dependencias de PacBrew respecto a la base que sí
 arrancaba. Enlazar sus símbolos no prueba su disponibilidad en un título nativo.
 Hay imports de Keyboard, ImeDialog y PosixForWebKit a revisar.
 
+## Resultado BOOT-DIAG-1 y siguiente prueba
+
+El propietario observa D00 a D05 y después el bloqueo, sin D06. Esto acota
+el fallo a `SDL_SetMainReady()` o `SDL_Init(SDL_INIT_VIDEO)`; no demuestra por
+sí solo qué llamada interna falla. El archivo de SDL del sysroot fijado confirma
+que `PS5_CreateDevice` llama a `PS5_Keyboard_Init` y `PS5_Keyboard_Open` antes de
+inicializar VideoOut. Estas llamadas no cargan el módulo Keyboard.
+
+BOOT-DIAG-2 carga y comprueba el módulo nativo Keyboard `0x0106` antes de SDL.
+El ID y la obligación de cargarlo antes de inicializar están documentados en
+[la investigación de input nativo](https://github.com/blackbearreloaded/ps5-native-gamepad-input-research).
+La causa exacta del crash sigue pendiente de confirmar en hardware.
+
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-1
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-2 \
+  APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen"
 ```
 
 Cerrar Tube5 y sustituir la carpeta completa `dist/PPSA99999/` en la consola,
@@ -27,7 +41,12 @@ Grabar los avisos y comunicar el último código Dxx visible.
 | D02 | Entrada en `main` |
 | D03 | Lectura de etiqueta de build |
 | D04 | UserService |
-| D05 | SDL vídeo, incluidos teclado/remote inicializados por su driver PS5 |
+| D04K | Carga/comprobación del módulo Keyboard; un retorno distinto de cero detiene el arranque |
+| D05 | `SDL_SetMainReady()` |
+| D05A | `SDL_Init(SDL_INIT_VIDEO)` |
+| D05K1 | Inicialización de Keyboard; el aviso de retorno contiene su resultado |
+| D05K2 | Apertura de Keyboard; el aviso de retorno contiene su resultado |
+| D05V | Apertura de VideoOut; el aviso de retorno contiene su resultado |
 | D06 | SDL audio |
 | D07 | SDL mando |
 | D08 | Ventana |

@@ -4,6 +4,7 @@
 #include "demo_renderer.hpp"
 #include "media_player.hpp"
 #include "navigation.hpp"
+#include "native_sdl.hpp"
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -137,8 +138,19 @@ int main()
     tube5_boot_checkpoint("Tube5 D04: iniciar UserService");
     (void)sceUserServiceInitialize(nullptr);
 #endif
+    if (tube5::prepare_native_sdl() != 0)
+    {
+        tube5_boot_checkpoint("Tube5 ERROR: modulo Keyboard no disponible - SDL no iniciado");
+#ifndef TUBE5_HOST
+        for (;;)
+            (void)sceKernelUsleep(1000000);
+#else
+        return 1;
+#endif
+    }
     tube5_boot_checkpoint("Tube5 D05: iniciar SDL VIDEO");
     SDL_SetMainReady();
+    tube5_boot_checkpoint("Tube5 D05A: SDL API lista - iniciar VIDEO");
     if (SDL_Init(SDL_INIT_VIDEO) != 0)
         fatal("SDL VIDEO");
     tube5_boot_checkpoint("Tube5 D06: VIDEO OK - iniciar AUDIO");

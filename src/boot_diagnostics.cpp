@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "boot_diagnostics.hpp"
+#include <cstddef>
 
 #if defined(TUBE5_DIAGNOSTICS) && !defined(TUBE5_HOST)
 #include <cstddef>
@@ -31,4 +32,21 @@ extern "C" void tube5_boot_checkpoint(const char *message) noexcept
 #else
     (void)message;
 #endif
+}
+
+void tube5_boot_result(const char *stage, std::uint32_t result) noexcept
+{
+    char message[160]{};
+    std::size_t length = 0;
+    if (stage)
+        for (; stage[length] && length < sizeof(message) - 12; ++length)
+            message[length] = stage[length];
+    message[length++] = ' ';
+    message[length++] = '0';
+    message[length++] = 'x';
+    constexpr char digits[] = "0123456789ABCDEF";
+    for (unsigned i = 0; i < 8; ++i)
+        message[length++] = digits[(result >> (28 - i * 4)) & 0xf];
+    message[length] = '\0';
+    tube5_boot_checkpoint(message);
 }

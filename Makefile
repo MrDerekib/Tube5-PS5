@@ -69,7 +69,16 @@ doctor:
 	@printf '%s\n' '==> [doctor] Checking the Linux/WSL host without changing it'
 	@bash tools/doctor.sh
 
-test: test-unit test-boot-diagnostics test-integration test-elevation test-update-check test-self-update
+test: test-unit test-boot-diagnostics test-native-sdl test-integration test-elevation test-update-check test-self-update
+
+.PHONY: test-native-sdl
+test-native-sdl:
+	@mkdir -p build/tests
+	@$(HOST_CXX) $(HOST_TEST_CXXFLAGS) -g -fsanitize=address,undefined \
+		-Isrc tests/test_native_sdl.cpp src/native_sdl.cpp src/boot_diagnostics.cpp \
+		$(HOST_TEST_LDFLAGS) -o build/tests/native-sdl
+	@build/tests/native-sdl
+	@printf '%s\n' 'Native SDL keyboard module lifecycle checks passed.'
 
 .PHONY: test-boot-diagnostics
 test-boot-diagnostics:

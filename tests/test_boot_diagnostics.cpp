@@ -39,4 +39,11 @@ int main()
     assert(captured[45] == 'A' && captured.back() == 0);
     tube5_boot_checkpoint(nullptr);
     assert(captured[45] == 0 && waits == 3);
+    tube5_boot_result("RESULT", 0x80960003);
+    assert(std::strcmp(reinterpret_cast<const char *>(captured.data() + 45), "RESULT 0x80960003") ==
+           0);
+    tube5_boot_result(long_message.data(), 0xFFFFFFFF);
+    const auto *text = reinterpret_cast<const char *>(captured.data() + 45);
+    assert(std::strlen(text) == 159);
+    assert(std::strcmp(text + 149, "0xFFFFFFFF") == 0);
 }
