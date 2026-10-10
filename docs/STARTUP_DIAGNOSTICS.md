@@ -425,10 +425,49 @@ nativo ni demuestra la causa del crash. Se prueba además un extracto de los
 primeros 120 s sin recodificar; ver [YOUTUBE_TEST.md](YOUTUBE_TEST.md).
 DIAG16 queda respaldada con eboot/etiqueta en `.local/boot-diag-16/`.
 
+## BOOT-DIAG-18-HTTP: conservación de muestras de audio
+
+El usuario confirma reproducción del extracto de 120 s, pero con audio que
+cruje/distorsiona. El lector de SDL_kitchensink fijado descarta el resto de cada
+paquete tras una lectura parcial: `av_frame_unref(current)` borra `crop_bottom`
+antes de decidir si debe retirar el paquete. Cancelar la lectura tampoco copia
+el contador modificado al frame de la cola. Una regresión host reproduce la
+pérdida de 90 muestras estéreo al leer 1024 de un paquete de 1114 muestras.
+
+DIAG18 sustituye solamente ese lector mediante wrapper: mueve el frame fuera
+de la cola, conserva su referencia entre callbacks y ajusta el PTS según los
+bytes consumidos. La callback rellena la salida con cuantos bloques necesite;
+un bloque corto no introduce automáticamente silencio. No se amplían buffers
+ni se reserva otro almacén PCM. Un reset con SDL pausado elimina el fragmento
+pendiente antes de seek/cierre. Se mantiene el contrato S16 estéreo/48 kHz.
+El ABI privado se limita a la versión fijada; se comprueba con los headers host
+y los offsets del archivo nativo (userdata 0x28, current 0x18, queue 0x30).
+
+`AUD ... U<N> E<N>` muestra callbacks/bytes PCM, callbacks con salida incompleta
+y último error. Algunos huecos al arrancar o saltar no prueban un fallo; interesa
+si `U` crece continuamente durante reproducción normal. La prueba PCM verifica
+byte a byte fragmentos y bloques consecutivos, espera por PTS, descarte tardío,
+alineación y reset. Los smoke usan audio dummy: la calidad sonora y el efecto
+sobre los crujidos siguen pendientes de prueba en PS5. No se da por resuelto
+el ENOMEM del vídeo completo de 28 minutos.
+
+Con Tube5 cerrada, sustituir solo `eboot.bin` y `build-label.txt` de
+`dist/PPSA99999/` en `/data/homebrew/PPSA99999/`. Mantener URL/payloads. Comparar
+audio HTTP primero sin saltos y después pausa/seek/reapertura, con volumen
+moderado. Anotar si desaparecen los crujidos y si U sube constantemente.
+
+Validación PC: regresión PCM y batería media con ASan/UBSan/LSan, smoke HTTP
+del extracto real (apertura, reproducción inicial, pausa, seek a EOF y reapertura),
+`make test` y build nativa con FSELF válido. El smoke no reproduce los 120 s
+enteros de forma continua. `make lint` sigue fallando por formato en archivos
+previos de self-update, no modificados aquí; el formato de los archivos de
+esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
+`6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
+
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-17-HTTP \
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-18-HTTP \
   APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign Kit_LockVideoDecoderRaw Kit_BeginPacketBufferRead Kit_FinishPacketBufferRead Kit_CancelPacketBufferRead Kit_GetTimerElapsed av_frame_ref"
 ```
 

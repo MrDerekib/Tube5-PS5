@@ -85,6 +85,7 @@ class MediaPlayer final
     std::atomic<unsigned> audio_callbacks_{0};
     std::atomic<std::size_t> audio_bytes_{0};
     std::atomic<int> audio_error_{0};
+    std::atomic<unsigned> audio_underruns_{0};
     unsigned seek_requests_ = 0;
     unsigned seek_dispatches_ = 0;
     bool paused_ = false;

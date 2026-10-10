@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "media_player.hpp"
+#include "audio_reader.hpp"
 #include "codec_diagnostics.hpp"
 #include "thread_diagnostics.hpp"
 #include "pipeline_diagnostics.hpp"
@@ -174,12 +175,22 @@ void MediaPlayer::audio_callback(void *userdata, Uint8 *stream, int length) noex
     if (self->player_)
     {
         ++self->audio_callbacks_;
-        const int result =
-            Kit_GetPlayerAudioData(self->player_, 0, stream, static_cast<std::size_t>(length));
-        if (result > 0)
+        int filled = 0;
+        while (filled < length)
+        {
+            const int result =
+                Kit_GetPlayerAudioData(self->player_, static_cast<std::size_t>(filled),
+                                       stream + filled, static_cast<std::size_t>(length - filled));
+            if (result <= 0)
+            {
+                if (result < 0)
+                    self->audio_error_ = result;
+                ++self->audio_underruns_;
+                break;
+            }
+            filled += result;
             self->audio_bytes_ += static_cast<std::size_t>(result);
-        else if (result < 0)
-            self->audio_error_ = result;
+        }
     }
 }
 
@@ -197,6 +208,7 @@ void MediaPlayer::close() noexcept
     if (audio_)
         SDL_CloseAudioDevice(audio_);
     audio_ = 0;
+    reset_audio_reader();
     if (player_)
         Kit_ClosePlayer(player_);
     end_pipeline_diagnostic();
@@ -214,6 +226,7 @@ void MediaPlayer::close() noexcept
     audio_callbacks_ = 0;
     audio_bytes_ = 0;
     audio_error_ = 0;
+    audio_underruns_ = 0;
     seek_requests_ = 0;
     seek_dispatches_ = 0;
     frame_area_ = {};
@@ -270,6 +283,7 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
         (seek_dispatched_at_ == 0 || now - seek_dispatched_at_ >= 500))
     {
         SDL_PauseAudioDevice(audio_, 1);
+        reset_audio_reader();
         if (Kit_PlayerSeek(player_, pending_seek_) != 0)
             std::snprintf(error_, sizeof(error_), "SEEK: %s", Kit_GetError());
         else
@@ -364,11 +378,11 @@ void MediaPlayer::diagnostic_status(char *text, std::size_t capacity) const noex
         Kit_GetPlayerVideoBufferState(player_, &frames, &frame_capacity, &packets,
                                       &packet_capacity);
     std::snprintf(text, capacity,
-                  "FR %u BUF %u/%u PKT %u/%u SEEK %u/%u RAW %u/%u RC%d S%d AUD %u/%zu E%d",
+                  "FR %u BUF %u/%u PKT %u/%u SEEK %u/%u RAW %u/%u RC%d S%d AUD %u/%zu U%u E%d",
                   frames_uploaded_, frames, frame_capacity, packets, packet_capacity,
                   seek_dispatches_, seek_requests_, raw_successes_, raw_attempts_, raw_result_,
                   player_ ? Kit_GetPlayerState(player_) : KIT_CLOSED, audio_callbacks_.load(),
-                  audio_bytes_.load(), audio_error_.load());
+                  audio_bytes_.load(), audio_underruns_.load(), audio_error_.load());
 }
 
 double MediaPlayer::position() const noexcept

@@ -9,7 +9,7 @@ hardware can prove.
 | --- | --- |
 | `make test-deps` | Fetch and verify the pinned host-only GoogleTest source. |
 | `make test-unit` | Compile and run the host-native GoogleTest application tests. |
-| `bash tools/test-host-media.sh` | With the pinned host Kitchensink checkout prepared: sanitizer checks for native-memory boundaries, diagnostic mocks, real local video/audio, pause, seeks, EOF/reopen, and an offscreen UI preview. Native sync hooks and console output still require PS5. |
+| `bash tools/test-host-media.sh` | With the pinned host Kitchensink checkout prepared: sanitizer checks for native-memory boundaries, diagnostic mocks, byte-exact partial PCM reads, real local video/audio, pause, seeks, EOF/reopen, HTTP failures, and an offscreen UI preview. Native sync hooks and console output still require PS5. |
 | `make test-integration` | Exercise repository scripts through subprocesses and temporary files. |
 | `make test-update-check` | Check the [update check](UPDATE_CHECK.md): versions, parsing, decisions, hostile input, under sanitizers. |
 | `make test` | Run every host test suite. |
@@ -56,6 +56,13 @@ Each test must clean up its files, avoid shared mutable state, and include the
 failure case that would have caught the associated bug.
 
 ## PS5 integration validation
+
+`tests/test_audio_reader.cpp` first reproduces the pinned upstream reader's
+discarded tail, then verifies that Tube5 preserves and concatenates PCM without
+lost/duplicated bytes. It also exercises early/late timestamps, reset and sample
+alignment. Playback smoke tests use SDL's dummy audio backend; they do not prove
+audible quality or absence of native AudioOut underruns. The hardware `AUD U`
+counter counts callbacks that could not fill their output, not their duration.
 
 Rendering, controller input, AudioOut, mounted paths, launch/closure behavior,
 and firmware compatibility require hardware validation. A passing host suite
