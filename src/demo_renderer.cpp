@@ -245,15 +245,21 @@ void notify(std::string_view message) noexcept
     return (static_cast<std::size_t>(block_index) << 16) + offset;
 }
 
-void put_pixel_unchecked(std::uint32_t *pixels, unsigned x, unsigned y, Color color) noexcept
+void put_pixel_unchecked(std::uint32_t *pixels, unsigned x, unsigned y, Color color,
+                         bool linear) noexcept
 {
+    if (linear)
+    {
+        pixels[y * frame_width + x] = static_cast<std::uint32_t>(color);
+        return;
+    }
     auto *bytes = reinterpret_cast<std::uint8_t *>(pixels);
     *reinterpret_cast<std::uint32_t *>(bytes + tiled_byte_offset(x, y)) =
         static_cast<std::uint32_t>(color);
 }
 
 void fill_rect(std::uint32_t *pixels, unsigned x, unsigned y, unsigned width, unsigned height,
-               Color color) noexcept
+               Color color, bool linear) noexcept
 {
     if (x >= frame_width || y >= frame_height)
         return;
@@ -263,12 +269,12 @@ void fill_rect(std::uint32_t *pixels, unsigned x, unsigned y, unsigned width, un
     for (unsigned row = y; row < bottom; ++row)
     {
         for (unsigned column = x; column < right; ++column)
-            put_pixel_unchecked(pixels, column, row, color);
+            put_pixel_unchecked(pixels, column, row, color, linear);
     }
 }
 
 void fill_circle(std::uint32_t *pixels, unsigned center_x, unsigned center_y, unsigned radius,
-                 Color color) noexcept
+                 Color color, bool linear) noexcept
 {
     const int signed_radius = static_cast<int>(radius);
     for (int y = -signed_radius; y <= signed_radius; ++y)
@@ -284,7 +290,7 @@ void fill_circle(std::uint32_t *pixels, unsigned center_x, unsigned center_y, un
                     const auto bounded_x = static_cast<unsigned>(pixel_x);
                     const auto bounded_y = static_cast<unsigned>(pixel_y);
                     if (bounded_x < frame_width && bounded_y < frame_height)
-                        put_pixel_unchecked(pixels, bounded_x, bounded_y, color);
+                        put_pixel_unchecked(pixels, bounded_x, bounded_y, color, linear);
                 }
             }
         }
@@ -292,7 +298,7 @@ void fill_circle(std::uint32_t *pixels, unsigned center_x, unsigned center_y, un
 }
 
 void fill_triangle(std::uint32_t *pixels, unsigned center_x, unsigned top, unsigned half_width,
-                   unsigned height, Color color) noexcept
+                   unsigned height, Color color, bool linear) noexcept
 {
     if (height == 0 || center_x >= frame_width)
         return;
@@ -302,12 +308,12 @@ void fill_triangle(std::uint32_t *pixels, unsigned center_x, unsigned top, unsig
         const unsigned half = row * half_width / height;
         const unsigned left = half > center_x ? 0 : center_x - half;
         const unsigned right = half >= frame_width - center_x ? frame_width : center_x + half + 1;
-        fill_rect(pixels, left, top + row, right - left, 1, color);
+        fill_rect(pixels, left, top + row, right - left, 1, color, linear);
     }
 }
 
 void draw_text(std::uint32_t *pixels, unsigned x, unsigned y, std::string_view value,
-               unsigned scale, Color color) noexcept
+               unsigned scale, Color color, bool linear) noexcept
 {
     for (const char character : value)
     {
@@ -317,7 +323,8 @@ void draw_text(std::uint32_t *pixels, unsigned x, unsigned y, std::string_view v
             for (unsigned column = 0; column < 5; ++column)
             {
                 if ((rows[row] & (1U << (4 - column))) != 0)
-                    fill_rect(pixels, x + column * scale, y + row * scale, scale, scale, color);
+                    fill_rect(pixels, x + column * scale, y + row * scale, scale, scale, color,
+                              linear);
             }
         }
         x += 6 * scale;
@@ -339,30 +346,30 @@ void flush_range(void *address, std::size_t length) noexcept
 
 void Canvas::clear(Color color) noexcept
 {
-    fill_rect(pixels_, 0, 0, frame_width, frame_height, color);
+    fill_rect(pixels_, 0, 0, frame_width, frame_height, color, linear_);
 }
 
 void Canvas::rectangle(unsigned x, unsigned y, unsigned width, unsigned height,
                        Color color) noexcept
 {
-    fill_rect(pixels_, x, y, width, height, color);
+    fill_rect(pixels_, x, y, width, height, color, linear_);
 }
 
 void Canvas::circle(unsigned center_x, unsigned center_y, unsigned radius, Color color) noexcept
 {
-    fill_circle(pixels_, center_x, center_y, radius, color);
+    fill_circle(pixels_, center_x, center_y, radius, color, linear_);
 }
 
 void Canvas::triangle(unsigned center_x, unsigned top, unsigned half_width, unsigned height,
                       Color color) noexcept
 {
-    fill_triangle(pixels_, center_x, top, half_width, height, color);
+    fill_triangle(pixels_, center_x, top, half_width, height, color, linear_);
 }
 
 void Canvas::text(unsigned x, unsigned y, std::string_view value, unsigned scale,
                   Color color) noexcept
 {
-    draw_text(pixels_, x, y, value, scale, color);
+    draw_text(pixels_, x, y, value, scale, color, linear_);
 }
 
 void read_asset_text(const char *path, std::span<char> destination,

@@ -14,9 +14,28 @@
 #include <cstdio>
 #include <fstream>
 #include <span>
+#include <vector>
 
 namespace
 {
+TEST(CanvasTest, LinearFramebufferStaysInsideBounds)
+{
+    constexpr std::size_t width = 1920, height = 1080;
+    constexpr std::uint32_t guard = 0x12345678;
+    std::vector<std::uint32_t> pixels(width * height + 2, guard);
+    ps5::demo::Canvas canvas{pixels.data() + 1, true};
+    canvas.clear(ps5::demo::Color::background);
+    EXPECT_EQ(pixels[1], static_cast<std::uint32_t>(ps5::demo::Color::background));
+    EXPECT_EQ(pixels[width * height], static_cast<std::uint32_t>(ps5::demo::Color::background));
+    canvas.rectangle(1918, 1078, 100, 100, ps5::demo::Color::white);
+    canvas.circle(1919, 1079, 30, ps5::demo::Color::white);
+    canvas.triangle(1919, 1070, 30, 30, ps5::demo::Color::white);
+    canvas.text(1919, 1079, "TUBE5", 4, ps5::demo::Color::white);
+    EXPECT_EQ(pixels.front(), guard);
+    EXPECT_EQ(pixels.back(), guard);
+    EXPECT_EQ(pixels[width * height], static_cast<std::uint32_t>(ps5::demo::Color::white));
+}
+
 class AssetTextTest : public testing::Test
 {
   protected:

@@ -41,6 +41,12 @@ namespace detail
 class Canvas final
 {
   public:
+    // SDL uses a contiguous 1920 x 1080 buffer; VideoOut uses PS5 tiled memory.
+    explicit Canvas(std::uint32_t *pixels, bool linear = false) noexcept
+        : pixels_{pixels}, linear_{linear}
+    {
+    }
+
     void clear(Color color) noexcept;
     void rectangle(unsigned x, unsigned y, unsigned width, unsigned height, Color color) noexcept;
     void circle(unsigned center_x, unsigned center_y, unsigned radius, Color color) noexcept;
@@ -49,11 +55,8 @@ class Canvas final
     void text(unsigned x, unsigned y, std::string_view value, unsigned scale, Color color) noexcept;
 
   private:
-    explicit Canvas(std::uint32_t *pixels) noexcept : pixels_{pixels}
-    {
-    }
-
     std::uint32_t *pixels_;
+    bool linear_;
 
     friend void detail::present(DrawScene draw, std::string_view ready_message,
                                 bool every_frame) noexcept;

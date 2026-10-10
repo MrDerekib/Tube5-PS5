@@ -1,0 +1,85 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#define SDL_MAIN_HANDLED
+#include "media_player.hpp"
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+
+static void require(bool value, const char *message)
+{
+    if (!value)
+    {
+        std::fprintf(stderr, "FAIL: %s (%s)\n", message, SDL_GetError());
+        std::exit(1);
+    }
+}
+
+int main()
+{
+    SDL_SetMainReady();
+    require(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) == 0, "SDL init");
+    require(Kit_Init(0) == 0, "Kit init");
+    SDL_Window *window = SDL_CreateWindow("test", 0, 0, 640, 360, SDL_WINDOW_HIDDEN);
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    require(renderer != nullptr, "renderer");
+    tube5::MediaPlayer player;
+    require(!player.open(renderer, "assets/does-not-exist.mp4"), "missing file rejected");
+    require(player.error()[0] != '\0', "missing file diagnostic");
+    require(player.open(renderer, "assets/test-clip.mp4"), player.error());
+    require(std::abs(player.duration() - 20.0) < 0.2, "clip duration");
+    for (int i = 0; i < 30; ++i)
+    {
+        player.draw(renderer, SDL_Rect{0, 0, 640, 360});
+        SDL_RenderPresent(renderer);
+        SDL_Delay(33);
+    }
+    require(player.position() > 0.4, "playback advances");
+    // Capture pixels and prove actual decoded frames are being displayed.
+    SDL_Surface *capture = SDL_CreateRGBSurfaceWithFormat(0, 640, 360, 32, SDL_PIXELFORMAT_RGBA32);
+    require(capture != nullptr, "capture allocation");
+    require(SDL_RenderReadPixels(renderer, nullptr, capture->format->format, capture->pixels,
+                                 capture->pitch) == 0,
+            "video capture");
+    auto *bytes = static_cast<unsigned char *>(capture->pixels);
+    int colored = 0;
+    for (int i = 0; i < 640 * 360; ++i)
+        colored += bytes[i * 4] > 32 || bytes[i * 4 + 1] > 32 || bytes[i * 4 + 2] > 32;
+    require(colored > 20000, "decoded image is not black");
+    require(SDL_SaveBMP(capture, "build/video-preview.bmp") == 0, "save video preview");
+    SDL_FreeSurface(capture);
+    player.toggle_pause();
+    require(player.paused(), "pause");
+    const double paused_at = player.position();
+    SDL_Delay(150);
+    require(std::abs(player.position() - paused_at) < 0.05, "paused clock remains still");
+    player.seek(5.0);
+    require(player.paused(), "seek preserves pause");
+    require(std::abs(player.position() - paused_at - 5.0) < 0.3, "forward seek");
+    player.seek(-100.0);
+    require(player.position() >= 0 && player.position() < 0.3, "negative seek clamps to zero");
+    player.toggle_pause();
+    require(!player.paused(), "resume");
+    for (int i = 0; i < 30; ++i)
+    {
+        player.draw(renderer, SDL_Rect{0, 0, 640, 360});
+        SDL_Delay(33);
+    }
+    require(player.position() < 2.0, "paused seek applied on resume");
+    player.seek(100.0);
+    for (int i = 0; i < 90 && !player.finished(); ++i)
+    {
+        player.draw(renderer, SDL_Rect{0, 0, 640, 360});
+        SDL_Delay(33);
+    }
+    std::printf("EOF position %.3f / %.3f\n", player.position(), player.duration());
+    require(player.finished(), "end of video");
+    player.close();
+    require(player.open(renderer, "assets/test-clip.mp4"), "reopen after end");
+    player.close();
+    player.close();
+    Kit_Quit();
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    std::puts("Media smoke passed: open, decode, pause, seek, EOF, reopen, cleanup.");
+}

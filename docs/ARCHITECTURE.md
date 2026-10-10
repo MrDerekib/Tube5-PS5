@@ -1,8 +1,22 @@
 # Arquitectura de Tube5
 
-Tube5 será una aplicación multimedia nativa para PS5. Esta primera versión es
-una base de compilación y presentación: no reproduce contenido ni modifica el
-cliente oficial de YouTube.
+Tube5 es una aplicación multimedia nativa para PS5. El prototipo actual reproduce
+un clip local; no conecta todavía con YouTube ni modifica su cliente oficial.
+
+## Implementado
+
+- `main.cpp`: ventana y eventos SDL2, interfaz 1080p y mando/teclado.
+- `navigation.hpp`: navegación independiente del hardware, con pruebas unitarias.
+- `demo_renderer`: dibujo CPU; framebuffer lineal para SDL y modo tiled de la plantilla.
+- `media_player`: propiedad y limpieza del decodificador, textura y dispositivo de
+  audio. SDL_kitchensink 2.0.0-a2 sobre FFmpeg 7.0.1 del port PacBrew.
+- `native_compat.c`: `dladdr` sin información para el código de bibliotecas que lo
+  consulta. El enlace incorpora funciones POSIX del SDK público donde son necesarias.
+
+La pausa conserva una posición propia porque el reloj de esta versión de
+SDL_kitchensink continúa avanzando en pausa. Las peticiones de seek se agrupan
+y se ejecutan al reproducir para evitar perderlas mientras el demuxer está
+ocupado. El clip usa H.264 baseline/AAC y la decodificación es por CPU.
 
 ## Capas previstas
 
@@ -27,7 +41,7 @@ cliente oficial de YouTube.
 
 ## Límites del primer hito
 
-El objetivo inmediato es validar una aplicación instalable, la UI básica y los
-contratos de reproductor/SponsorBlock. La compatibilidad con una fuente de
+El objetivo inmediato es validar el nuevo reproductor y el mando en PS5 13.20.
+La compatibilidad con una fuente de
 vídeo concreta no se presupone ni se anuncia hasta contar con una integración
 probada y permitida.
