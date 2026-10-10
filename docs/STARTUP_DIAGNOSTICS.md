@@ -378,10 +378,22 @@ Detalles, límites y checkpoints H01/H02: [HTTP_TEST.md](HTTP_TEST.md).
 La causa exacta del crash anterior y el resultado físico de DIAG14 siguen
 pendientes de confirmación.
 
+## BOOT-DIAG-15-HTTP: conexión no bloqueante verificada y plazo de apertura
+
+El usuario reportó que DIAG14 permaneció en H01 y tuvo que cerrarla a la fuerza,
+sin la pantalla de crash anterior. El servidor responde desde PC, sin petición
+HTTP registrada de PS5 para ese intento; esto no localiza por sí solo la llamada.
+DIAG15 fuerza/verifica SO_NBIO antes de connect y devuelve error si no puede
+asegurarlo, incluso si fcntl había devuelto éxito. Añade AVIOInterruptCB con un
+plazo cooperativo de 8 s para apertura/probing y conserva el timeout por operación.
+Ese callback no puede cancelar una syscall bloqueada; la corrección física está
+pendiente. H03/H10/H11/H12 son traces sin usleep, para localizar la fase y retorno
+de connect. Detalles y pruebas de servidor que no responde: [HTTP_TEST.md](HTTP_TEST.md).
+
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-14-HTTP \
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-15-HTTP \
   APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign Kit_LockVideoDecoderRaw Kit_BeginPacketBufferRead Kit_FinishPacketBufferRead Kit_CancelPacketBufferRead Kit_GetTimerElapsed av_frame_ref"
 ```
 

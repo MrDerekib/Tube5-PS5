@@ -36,18 +36,18 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     "${libs[@]}" -o build/video-conversion-test
 build/video-conversion-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
-    -DTUBE5_NETWORK_WRAP "${cflags[@]}" tests/test_network_source.cpp src/network_source.cpp src/boot_diagnostics.cpp \
-    "${libs[@]}" -o build/network-source-test
+    -DTUBE5_NETWORK_WRAP -Isrc "${cflags[@]}" tests/test_network_source.cpp src/network_source.cpp src/boot_diagnostics.cpp \
+    "${libs[@]}" -Wl,--wrap=SDL_GetTicks64 -o build/network-source-test
 build/network-source-test
 clang -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
-    -D_DEFAULT_SOURCE -DTUBE5_HOST -DTUBE5_NETWORK_TEST \
+    -D_DEFAULT_SOURCE -DTUBE5_HOST -DTUBE5_NETWORK_TEST -DTUBE5_NETWORK_SOCKET_MOCK \
     -Dgetsockopt=tube5_test_getsockopt -Dsetsockopt=tube5_test_setsockopt \
     tests/test_native_network.c src/native_network.c -o build/native-network-test
 build/native-network-test
 clang -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -D_DEFAULT_SOURCE -DTUBE5_HOST -DTUBE5_NETWORK_TEST \
     -c src/native_network.c -o build/native-network-host.o
-native_network_wraps=-Wl,--wrap=getaddrinfo,--wrap=freeaddrinfo,--wrap=gai_strerror,--wrap=getnameinfo,--wrap=gethostbyname,--wrap=fcntl,--wrap=strcasestr,--wrap=isatty
+native_network_wraps=-Wl,--wrap=getaddrinfo,--wrap=freeaddrinfo,--wrap=gai_strerror,--wrap=getnameinfo,--wrap=gethostbyname,--wrap=fcntl,--wrap=connect,--wrap=strcasestr,--wrap=isatty
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc tests/test_native_framebuffer.cpp src/native_framebuffer.cpp -o build/native-framebuffer-test
 build/native-framebuffer-test
@@ -59,6 +59,7 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "$native_network_wraps" \
     -Wl,--wrap=av_read_frame,--wrap=avcodec_send_packet,--wrap=avcodec_receive_frame,--wrap=avformat_seek_file,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat,--wrap=avformat_open_input -o build/media-smoke
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/media-smoke
+python3 -m unittest discover -s tests -p test_http_test_server.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_HOST -DTUBE5_OFFSCREEN -DTUBE5_CONVERSION_WRAP -DTUBE5_NETWORK_WRAP -ffunction-sections -fdata-sections \
     -Isrc -I"$source_root/include" "${cflags[@]}" src/main.cpp src/demo_renderer.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/native_sdl.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
     build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "$native_network_wraps" -Wl,--gc-sections,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat,--wrap=avformat_open_input -o build/tube5-host

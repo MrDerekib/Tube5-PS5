@@ -46,4 +46,8 @@ int main()
     const auto *text = reinterpret_cast<const char *>(captured.data() + 45);
     assert(std::strlen(text) == 159);
     assert(std::strcmp(text + 149, "0xFFFFFFFF") == 0);
+    const unsigned previous_waits = waits;
+    tube5_boot_trace("HTTP H11");
+    assert(std::strcmp(reinterpret_cast<const char *>(captured.data() + 45), "HTTP H11") == 0);
+    assert(waits == previous_waits);
 }

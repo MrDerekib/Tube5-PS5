@@ -4,4 +4,5 @@
 
 // Optional checkpoints must work before runtime/heap initialization.
 extern "C" void tube5_boot_checkpoint(const char *message) noexcept;
+extern "C" void tube5_boot_trace(const char *message) noexcept;
 void tube5_boot_result(const char *stage, std::uint32_t result) noexcept;

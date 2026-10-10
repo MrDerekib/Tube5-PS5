@@ -4,6 +4,7 @@
 #include "thread_diagnostics.hpp"
 #include "pipeline_diagnostics.hpp"
 #include "memory_diagnostics.hpp"
+#include "network_source.hpp"
 #include <algorithm>
 #include <cstdio>
 
@@ -22,8 +23,10 @@ bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
     error_[0] = '\0';
     reset_memory_diagnostic();
     source_ = Kit_CreateSourceFromUrl(path);
+    tube5::finish_network_open();
     if (!source_)
-        return fail("SOURCE", Kit_GetError());
+        return fail("SOURCE",
+                    tube5::network_open_error()[0] ? tube5::network_open_error() : Kit_GetError());
     const int video = Kit_GetBestSourceStream(source_, KIT_STREAMTYPE_VIDEO);
     const int audio = Kit_GetBestSourceStream(source_, KIT_STREAMTYPE_AUDIO);
     if (video < 0 || audio < 0)

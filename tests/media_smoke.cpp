@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 static void require(bool value, const char *message)
 {
@@ -38,6 +39,21 @@ int main(int argc, char **argv)
     tube5::MediaPlayer player;
     require(!player.open(renderer, "assets/does-not-exist.mp4"), "missing file rejected");
     require(player.error()[0] != '\0', "missing file diagnostic");
+    if (argc > 2 && std::strcmp(argv[2], "--expect-open-failure") == 0)
+    {
+        const Uint64 start = SDL_GetTicks64();
+        require(!player.open(renderer, clip), "stalled HTTP source rejected");
+        require(SDL_GetTicks64() - start < 11000, "HTTP failure returns within deadline");
+        require(std::strstr(player.error(), "HTTP") != nullptr, "HTTP failure detail preserved");
+        require(player.open(renderer, "assets/test-clip.mp4"), "local recovery after HTTP failure");
+        player.close();
+        Kit_Quit();
+        SDL_DestroyRenderer(renderer);
+        SDL_FreeSurface(output);
+        SDL_Quit();
+        std::puts("HTTP stall passed: bounded failure and local recovery.");
+        return 0;
+    }
     require(player.open(renderer, clip), player.error());
     require(Kit_GetHint(KIT_HINT_THREAD_COUNT) == 1, "explicit single-thread codec baseline");
     require(std::abs(player.duration() - 20.0) < 0.2, "clip duration");

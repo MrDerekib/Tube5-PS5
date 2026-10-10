@@ -158,7 +158,7 @@ if [[ $app_source_dir == src && -f $root/src/network_source.cpp ]]; then
     app_wrap_symbols+=" avformat_open_input"
 fi
 if [[ $app_source_dir == src && -f $root/src/native_network.c ]]; then
-    app_wrap_symbols+=" getaddrinfo freeaddrinfo gai_strerror getnameinfo gethostbyname fcntl strcasestr isatty"
+    app_wrap_symbols+=" getaddrinfo freeaddrinfo gai_strerror getnameinfo gethostbyname fcntl connect strcasestr isatty"
 fi
 
 # Link-time wrappers: each symbol S resolves to the app's __wrap_S, and

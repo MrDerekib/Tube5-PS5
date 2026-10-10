@@ -1,6 +1,6 @@
 # Prueba HTTP en la red local
 
-BOOT-DIAG-14-HTTP conserva la reproducción local de DIAG12 y permite elegir HTTP
+BOOT-DIAG-15-HTTP conserva la reproducción local de DIAG12 y permite elegir HTTP
 en Ajustes. No es aún integración con YouTube, HTTPS, DASH ni buffering adaptativo.
 
 ## Servidor del PC
@@ -46,7 +46,7 @@ Cerrar Tube5. Si ya está instalada DIAG12 completa, copiar estos tres archivos 
 - `dist/PPSA99999/build-label.txt`
 - `dist/PPSA99999/network-test-url.txt`
 
-Arrancar Tube5 y comprobar BOOT-DIAG-14-HTTP. Por defecto usa LOCAL para preservar
+Arrancar Tube5 y comprobar BOOT-DIAG-15-HTTP. Por defecto usa LOCAL para preservar
 la comparación. En Ajustes, X alterna LOCAL/HTTP; se muestra la URL configurada.
 Círculo vuelve al menú y la tarjeta cambia a VIDEO EN RED. X abre el clip HTTP.
 La selección no persiste al reiniciar la app.
@@ -91,6 +91,26 @@ terminado. Solo se notifican al abrir, no durante lecturas ni seeks; los avisos
 de diagnóstico añaden una breve espera antes de iniciar el reloj del vídeo.
 Si vuelve a bloquearse, grabar el último aviso además del error de la consola.
 
+DIAG14 dejó de mostrar el crash, pero quedó bloqueada en H01 y requirió cierre
+forzado. El servidor seguía respondiendo a las comprobaciones del PC, sin una
+petición HTTP registrada de la PS5 para ese intento. No hay backtrace del bloqueo.
+El fallback fcntl anterior solo intervenía ante EINVAL; por sí solo no verificaba
+el modo real de un socket cuando libc devolvía éxito.
+
+DIAG15 fuerza SO_NBIO=1 antes de connect y comprueba que el socket devuelve ese
+estado. Si falla o sigue bloqueante, devuelve error sin llamar a connect. Los
+traces de red no duermen: H03 indica dirección IPv4 preparada, H10 preparación
+del socket, H11 entrada en connect y H12 su retorno/errno. Un retorno -1 con
+EINPROGRESS es normal para una conexión no bloqueante; no demuestra fallo de red.
+
+Además instala AVIOInterruptCB con un plazo de 8 s que cubre apertura y probing
+de la fuente. Conserva un callback previo del llamador y desactiva el plazo antes
+de iniciar reproducción, para no cortarla a los 8 s. Mantiene el timeout por
+operación de 5 s. Muestra el error de FFmpeg al volver al menú. El límite es
+cooperativo: FFmpeg debe volver a comprobar el callback; no puede interrumpir una
+llamada del kernel que se quede bloqueada. Por eso también se fuerza/verifica el
+socket. No se promete que el bloqueo físico esté resuelto sin probar DIAG15.
+
 Pruebas:
 
 ```bash
@@ -120,6 +140,17 @@ El smoke local y HTTP pasa enlazando el mismo adaptador de resolución y fcntl
 Compila la variante nativa y valida la integridad del FSELF. La auditoría del ELF
 confirma que las siete funciones de resolución/texto corregidas ya no son imports;
 ff_socket_nonblock llama a __wrap_fcntl. La prueba física PS5 sigue pendiente.
+
+La validación de DIAG15 añade rechazo de sockets que ignoran SO_NBIO, propagación
+del error de setsockopt, retorno EINPROGRESS, deadline con reloj simulado y un
+servidor real que acepta HTTP pero no responde. El smoke de ese servidor debe
+devolver error en menos de 11 s y volver a abrir el clip local. También se
+comprueba que los traces de notificación no añadan usleep.
+Estas pruebas pasan con sanitizadores, incluido el servidor detenido antes de
+responder y la recuperación local. Pasa también el smoke HTTP normal con más de
+ocho segundos continuos, pausa, seeks, EOF y reapertura; el plazo se desactiva
+antes de reproducir. Compila DIAG15 nativa, valida el FSELF y el ELF confirma
+que ff_connect_parallel llama al nuevo wrapper de connect.
 
 DIAG12 permanece respaldada en `.local/boot-diag-12/`, con su eboot, etiqueta y
 ZIP, para recuperar la referencia local si aparece una regresión.

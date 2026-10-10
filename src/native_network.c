@@ -16,6 +16,13 @@
 #include <string.h>
 #include <sys/socket.h>
 
+#if defined(TUBE5_DIAGNOSTICS) && !defined(TUBE5_HOST)
+extern void tube5_boot_trace(const char *message);
+#define NET_TRACE(message) tube5_boot_trace(message)
+#else
+#define NET_TRACE(message) ((void)0)
+#endif
+
 int __wrap_getaddrinfo(const char *node, const char *service, const struct addrinfo *hints,
                        struct addrinfo **result)
 {
@@ -67,6 +74,7 @@ int __wrap_getaddrinfo(const char *node, const char *service, const struct addri
         (void)inet_ntop(AF_INET, &address, entry->ai_canonname, 16);
     }
     *result = entry;
+    NET_TRACE("Tube5 HTTP H03: IPv4 lista");
     return 0;
 }
 
@@ -130,6 +138,39 @@ struct hostent *__wrap_gethostbyname(const char *name)
 }
 
 extern int __real_fcntl(int descriptor, int command, ...);
+extern int __real_connect(int, const struct sockaddr *, socklen_t);
+
+int __wrap_connect(int descriptor, const struct sockaddr *address, socklen_t length)
+{
+    NET_TRACE("Tube5 HTTP H10: asegurar socket no bloqueante");
+#if defined(TUBE5_HOST) && !defined(TUBE5_NETWORK_SOCKET_MOCK)
+    const int flags = __real_fcntl(descriptor, F_GETFL);
+    if (flags < 0 || __real_fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) < 0)
+        return -1;
+#else
+    const int on = 1;
+    if (setsockopt(descriptor, SOL_SOCKET, 0x1200, &on, sizeof(on)) < 0)
+        return -1;
+    int actual = 0;
+    socklen_t size = sizeof(actual);
+    if (getsockopt(descriptor, SOL_SOCKET, 0x1200, &actual, &size) < 0)
+        return -1;
+    if (!actual)
+    {
+        errno = EIO;
+        return -1;
+    }
+#endif
+    NET_TRACE("Tube5 HTTP H11: conectar TCP");
+    const int result = __real_connect(descriptor, address, length);
+    const int saved_error = errno;
+    char status[96];
+    snprintf(status, sizeof(status), "Tube5 HTTP H12: connect %d errno %d", result,
+             result < 0 ? saved_error : 0);
+    NET_TRACE(status);
+    errno = saved_error;
+    return result;
+}
 
 int __wrap_fcntl(int descriptor, int command, ...)
 {

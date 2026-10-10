@@ -2,10 +2,12 @@
 import importlib.util
 from pathlib import Path
 import tempfile
+import os
+import subprocess
 import threading
 import unittest
 from http.client import HTTPConnection
-from http.server import ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 spec = importlib.util.spec_from_file_location(
     "tube5_http", Path(__file__).resolve().parents[1] / "tools/http-test-server.py")
@@ -14,6 +16,31 @@ spec.loader.exec_module(http)
 
 
 class RangeTests(unittest.TestCase):
+    @unittest.skipUnless(Path("build/media-smoke").is_file(), "Build host media smoke first")
+    def test_player_recovers_from_stalled_http(self):
+        release = threading.Event()
+
+        class Stalled(BaseHTTPRequestHandler):
+            def do_GET(self):
+                release.wait(15)  # Deliberately never send headers during open.
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Stalled)
+        server.daemon_threads = True
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
+            result = subprocess.run(
+                ["build/media-smoke", f"http://127.0.0.1:{server.server_port}/test-clip.mp4",
+                 "--expect-open-failure"], env=env, capture_output=True, text=True, timeout=13)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("HTTP stall passed", result.stdout)
+        finally:
+            release.set()
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
     def test_ranges(self):
         for value, expected in [(None, (0, 99)), ("bytes=0-9", (0, 9)),
                                 ("bytes=50-", (50, 99)), ("bytes=-10", (90, 99)),

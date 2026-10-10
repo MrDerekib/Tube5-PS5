@@ -9,7 +9,7 @@ extern "C" int sceKernelSendNotificationRequest(std::uint32_t, void *, std::size
 extern "C" int sceKernelUsleep(std::uint32_t);
 #endif
 
-extern "C" void tube5_boot_checkpoint(const char *message) noexcept
+static void send_checkpoint(const char *message, bool pause) noexcept
 {
 #if defined(TUBE5_DIAGNOSTICS) && !defined(TUBE5_HOST)
     // Native notification layout from the hardware-tested template. No heap,
@@ -28,10 +28,22 @@ extern "C" void tube5_boot_checkpoint(const char *message) noexcept
             request.text[i] = message[i];
     request.text[i] = '\0';
     (void)sceKernelSendNotificationRequest(0, &request, sizeof(request), 0);
-    (void)sceKernelUsleep(700000);
+    if (pause)
+        (void)sceKernelUsleep(700000);
 #else
     (void)message;
+    (void)pause;
 #endif
+}
+
+extern "C" void tube5_boot_checkpoint(const char *message) noexcept
+{
+    send_checkpoint(message, true);
+}
+
+extern "C" void tube5_boot_trace(const char *message) noexcept
+{
+    send_checkpoint(message, false);
 }
 
 void tube5_boot_result(const char *stage, std::uint32_t result) noexcept

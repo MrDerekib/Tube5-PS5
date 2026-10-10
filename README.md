@@ -52,10 +52,13 @@ La build 11 probada queda respaldada localmente en
 La siguiente fase añade un servidor LAN que expone solo
 el clip sintético y permite alternar LOCAL/HTTP con X en Ajustes. La reproducción
 local sigue siendo el modo inicial; no hay integración con YouTube todavía.
-DIAG13 se bloqueó al abrir HTTP en consola. **BOOT-DIAG-14-HTTP** adapta las
+DIAG13 se bloqueó al abrir HTTP en consola. BOOT-DIAG-14-HTTP adapta las
 funciones de resolución y flags de sockets al título nativo, evitando imports
 de WebKit en esas llamadas. La prueba de red admite IPv4 numérico; la corrección
-en consola sigue pendiente de validación.
+en consola evitó la pantalla de crash, pero se quedó esperando en H01.
+**BOOT-DIAG-15-HTTP** fuerza/verifica sockets no bloqueantes antes de connect,
+añade un límite cooperativo de apertura/probing y traces de conexión sin pausas.
+Su resultado físico sigue pendiente.
 Ver [configuración del servidor y prueba HTTP](docs/HTTP_TEST.md).
 
 Para actualizar la prueba: cerrar Tube5 y copiar **toda** la carpeta
@@ -65,7 +68,7 @@ para una instalación inicial. Si ya tienes la carpeta completa de la build 8 o
 9, 10, 11 o 12, la prueba HTTP necesita sustituir `eboot.bin`, `build-label.txt` y
 añadir `network-test-url.txt` siguiendo la guía HTTP; el paquete también incluye
 los créditos en `THIRD_PARTY_NOTICES.md`.
-Si ya está instalada DIAG13 con la URL correcta, DIAG14 solo cambia el ejecutable
+Si ya está instalada DIAG13 o DIAG14 con la URL correcta, DIAG15 solo cambia el ejecutable
 y la etiqueta.
 
 ## Primera arquitectura

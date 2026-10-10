@@ -15,11 +15,21 @@ const char *__wrap_gai_strerror(int);
 int __wrap_getnameinfo(const struct sockaddr *, socklen_t, char *, socklen_t, char *, socklen_t,
                        int);
 int __wrap_fcntl(int, int, ...);
+int __wrap_connect(int, const struct sockaddr *, socklen_t);
 char *__wrap_strcasestr(const char *, const char *);
 int __wrap_isatty(int);
 
 static int real_result = -1, real_error = EINVAL, is_socket = 1, nonblocking = 0;
 static unsigned socket_checks = 0, socket_sets = 0;
+static int ignore_nbio = 0, set_error = 0;
+static unsigned connects = 0;
+int __real_connect(int descriptor, const struct sockaddr *address, socklen_t size)
+{
+    assert(descriptor == 7 && address && size == sizeof(struct sockaddr_in) && nonblocking);
+    ++connects;
+    errno = EINPROGRESS;
+    return -1;
+}
 
 int __real_fcntl(int descriptor, int command, ...)
 {
@@ -50,7 +60,13 @@ int getsockopt(int descriptor, int level, int option, void *value, socklen_t *si
 int setsockopt(int descriptor, int level, int option, const void *value, socklen_t size)
 {
     assert(descriptor == 7 && level == SOL_SOCKET && option == 0x1200 && size == sizeof(int));
-    nonblocking = *(const int *)value;
+    if (set_error)
+    {
+        errno = set_error;
+        return -1;
+    }
+    if (!ignore_nbio)
+        nonblocking = *(const int *)value;
     ++socket_sets;
     return 0;
 }
@@ -101,6 +117,18 @@ int main(void)
     real_result = 123;
     assert(__wrap_fcntl(7, F_GETFL) == 123 && socket_checks == checks);
     assert(__wrap_fcntl(7, -999) == -1 && errno == EINVAL);
+    struct sockaddr_in target = {0};
+    is_socket = 1;
+    assert(__wrap_connect(7, (struct sockaddr *)&target, sizeof(target)) == -1);
+    assert(errno == EINPROGRESS && connects == 1 && nonblocking);
+    nonblocking = 0;
+    ignore_nbio = 1;
+    assert(__wrap_connect(7, (struct sockaddr *)&target, sizeof(target)) == -1);
+    assert(errno == EIO && connects == 1); // Never connect on a blocking socket.
+    ignore_nbio = 0;
+    set_error = EINVAL;
+    assert(__wrap_connect(7, (struct sockaddr *)&target, sizeof(target)) == -1);
+    assert(errno == EINVAL && connects == 1);
     assert(strcmp(__wrap_strcasestr("HTTP Content-Length", "content"), "Content-Length") == 0);
     assert(!__wrap_strcasestr("abc", "abcd"));
     assert(strcmp(__wrap_strcasestr("abc", ""), "abc") == 0);
