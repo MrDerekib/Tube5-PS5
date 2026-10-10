@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "media_player.hpp"
+#include "codec_diagnostics.hpp"
 #include <algorithm>
 #include <cstdio>
 
@@ -34,10 +35,14 @@ bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
     audio_request.bytes = 2;
     audio_request.sample_rate = 48000;
     audio_request.channels = 2;
+    // Establish a conservative native baseline before trying parallel codec
+    // workers. This does NOT disable Kitchensink's demux/audio/video threads.
+    Kit_SetHint(KIT_HINT_THREAD_COUNT, 1);
+    reset_codec_diagnostic();
     player_ =
         Kit_CreatePlayer(source_, video, audio, -1, &video_request, &audio_request, 1920, 1080);
     if (!player_)
-        return fail("DECODER", Kit_GetError());
+        return fail("DECODER", codec_diagnostic()[0] ? codec_diagnostic() : Kit_GetError());
     Kit_PlayerInfo info{};
     Kit_GetPlayerInfo(player_, &info);
     width_ = info.video_format.width;

@@ -61,11 +61,33 @@ del error del constructor antes de que se pierda, con ancho, alto y bits en hex.
 La prueba en PC simula ese fallo y comprueba la conservación del mensaje y los
 argumentos. También comprueba menú directo y vídeo superpuesto sin ventana SDL.
 
+## BOOT-DIAG-5: apertura del decodificador
+
+En BOOT-DIAG-4 el propietario confirma menú, navegación con cruceta, entrada en
+Ajustes y Acerca de y funcionamiento de Options. Al abrir Vídeo de prueba,
+SDL_kitchensink informa `Unable to open codec for stream 0`. Se ha pasado la
+apertura de fuente, selección de streams, búsqueda del decodificador y creación
+de su contexto, pero `avcodec_open2` falla. Todavía no se llega a la textura de
+vídeo ni a la apertura del dispositivo de audio del reproductor.
+
+BOOT-DIAG-5 fija `KIT_HINT_THREAD_COUNT=1` antes de crear el reproductor, en lugar
+de autodetectar el número de hilos. Es una prueba conservadora para reducir
+recursos e inicialización de workers de FFmpeg, no una causa confirmada ni una
+garantía de reproducción. Los hilos de demux/audio/vídeo de Kitchensink siguen
+activos. Las pruebas en PC usan la misma configuración.
+
+Un wrapper de `avcodec_open2` conserva su retorno negativo y la descripción de
+`av_strerror` antes de que Kitchensink lo sustituya por su mensaje genérico.
+Muestra codec, error y cantidad de hilos solicitada por notificación; también
+incluye el detalle al principio del mensaje amarillo del menú. Se borra antes
+de cada intento para no mostrar errores antiguos. Los tests simulan éxito,
+fallo y reinicio, comprobando que los argumentos y el retorno no se modifican.
+
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-4 \
-  APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL"
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-5 \
+  APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2"
 ```
 
 Cerrar Tube5 y sustituir la carpeta completa `dist/PPSA99999/` en la consola,
@@ -96,6 +118,7 @@ Grabar los avisos y comunicar el último código Dxx visible.
 | D12V | Configuración y primer flip de VideoOut nativo |
 | D13 | Primer frame presentado; evaluar el fallo posterior |
 | TEXTURE: fallo original | Constructor de superficie para vídeo; anotar el mensaje siguiente y sus dimensiones |
+| CODEC: apertura fallida | Apertura de codec FFmpeg; anotar codec y mensaje `FFmpeg -N: ...` |
 
 Los avisos se pueden encolar: el último visible es una pista, no una traza de
 crash. Si SDL devuelve un error, se muestran etapa y detalle y la app permanece

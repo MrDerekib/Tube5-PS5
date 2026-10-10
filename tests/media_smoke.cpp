@@ -37,6 +37,7 @@ int main()
     require(!player.open(renderer, "assets/does-not-exist.mp4"), "missing file rejected");
     require(player.error()[0] != '\0', "missing file diagnostic");
     require(player.open(renderer, "assets/test-clip.mp4"), player.error());
+    require(Kit_GetHint(KIT_HINT_THREAD_COUNT) == 1, "explicit single-thread codec baseline");
     require(std::abs(player.duration() - 20.0) < 0.2, "clip duration");
     for (int i = 0; i < 30; ++i)
     {

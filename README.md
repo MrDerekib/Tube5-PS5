@@ -21,10 +21,12 @@ SDL_kitchensink y FFmpeg, con decodificación por software.
 La versión inicial arrancó en una PS5 Fat con FW 13.20 y kstuff activo.
 Este nuevo prototipo pasó las pruebas en PC con sanitizadores. La primera build
 de reproducción falló con CE-108255-1; cargar Keyboard eliminó ese crash, pero
-el renderer de ventana SDL devolvió un error. La ruta offscreen llegó a D10 en
-consola, pero falló la textura de interfaz. La nueva prueba dibuja el menú
-directamente sobre la superficie propia y presenta mediante VideoOut nativo,
-pendiente de validar en consola. Está en diagnóstico; no se garantiza
+el renderer de ventana SDL devolvió un error. El menú dibujado directamente en
+la superficie propia con VideoOut nativo ya funciona en esa consola: cruceta,
+X, Ajustes, Acerca de y Options confirmados. El vídeo local falla al abrir el
+decodificador de stream 0. La nueva prueba fija un hilo de decodificación y
+conserva el error exacto de FFmpeg; pendiente de validar en PS5. Está en
+diagnóstico; no se garantiza
 compatibilidad con otros firmwares. Consulta [el diagnóstico de arranque](docs/STARTUP_DIAGNOSTICS.md)
 para compilar la variante con puntos de control.
 
