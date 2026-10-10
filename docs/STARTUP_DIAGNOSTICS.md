@@ -292,7 +292,17 @@ raíz, también sin diagnóstico; no se aplica a los ejemplos independientes de
 la plantilla. La prueba de PC usa los mismos wrappers de conversión y extiende
 la reproducción inicial continua a unos diez segundos antes de probar pausa,
 saltos, EOF y reapertura. Los mocks inyectan ENOMEM, contexto nulo, recuperación
-y fallos de la propia cola. La prueba física de la build 11 sigue pendiente.
+y fallos de la propia cola.
+
+Prueba física de build 11: la grabación local privada IMG_4279.MOV (23,635 s)
+confirma imagen en movimiento durante el clip de 20 segundos y regreso al menú
+sin crash en PS5 Fat FW 13.20. Cerca del final se observa `MEMFAIL 0 NONE 0B
+ERR 0`, `MS LOOP 50 UI 2 VIDEO 7 COPY 4`, errores de lectura y decodificación
+en cero, y numerosos descartes en SYNC. El hito valida una reproducción local
+completa, no estabilidad prolongada, 30 fps sostenidos ni sincronización audible.
+La duración del bucle ronda 50 ms en esa muestra; queda investigar cadencia y
+descartes. El HUD inferior se solapa con los controles y dificulta leer YUV SCALE.
+Pausa, seek y reapertura en consola siguen pendientes de una prueba específica.
 
 Validación de build 11: pasan los mocks de formato/ENOMEM/contexto nulo y las
 pruebas de reproducción YUV con AddressSanitizer/UndefinedBehaviorSanitizer,
@@ -302,22 +312,52 @@ offscreen compila. Se inspeccionó la captura de vídeo para confirmar imagen y
 colores, y el ELF nativo confirma que creación/decodificación llaman a los
 wrappers de formato, scaler y escritura. El FSELF valida su integridad.
 
+## BOOT-DIAG-12: una sola espera de presentación
+
+La ruta nativa ejecutaba `SDL_Delay(33 - elapsed)` al terminar el callback y
+después `run_frames` vaciaba caché, enviaba el flip y esperaba con
+`sceVideoOutWaitVblank`. Son dos esperas consecutivas, compatibles con el
+intervalo de 50 ms observado. La build 12 elimina únicamente el delay del
+callback PS5; la espera y alternancia de buffers de VideoOut se conservan.
+El host mantiene su límite de 33 ms porque no usa ese bucle nativo.
+
+El HUD añade `MS WORK`, tiempo del callback desde eventos hasta copia a tiled,
+sin incluir el flush/flip/vblank externo. `MS LOOP` sigue midiendo el intervalo
+entre callbacks; su diferencia incluye presentación y planificación, no es una
+medición exclusiva de vblank. Los controles pasan a y=1040 para no tapar SYNC
+ni YUV SCALE. No se aumenta la tolerancia a frames tardíos para ocultar descartes.
+
+Se revisaron el lector de vídeo, reloj y lector de audio del Kitchensink a2
+fijado y los cambios equivalentes de BFplayer ad3bdc9. a2 aplica +0,1 s solo al
+primer candidato de vídeo, no a los siguientes tras descartar; pausa no congela
+el reloj compartido y resume reinicia su base. El lector de audio consulta
+`crop_bottom` después de `av_frame_unref`, un orden que BFplayer corrige.
+Son aspectos a tratar con pruebas específicas, no causas demostradas de todos
+los descartes de esta grabación. DIAG12 no modifica esas rutas: primero se
+compara la cadencia con DIAG11 manteniendo el mismo clip y resto del pipeline.
+
+Antes de construir DIAG12 se respaldaron el eboot, etiqueta y ZIP de DIAG11 en
+`.local/boot-diag-11/`. El eboot de referencia conserva SHA-256
+`d774978bf00a8f94660288c7809f226564c8f5290201a1d0592f7a94f1aadfa6`.
+Los resultados físicos de DIAG12 siguen pendientes.
+
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-11 \
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-12 \
   APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign Kit_LockVideoDecoderRaw Kit_BeginPacketBufferRead Kit_FinishPacketBufferRead Kit_CancelPacketBufferRead Kit_GetTimerElapsed av_frame_ref"
 ```
 
 Cerrar Tube5 y sustituir la carpeta completa `dist/PPSA99999/` en la consola,
 incluyendo `sce_module/`. No cambiar los payloads ni el firmware para esta prueba.
 Grabar los avisos y comunicar el último código Dxx visible.
-Si ya está instalada la build 8, 9 o 10 completa, para esta actualización sólo cambian
+Si ya está instalada la build 8, 9, 10 u 11 completa, para esta actualización sólo cambian
 `eboot.bin` y `build-label.txt`; basta con sustituir esos dos archivos con Tube5
 cerrado. Abrir Vídeo de prueba con una pulsación de X y esperar unos segundos.
-Para la build 11, grabar primero el clip completo sin pulsar nada. Si llega a
+Para la build 12, grabar primero el clip completo sin pulsar nada. Si llega a
 20 segundos sin crash, volver a abrirlo y probar pausa/reanudación y un salto de
-5 s. Capturar `MS`, `SYNC`, `FR/RAW`, `MEMFAIL` y `YUV SCALE` junto con las tres
+5 s. Comparar `MS LOOP/WORK`, `SYNC DROP`, `FR/RAW`, `MEMFAIL` y `YUV SCALE` con
+DIAG11 cerca de los mismos segundos del clip, junto con las tres
 líneas del pipeline. El aviso de primer frame ya no aparece desde la build 10.
 
 | Último aviso | La siguiente operación pendiente |

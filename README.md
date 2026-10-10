@@ -21,25 +21,35 @@ SDL_kitchensink y FFmpeg, con decodificación por software.
 El arranque, menú, cruceta, X, Ajustes, Acerca de y Options están confirmados en
 PS5 Fat FW 13.20 con kstuff activo. Cargar Keyboard y usar composición offscreen
 con VideoOut nativo eliminaron los fallos iniciales. La reproducción, pausa,
-saltos y reapertura pasan las pruebas en PC con sanitizadores, pero el vídeo
-todavía no funciona correctamente en esa PS5: la grabación de BOOT-DIAG-9 muestra
-la primera reproducción negra y un único frame congelado después de reanudar.
+saltos y reapertura pasan las pruebas en PC con sanitizadores. La grabación de
+BOOT-DIAG-9 mostraba la primera reproducción negra y un único frame congelado
+después de reanudar.
 Leer y decodificar paquetes no garantiza que se presenten fotogramas.
 
 BOOT-DIAG-10 consiguió imagen en movimiento desde el primer intento en esa PS5,
 pero se bloqueó sobre el segundo 7, precedido por reservas fallidas de unos
 983 KB. BOOT-DIAG-11 conserva las mejoras de memoria/dibujo y cambia los frames
 intermedios a YUV420 para reducir su tamaño. Impide encolar frames cuya conversión
-falló y añade contadores del conversor. Su resultado en consola sigue pendiente;
-el crash todavía no tiene una causa exacta confirmada. No se garantiza
+falló y añade contadores del conversor. La grabación local IMG_4279 confirma una
+reproducción completa de 20 segundos y regreso al menú sin crash en esa PS5,
+con MEMFAIL en cero cerca del final. Quedan descartes de frames y trabajo de
+fluidez; pausa, saltos y reapertura todavía necesitan validación en consola.
+El crash anterior todavía no tiene una causa exacta confirmada. No se garantiza
 compatibilidad con otros firmwares. Consulta [el diagnóstico de arranque](docs/STARTUP_DIAGNOSTICS.md)
 para compilar la variante con puntos de control y registrar la prueba.
+
+BOOT-DIAG-12 elimina la espera adicional de 33 ms en el callback PS5: VideoOut
+ya espera al refresco después de presentar. Añade `MS WORK` para distinguir
+trabajo del callback del intervalo total y separa los controles del HUD.
+No cambia el reloj, el audio ni las colas de DIAG11; su resultado físico está
+pendiente. La build 11 probada queda respaldada localmente en
+`.local/boot-diag-11/` (no publicada).
 
 Para actualizar la prueba: cerrar Tube5 y copiar **toda** la carpeta
 `dist/PPSA99999/` a `/data/homebrew/PPSA99999/`, sustituyendo la anterior.
 Incluye `eboot.bin`, `sce_sys/`, `sce_module/` y `assets/`; no basta con el ejecutable
 para una instalación inicial. Si ya tienes la carpeta completa de la build 8 o
-9 o 10, la prueba 11 necesita sustituir `eboot.bin` y `build-label.txt`; el paquete
+9, 10 u 11, la prueba 12 necesita sustituir `eboot.bin` y `build-label.txt`; el paquete
 también actualiza los créditos en `THIRD_PARTY_NOTICES.md`.
 
 ## Primera arquitectura

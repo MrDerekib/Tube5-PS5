@@ -101,7 +101,7 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(350, 900, status, 4, Color::white);
 #ifdef TUBE5_DIAGNOSTICS
         char diagnostics[192]{};
-        canvas.text(800, 125, frame_timing.data(), 2, muted);
+        canvas.text(700, 125, frame_timing.data(), 2, muted);
         tube5::video_sync_diagnostic_status(diagnostics, sizeof(diagnostics));
         canvas.text(350, 980, diagnostics, 2, muted);
         tube5::video_conversion_status(diagnostics, sizeof(diagnostics));
@@ -128,7 +128,7 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(playing_screen ? 350 : 120, playing_screen ? 930 : 865, line.data(),
                     playing_screen ? 2 : 3, Color::yellow);
     }
-    canvas.text(120, 995,
+    canvas.text(120, nav.screen == tube5::Screen::player ? 1040 : 995,
                 nav.screen == tube5::Screen::player
                     ? "X PAUSA   IZQ/DER 5 SEG   CIRCULO VOLVER"
                     : "CRUCETA MOVER   X ABRIR   CIRCULO VOLVER   OPTIONS AJUSTES",
@@ -470,11 +470,11 @@ int main()
                 fatal("NATIVE BLIT");
             }
         }
-        const Uint32 elapsed = SDL_GetTicks() - frame_start;
 #ifdef TUBE5_DIAGNOSTICS
-        std::snprintf(frame_timing.data(), frame_timing.size(), "MS LOOP %u UI %u VIDEO %u COPY %u",
-                      interval, video_start - paint_start, video_end - video_start,
-                      SDL_GetTicks() - blit_start);
+        std::snprintf(frame_timing.data(), frame_timing.size(),
+                      "MS LOOP %u WORK %u UI %u VIDEO %u COPY %u", interval,
+                      SDL_GetTicks() - frame_start, video_start - paint_start,
+                      video_end - video_start, SDL_GetTicks() - blit_start);
 #else
         (void)interval;
         (void)paint_start;
@@ -482,8 +482,14 @@ int main()
         (void)video_end;
         (void)blit_start;
 #endif
+#ifdef TUBE5_HOST
+        // The host has no native presentation wait. On PS5 run_frames already
+        // waits for VideoOut vblank after drawing/flushing/submitting. Sleeping
+        // here as well adds to that wait and can cap a 30fps clip near 20fps.
+        const Uint32 elapsed = SDL_GetTicks() - frame_start;
         if (elapsed < 33)
             SDL_Delay(33 - elapsed);
+#endif
     };
 #ifdef TUBE5_HOST
     while (running)
