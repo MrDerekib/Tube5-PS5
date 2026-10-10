@@ -464,6 +464,28 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-21-HTTP: medir la memoria flexible efectiva
+
+DIAG20 se copió como carpeta completa y se probó en la consola, pero el error
+se repite con los mismos datos: `MEMFAIL 16 ALIGN 247119B ERR 12`, `W 3/3/3`,
+`READ 45/45 ERR 0`. No hubo avance observable. La coincidencia no permite saber
+si el kernel aplicó el nuevo presupuesto o si 1 GiB no bastó.
+
+DIAG21 conserva el ajuste de `kernel.flexibleMemorySize` y consulta
+`sceKernelAvailableFlexibleMemorySize` al iniciar cada apertura. Tras un fallo,
+la UI mostrará `FMEM BEFORE OPEN N MiB`; alrededor de 989 MiB es compatible con
+el presupuesto de 1 GiB, mientras que alrededor de 413 MiB apunta al valor por
+defecto de 448 MiB. Son cantidades disponibles, no el tamaño configurado exacto.
+Si aparece `FMEM QUERY ERR`, anotar también ese código. La consulta se hace una
+vez al abrir, no en cada frame.
+
+El dato decidirá el siguiente paso: si marca el rango alto y falla igual,
+dejamos de tocar el presupuesto y aislamos qué asignación de 247119 bytes falla;
+si marca el rango bajo, comprobamos la publicación/remontaje del `param.json`.
+Probar solo una vez, con Tube5 completamente cerrada antes de copiar.
+Build nativa y FSELF válidas; SHA-256 del eboot DIAG21:
+`b7abbc01363da1205f5a1f832918565115a6c2d3e1ea354d3cfa0a01d87f6025`.
+
 ## BOOT-DIAG-20-HTTP: aumentar la memoria flexible del título
 
 DIAG19 se instaló en PS5 Fat 13.20, pero la apertura del MP4 completo sigue
@@ -483,8 +505,9 @@ captura deberá separar fallo durante el escaneo de fuente y durante la creació
 del player/codec antes de ajustar otros límites.
 
 La build conserva el código DIAG19; el único cambio funcional es el presupuesto
-del título. Para esta prueba hay que copiar también `sce_sys/param.json` a la
-carpeta de la consola, además de `eboot.bin` y `build-label.txt`, siempre con
+del título. La prueba posterior no aportó una mejora. Para esa prueba había que
+copiar `sce_sys/param.json` a la carpeta de la consola, además de `eboot.bin` y
+`build-label.txt`, siempre con
 Tube5 completamente cerrada. Probar una apertura del vídeo y, si llega a entrar,
 30–60 segundos. No insistir si vuelve a marcar ENOMEM.
 
@@ -542,7 +565,7 @@ error/MEMFAIL/READ y no insistir. No cambiar servidor durante la reproducción.
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-20-HTTP \
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-21-HTTP \
   APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign Kit_LockVideoDecoderRaw Kit_BeginPacketBufferRead Kit_FinishPacketBufferRead Kit_CancelPacketBufferRead Kit_GetTimerElapsed av_frame_ref"
 ```
 
