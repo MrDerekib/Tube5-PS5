@@ -189,13 +189,33 @@ int main()
     if (!renderer)
         fatal("RENDERER");
     tube5_boot_checkpoint("Tube5 D10: renderer OK - framebuffer");
-    (void)SDL_RenderSetLogicalSize(renderer, 1920, 1080);
-    SDL_Texture *ui = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
-                                        SDL_TEXTUREACCESS_STREAMING, 1920, 1080);
-    if (!ui)
-        fatal("UI TEXTURE");
-    auto pixels = std::unique_ptr<std::uint32_t[]>{new std::uint32_t[1920 * 1080]};
-    Canvas canvas{pixels.get(), true};
+    if (SDL_RenderSetLogicalSize(renderer, 1920, 1080) != 0)
+        fatal("LOGICAL SIZE");
+    SDL_Texture *ui = nullptr;
+    std::unique_ptr<std::uint32_t[]> pixels;
+    std::uint32_t *canvas_pixels = nullptr;
+    if (output)
+    {
+        // The offscreen software renderer already draws into this surface.
+        // Paint the UI in place: no extra 1080p texture or upload buffer.
+        if (!output->pixels || !output->format || output->w != 1920 || output->h != 1080 ||
+            output->pitch != 1920 * 4 || output->format->format != SDL_PIXELFORMAT_RGBA32)
+        {
+            (void)SDL_SetError("unexpected offscreen surface layout");
+            fatal("OUTPUT LAYOUT");
+        }
+        canvas_pixels = static_cast<std::uint32_t *>(output->pixels);
+    }
+    else
+    {
+        ui = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, 1920,
+                               1080);
+        if (!ui)
+            fatal("UI TEXTURE");
+        pixels.reset(new std::uint32_t[1920 * 1080]);
+        canvas_pixels = pixels.get();
+    }
+    Canvas canvas{canvas_pixels, true};
     SDL_GameController *controller = nullptr;
     const auto connect = [&]()
     {
@@ -332,9 +352,17 @@ int main()
             media.close();
             nav.screen = tube5::Screen::home;
         }
+        if (output && SDL_LockSurface(output) != 0)
+            fatal("UI SURFACE LOCK");
         paint(canvas, nav, media, controller != nullptr, error);
-        (void)SDL_UpdateTexture(ui, nullptr, pixels.get(), 1920 * 4);
-        (void)SDL_RenderCopy(renderer, ui, nullptr, nullptr);
+        if (output)
+            SDL_UnlockSurface(output);
+        else
+        {
+            if (SDL_UpdateTexture(ui, nullptr, pixels.get(), 1920 * 4) != 0 ||
+                SDL_RenderCopy(renderer, ui, nullptr, nullptr) != 0)
+                fatal("UI UPLOAD");
+        }
         if (nav.screen == tube5::Screen::player)
             media.draw(renderer, SDL_Rect{350, 260, 1220, 620});
         SDL_RenderPresent(renderer);

@@ -40,11 +40,32 @@ con copia acotada de la superficie lineal a sus buffers tiled. No abre un segund
 VideoOut mediante SDL. Las pruebas de vídeo en PC también usan superficie sin
 ventana ni driver de vídeo.
 
+El propietario confirma D10, seguido de `UI TEXTURE` y
+`Parameter 'surface' is invalid`, sin llegar al primer frame. El oso y el portal
+son la pantalla de carga heredada: VideoOut todavía no se ha iniciado. La
+superficie principal y el renderer se han creado; no se conoce aún la causa de
+que falle la superficie interna de la textura.
+
+## BOOT-DIAG-4: menú directamente sobre la superficie
+
+La ruta offscreen pinta el menú directamente en `output->pixels`, comprobando
+formato, dimensiones, pitch y bloqueo de la superficie. Elimina la textura de
+interfaz y su buffer de subida, aproximadamente 16 MiB de asignaciones. No
+demuestra que el fallo previo fuera falta de memoria ni valida las texturas de
+vídeo en PS5; el reproductor conserva su textura.
+
+El archivo `SDL_render_sw.c.o` del sysroot fijado confirma que `SW_CreateTexture`
+llama a `SDL_CreateRGBSurface_REAL` y luego a setters incluso si recibió `nullptr`.
+Esos setters sobrescriben el error original. Un wrapper de diagnóstico informa
+del error del constructor antes de que se pierda, con ancho, alto y bits en hex.
+La prueba en PC simula ese fallo y comprueba la conservación del mensaje y los
+argumentos. También comprueba menú directo y vídeo superpuesto sin ventana SDL.
+
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-3 \
-  APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen"
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-4 \
+  APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL"
 ```
 
 Cerrar Tube5 y sustituir la carpeta completa `dist/PPSA99999/` en la consola,
@@ -69,11 +90,12 @@ Grabar los avisos y comunicar el último código Dxx visible.
 | D07 | SDL mando |
 | D08 | Superficie RGBA offscreen |
 | D09 | Renderer software directo sobre esa superficie |
-| D10 | Textura, framebuffer y conexión del mando |
+| D10 | Tamaño lógico, validación del framebuffer y conexión del mando (sin textura UI en PS5) |
 | D11 | SDL_kitchensink |
 | D12 | Eventos, dibujo y presentación |
 | D12V | Configuración y primer flip de VideoOut nativo |
 | D13 | Primer frame presentado; evaluar el fallo posterior |
+| TEXTURE: fallo original | Constructor de superficie para vídeo; anotar el mensaje siguiente y sus dimensiones |
 
 Los avisos se pueden encolar: el último visible es una pista, no una traza de
 crash. Si SDL devuelve un error, se muestran etapa y detalle y la app permanece

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #define SDL_MAIN_HANDLED
 #include "media_player.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -23,6 +24,15 @@ int main()
     require(output != nullptr, "offscreen surface");
     SDL_Renderer *renderer = SDL_CreateSoftwareRenderer(output);
     require(renderer != nullptr, "renderer");
+    const auto frame = [&]()
+    {
+        // Match Tube5's direct UI painting followed by a video overlay.
+        require(SDL_LockSurface(output) == 0, "direct UI surface lock");
+        auto *pixels = static_cast<Uint32 *>(output->pixels);
+        for (int y = 0; y < output->h; ++y)
+            std::fill_n(pixels + y * (output->pitch / 4), output->w, 0xff101010);
+        SDL_UnlockSurface(output);
+    };
     tube5::MediaPlayer player;
     require(!player.open(renderer, "assets/does-not-exist.mp4"), "missing file rejected");
     require(player.error()[0] != '\0', "missing file diagnostic");
@@ -30,7 +40,8 @@ int main()
     require(std::abs(player.duration() - 20.0) < 0.2, "clip duration");
     for (int i = 0; i < 30; ++i)
     {
-        player.draw(renderer, SDL_Rect{0, 0, 640, 360});
+        frame();
+        player.draw(renderer, SDL_Rect{20, 20, 600, 320});
         SDL_RenderPresent(renderer);
         SDL_Delay(33);
     }
@@ -42,6 +53,8 @@ int main()
                                  capture->pitch) == 0,
             "video capture");
     auto *bytes = static_cast<unsigned char *>(capture->pixels);
+    require(*static_cast<Uint32 *>(capture->pixels) == 0xff101010,
+            "direct UI pixels survive video overlay");
     int colored = 0;
     for (int i = 0; i < 640 * 360; ++i)
         colored += bytes[i * 4] > 32 || bytes[i * 4 + 1] > 32 || bytes[i * 4 + 2] > 32;
