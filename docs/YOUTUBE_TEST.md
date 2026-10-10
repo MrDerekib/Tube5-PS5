@@ -74,7 +74,36 @@ EOF, reapertura y limpieza con sanitizadores. Pasa tanto con el MP4 local como
 con el servidor LAN, incluida apertura asíncrona HTTP. **No equivale a reproducir los
 28 minutos completos**, no valida sincronización audible con el backend dummy
 y no confirma el backend nativo de PS5. La validación física de este contenido
-está pendiente: probar 1–2 minutos, audio, pausa/reanudación, ±5 s, salida y
+falló en DIAG16: H02=0, después `HTTP READ: cannot allocate memory`, y el usuario
+reporta crash normalmente al insistir tres veces. No hay backtrace ni foto del
+contador MEMFAIL de ese fallo. No se considera reproducible en PS5 todavía.
+No demuestra falta de RAM física, fuga confirmada ni un fallo de DNS/firewall.
+
+DIAG17 conserva el diagnóstico MEMFAIL y READ visible en el menú tras el error.
+Si la lectura devuelve ENOMEM, cierra el player y no permite otra apertura
+(LOCAL o HTTP) hasta cerrar/reabrir Tube5. Es una mitigación conservadora del
+patrón de reintentos, **no una corrección demostrada de la causa**. En PC se
+inyecta el resultado ENOMEM después de reproducir imagen, se comprueba limpieza,
+rechazo de tres reintentos y recuperación con una instancia nueva, con
+sanitizadores. No equivale a agotar el allocator nativo o reproducir el crash.
+
+Para separar duración/tablas del contenedor de códecs/contenido inicial, se
+prepara un extracto privado de los primeros 120 s sin recodificar:
+
+```bash
+ffmpeg -nostdin -v error -n -i .local/youtube/qf31PkeESoU/media.mp4 \
+  -t 120 -map 0:v:0 -map 0:a:0 -c copy -movflags +faststart \
+  .local/youtube/qf31PkeESoU/diagnostic-120s.mp4
+python3 tools/http-test-server.py --bind IP_DEL_PC --port 8080 \
+  --clip .local/youtube/qf31PkeESoU/diagnostic-120s.mp4
+```
+
+Mantiene H.264 Main 640x360/AAC-LC 44,1 kHz; 120,033 s y 5.111.569 bytes.
+El archivo completo permanece intacto. Un cambio de resultado solo orientaría
+el diagnóstico; no prueba por sí solo qué asignación o recurso provoca el fallo.
+Antes de probar, actualizar eboot.bin y build-label.txt a DIAG17 con la app
+cerrada. Abrir **una vez**; si falla, fotografiar el menú entero (error, MEMFAIL
+y READ), no insistir. Prueba física pendiente: audio, pausa/reanudación, ±5 s, salida y
 reapertura; comparar MEMFAIL, SYNC DROP y LOOP con DIAG16/sintético.
 
 La siguiente fase debe estudiar resolución de enlaces normales, entrega de los

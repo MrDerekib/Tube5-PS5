@@ -407,10 +407,28 @@ de 8 s sin frames (excluye pausa y reinicia tras seek/resume). No añade reconex
 automática. LOCAL conserva su apertura anterior. Casos y límites: [HTTP_TEST.md](HTTP_TEST.md).
 Prueba física de esta variante pendiente; DIAG15 respaldada localmente.
 
+Después, el usuario confirmó timeout en unos 6 s y cancelación con el servidor
+que retiene cabeceras, y reproducción de nuevo al restaurar el servidor normal.
+
+## BOOT-DIAG-17-HTTP: diagnóstico y protección de lectura ENOMEM
+
+El primer MP4 de YouTube preparado en PC abre (H02=0) pero devuelve ENOMEM de
+lectura HTTP. El usuario reporta crash normalmente al tercer intento. Aún no
+hay backtrace ni datos de la asignación nativa fallida, y el smoke PC pasa.
+DIAG17 no cambia allocator, runtime, límites de probing ni códecs: muestra
+MEMFAIL y READ también en el menú tras el error y bloquea nuevas aperturas
+tras ese ENOMEM hasta reiniciar la app. LOCAL tampoco se abre en esa sesión;
+timeouts y conexiones rechazadas conservan su recuperación anterior.
+La prueba host inyecta ENOMEM tras subir frames y comprueba cierre, bloqueo de
+reintentos y recuperación con instancia nueva. No reproduce el agotamiento
+nativo ni demuestra la causa del crash. Se prueba además un extracto de los
+primeros 120 s sin recodificar; ver [YOUTUBE_TEST.md](YOUTUBE_TEST.md).
+DIAG16 queda respaldada con eboot/etiqueta en `.local/boot-diag-16/`.
+
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-16-HTTP \
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-17-HTTP \
   APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign Kit_LockVideoDecoderRaw Kit_BeginPacketBufferRead Kit_FinishPacketBufferRead Kit_CancelPacketBufferRead Kit_GetTimerElapsed av_frame_ref"
 ```
 

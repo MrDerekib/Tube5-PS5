@@ -64,6 +64,9 @@ class MediaPlayer final
     std::atomic<bool> opening_done_{false};
     bool opening_cancelled_ = false;
     bool network_ = false;
+    // A native ENOMEM followed by repeated opens has crashed on hardware.
+    // Preserve the first failure and require a fresh app session, not retries.
+    bool memory_blocked_ = false;
     Uint32 last_frame_at_ = 0;
     char opening_path_[256]{};
     static void audio_callback(void *userdata, Uint8 *stream, int length) noexcept;

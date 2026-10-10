@@ -72,6 +72,11 @@ Ver [configuración del servidor y prueba HTTP](docs/HTTP_TEST.md).
 El [primer piloto con contenido de YouTube](docs/YOUTUBE_TEST.md) prepara un
 MP4 privado en el PC y lo sirve por la misma ruta LAN, sin nueva build PS5.
 No es streaming directo: se descarga previamente; validación física pendiente.
+El MP4 completo dio ENOMEM de lectura en PS5 y crash tras reintentos.
+**BOOT-DIAG-17-HTTP** conserva el diagnóstico en el menú y bloquea nuevas
+aperturas tras ese ENOMEM hasta reiniciar Tube5. Es una protección y prueba
+diagnóstica, no la solución confirmada al vídeo completo. El servidor usa ahora
+un extracto de 120 s con los mismos códecs; resultado físico pendiente.
 
 Para actualizar la prueba: cerrar Tube5 y copiar **toda** la carpeta
 `dist/PPSA99999/` a `/data/homebrew/PPSA99999/`, sustituyendo la anterior.
@@ -80,7 +85,7 @@ para una instalación inicial. Si ya tienes la carpeta completa de la build 8 o
 9, 10, 11 o 12, la prueba HTTP necesita sustituir `eboot.bin`, `build-label.txt` y
 añadir `network-test-url.txt` siguiendo la guía HTTP; el paquete también incluye
 los créditos en `THIRD_PARTY_NOTICES.md`.
-Si ya está instalada DIAG13, DIAG14 o DIAG15 con la URL correcta, DIAG16 solo cambia el ejecutable
+Si ya está instalada DIAG13–16 con la URL correcta, DIAG17 solo cambia el ejecutable
 y la etiqueta.
 
 ## Primera arquitectura

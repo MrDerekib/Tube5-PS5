@@ -17,6 +17,24 @@ spec.loader.exec_module(http)
 
 class RangeTests(unittest.TestCase):
     @unittest.skipUnless(Path("build/media-smoke").is_file(), "Build host media smoke first")
+    def test_player_blocks_retries_after_read_oom(self):
+        server = ThreadingHTTPServer(("127.0.0.1", 0), http.handler_for(Path("assets/test-clip.mp4")))
+        server.daemon_threads = True
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
+            result = subprocess.run(
+                ["build/media-smoke", f"http://127.0.0.1:{server.server_port}/test-clip.mp4",
+                 "--expect-read-oom"], env=env, capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("HTTP OOM passed", result.stdout)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+    @unittest.skipUnless(Path("build/media-smoke").is_file(), "Build host media smoke first")
     def test_player_recovers_from_midstream_stall(self):
         release = threading.Event()
         with tempfile.TemporaryDirectory() as directory:

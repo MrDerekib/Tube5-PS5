@@ -7,6 +7,17 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+extern "C"
+{
+#include <libavutil/error.h>
+    int __real__ZN5tube522network_playback_errorEv();
+}
+static bool inject_read_oom = false;
+// Host-test-only link wrapper: exercise teardown/guard without exhausting RAM.
+extern "C" int __wrap__ZN5tube522network_playback_errorEv()
+{
+    return inject_read_oom ? AVERROR(ENOMEM) : __real__ZN5tube522network_playback_errorEv();
+}
 
 static void require(bool value, const char *message)
 {
@@ -139,6 +150,36 @@ int main(int argc, char **argv)
         SDL_FreeSurface(output);
         SDL_Quit();
         std::puts("HTTP cut passed: visible playback, bounded failure and local recovery.");
+        return 0;
+    }
+    if (argc > 2 && std::strcmp(argv[2], "--expect-read-oom") == 0)
+    {
+        for (int i = 0; i < 40; ++i)
+        {
+            player.draw(renderer, SDL_Rect{0, 0, 640, 360});
+            SDL_Delay(16);
+        }
+        require(player.frames_uploaded() > 0, "playback before injected ENOMEM");
+        inject_read_oom = true;
+        require(player.check_network_failure(), "read ENOMEM handled");
+        inject_read_oom = false;
+        for (int retry = 0; retry < 3; ++retry)
+        {
+            require(!player.begin_open(clip), "blocked repeated HTTP opens after ENOMEM");
+            require(!player.open(renderer, "assets/test-clip.mp4"),
+                    "blocked local open in failed session");
+            require(!player.opening() && std::strstr(player.error(), "ENOMEM"),
+                    "preserve original error without starting worker");
+        }
+        player.close();
+        tube5::MediaPlayer fresh_session;
+        require(fresh_session.open(renderer, "assets/test-clip.mp4"), "fresh session can recover");
+        fresh_session.close();
+        Kit_Quit();
+        SDL_DestroyRenderer(renderer);
+        SDL_FreeSurface(output);
+        SDL_Quit();
+        std::puts("HTTP OOM passed: teardown, blocked retries and fresh-session recovery.");
         return 0;
     }
     require(Kit_GetHint(KIT_HINT_THREAD_COUNT) == 1, "explicit single-thread codec baseline");

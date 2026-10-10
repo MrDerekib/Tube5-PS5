@@ -149,6 +149,18 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         const bool playing_screen = nav.screen == tube5::Screen::player;
         canvas.text(playing_screen ? 350 : 120, playing_screen ? 930 : 865, line.data(),
                     playing_screen ? 2 : 3, Color::yellow);
+#ifdef TUBE5_DIAGNOSTICS
+        if (!playing_screen && !media.opening())
+        {
+            // Keep the allocation and demux failure readable after teardown.
+            // Retrying a fatal read ENOMEM no longer resets these counters.
+            char failure[192]{};
+            tube5::memory_diagnostic_status(failure, sizeof(failure));
+            canvas.text(120, 915, failure, 2, Color::yellow);
+            tube5::pipeline_diagnostic_status(0, failure, sizeof(failure));
+            canvas.text(120, 945, failure, 2, Color::yellow);
+        }
+#endif
     }
     canvas.text(120, nav.screen == tube5::Screen::player ? 1040 : 995,
                 nav.screen == tube5::Screen::player

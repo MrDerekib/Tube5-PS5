@@ -24,6 +24,8 @@ bool MediaPlayer::fail(const char *stage, const char *detail) noexcept
 
 bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
 {
+    if (memory_blocked_)
+        return false;
     close();
     error_[0] = '\0';
     begin_network_session();
@@ -57,6 +59,8 @@ int MediaPlayer::open_source_worker(void *userdata) noexcept
 
 bool MediaPlayer::begin_open(const char *path) noexcept
 {
+    if (memory_blocked_)
+        return false;
     close();
     error_[0] = '\0';
     if (!path || std::strlen(path) >= sizeof(opening_path_))
@@ -329,6 +333,12 @@ bool MediaPlayer::check_network_failure() noexcept
     const int read_error = network_playback_error();
     if (read_error < 0)
     {
+        if (read_error == AVERROR(ENOMEM))
+        {
+            memory_blocked_ = true;
+            fail("HTTP READ", "ENOMEM - CIERRA Y REABRE TUBE5");
+            return true;
+        }
         char detail[AV_ERROR_MAX_STRING_SIZE]{};
         av_strerror(read_error, detail, sizeof(detail));
         fail("HTTP READ", detail);

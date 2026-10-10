@@ -1,6 +1,6 @@
 # Prueba HTTP en la red local
 
-BOOT-DIAG-16-HTTP conserva la reproducción local de DIAG12 y permite elegir HTTP
+BOOT-DIAG-17-HTTP conserva la reproducción local de DIAG12 y permite elegir HTTP
 en Ajustes. No es aún integración con YouTube, HTTPS, DASH ni buffering adaptativo.
 
 ## Servidor del PC
@@ -58,7 +58,7 @@ Cerrar Tube5. Si ya está instalada DIAG12 completa, copiar estos tres archivos 
 - `dist/PPSA99999/build-label.txt`
 - `dist/PPSA99999/network-test-url.txt`
 
-Arrancar Tube5 y comprobar BOOT-DIAG-16-HTTP. Por defecto usa LOCAL para preservar
+Arrancar Tube5 y comprobar BOOT-DIAG-17-HTTP. Por defecto usa LOCAL para preservar
 la comparación. En Ajustes, X alterna LOCAL/HTTP; se muestra la URL configurada.
 Círculo vuelve al menú y la tarjeta cambia a VIDEO EN RED. X abre el clip HTTP.
 La selección no persiste al reiniciar la app.
@@ -240,6 +240,13 @@ funcionan. Tras restaurar el servidor normal, vuelve a reproducir correctamente.
 Esto valida los casos básicos, no garantiza reconexión automática ni estabilidad
 de toda fuente. El [piloto YouTube preparado en PC](YOUTUBE_TEST.md) reutiliza
 esta build y el servidor con `--clip`, manteniendo aparte el clip sintético.
+
+DIAG17 añade una protección por el ENOMEM observado en el vídeo real: ante
+ENOMEM de lectura HTTP, cierra y bloquea nuevas aperturas hasta reiniciar Tube5.
+No bloquea los reintentos por timeout/ECONNREFUSED. Conserva las líneas MEMFAIL
+y READ en el menú tras el error, para fotografiarlas antes de cerrar. La prueba
+de ENOMEM en PC es inyección del retorno de lectura, no agotamiento del heap.
+Detalle del fallo y extracto diagnóstico: [YOUTUBE_TEST.md](YOUTUBE_TEST.md).
 
 DIAG12 permanece respaldada en `.local/boot-diag-12/`, con su eboot, etiqueta y
 ZIP, para recuperar la referencia local si aparece una regresión.
