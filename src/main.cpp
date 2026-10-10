@@ -163,6 +163,10 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             canvas.text(120, 975, failure, 2, Color::yellow);
             tube5::pipeline_diagnostic_status(0, failure, sizeof(failure));
             canvas.text(120, 945, failure, 2, Color::yellow);
+            tube5::memory_allocation_origin_status(0, failure, sizeof(failure));
+            canvas.text(800, 945, failure, 2, Color::yellow);
+            tube5::memory_allocation_origin_status(1, failure, sizeof(failure));
+            canvas.text(800, 975, failure, 2, Color::yellow);
         }
 #endif
     }

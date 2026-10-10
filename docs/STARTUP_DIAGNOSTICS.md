@@ -464,6 +464,47 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-24-HTTP: localizar el origen sin recorrer la pila
+
+DIAG23 falla con el MP4 completo y conserva los contadores anteriores más
+`AUDIO 0 VIDEO 0`. El propietario confirma que el extracto de 120 s sí abre;
+no se ha confirmado una reproducción continua de sus 120 s. Se prepara ahora
+un extracto de 600 s sin recodificar para probar primero con la misma DIAG23.
+Así se compara el archivo servido manteniendo la app instalada.
+
+DIAG24 es una candidata adicional: preserva el primer fallo de reserva en una
+instantánea publicada atómicamente (`FIRSTFAIL`, tamaño, alineación y `REL`).
+Los wrappers opcionales de `av_malloc`/`av_mallocz` conservan además el primer
+fallo observado de esos allocators y su caller (`FFALLOC`). El caller directo
+de posix_memalign puede ser solo av_malloc; el registro exterior permite
+identificar su solicitante cuando la llamada pasa por el wrapper. Las llamadas
+resueltas internamente en el mismo objeto de la biblioteca pueden no pasar por
+ese wrapper: `FFALLOC NONE` no descarta un fallo dentro de FFmpeg.
+
+Se lee únicamente la dirección de retorno inmediata, sin recorrer la pila,
+usar dladdr, TLS ni reservar memoria desde los hooks. Los retornos originales
+se preservan. REL es la diferencia firmada entre ese PC y
+`__wrap_posix_memalign`; permite corregir ASLR usando el ELF exacto de la build:
+
+```bash
+python3 tools/resolve-allocation-caller.py --elf .local/boot-diag-24/llvm-pie.elf +0xVALOR
+# Para un REL negativo:
+python3 tools/resolve-allocation-caller.py --elf .local/boot-diag-24/llvm-pie.elf -- -0xVALOR
+```
+
+El script resta un byte al PC de retorno para localizar la llamada y usa los
+símbolos del ELF nativo previo a la conversión. El resultado identifica función
+y desplazamiento; sin información DWARF puede no incluir archivo/línea. No
+usar el ELF de otra build. FIRSTFAIL puede diferir de MEMFAIL, que conserva el
+último fallo. FFALLOC es una instantánea independiente, no una correlación
+garantizada con FIRSTFAIL si fallan varios workers a la vez.
+
+Pruebas focalizadas de PC: paso intacto de los allocators, conservación del
+primer fallo frente a fallos posteriores, reinicio por sesión, tamaños cero,
+alineación y resolución de offsets positivos/negativos y límites de símbolos.
+Build nativa y FSELF válidos; DIAG23 y su ELF respaldados en `.local/boot-diag-23/`.
+Eboot DIAG24 SHA-256: `d17ea736f667ab53212af80fabcd9474de6708150b36ced971d4527488087599`.
+
 ## BOOT-DIAG-23-HTTP: conservar la primera salida de audio/vídeo
 
 En DIAG22 el propietario confirma que `ALLOC FAIL STAGE PLAYING` aparece y que

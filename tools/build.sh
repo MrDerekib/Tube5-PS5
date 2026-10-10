@@ -152,6 +152,10 @@ fi
 # Tube5's conversion guard is required even when diagnostic wrappers are off.
 # Keep it scoped to the root player, not the template's separate examples.
 app_wrap_symbols=${APP_WRAP_SYMBOLS:-}
+if [[ $app_source_dir == src && " ${definitions[*]} " == *" TUBE5_DIAGNOSTICS "* ]]; then
+    definitions+=(TUBE5_ALLOC_CALLER_WRAP)
+    app_wrap_symbols+=" av_malloc av_mallocz"
+fi
 if [[ $app_source_dir == src && -f $root/src/audio_reader.cpp ]]; then
     definitions+=(TUBE5_AUDIO_WRAP)
     app_wrap_symbols+=" Kit_GetAudioDecoderData"

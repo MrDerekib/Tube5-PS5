@@ -51,9 +51,11 @@ native_network_wraps=-Wl,--wrap=getaddrinfo,--wrap=freeaddrinfo,--wrap=gai_strer
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc tests/test_native_framebuffer.cpp src/native_framebuffer.cpp -o build/native-framebuffer-test
 build/native-framebuffer-test
-clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_DIAGNOSTICS \
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
+    -DTUBE5_DIAGNOSTICS -DTUBE5_ALLOC_CALLER_WRAP \
     -Isrc tests/test_memory_diagnostics.cpp src/memory_diagnostics.cpp -o build/memory-diagnostics-test
 build/memory-diagnostics-test
+python3 -m unittest discover -s tests -p test_allocation_caller.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -DTUBE5_AUDIO_WRAP -Isrc -I"$source_root/include" "${cflags[@]}" \
     tests/test_audio_reader.cpp src/audio_reader.cpp \

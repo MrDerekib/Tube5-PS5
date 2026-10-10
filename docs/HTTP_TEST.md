@@ -100,7 +100,7 @@ strcasestr (tokens ASCII) e isatty para evitar imports auxiliares de WebKit.
 Al abrir HTTP, los avisos `HTTP H01: abrir conexion` y `HTTP H02: apertura retorno`
 delimitan avformat_open_input. H02 muestra su retorno hexadecimal: cero significa
 apertura correcta, no que el posterior probing o la reproducción ya hayan
-terminado. Solo se notifican al abrir, no durante lecturas ni seeks; los avisos
+terminado. H01/H02 solo se notifican al abrir; los avisos
 de diagnóstico añaden una breve espera antes de iniciar el reloj del vídeo.
 Si vuelve a bloquearse, grabar el último aviso además del error de la consola.
 
@@ -115,6 +115,11 @@ estado. Si falla o sigue bloqueante, devuelve error sin llamar a connect. Los
 traces de red no duermen: H03 indica dirección IPv4 preparada, H10 preparación
 del socket, H11 entrada en connect y H12 su retorno/errno. Un retorno -1 con
 EINPROGRESS es normal para una conexión no bloqueante; no demuestra fallo de red.
+Estos traces están en los wrappers de resolución numérica y conexión, así que
+también pueden aparecer durante seeks cuando HTTP abre otra conexión para
+reposicionar la lectura. El propietario observa H03 repetidos y H10/H11/H12 al
+retroceder o avanzar repetidamente. Por sí solos no son errores ni prueban que
+el seek terminó: eso lo reflejan SEEKEXEC y su retorno.
 
 Además instala AVIOInterruptCB con un plazo de 8 s que cubre apertura y probing
 de la fuente. Conserva un callback previo del llamador y desactiva el plazo antes
