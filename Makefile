@@ -69,7 +69,16 @@ doctor:
 	@printf '%s\n' '==> [doctor] Checking the Linux/WSL host without changing it'
 	@bash tools/doctor.sh
 
-test: test-unit test-integration test-elevation test-update-check test-self-update
+test: test-unit test-boot-diagnostics test-integration test-elevation test-update-check test-self-update
+
+.PHONY: test-boot-diagnostics
+test-boot-diagnostics:
+	@mkdir -p build/tests
+	@$(HOST_CXX) $(HOST_TEST_CXXFLAGS) -g -fsanitize=address,undefined \
+		-DTUBE5_DIAGNOSTICS -Isrc tests/test_boot_diagnostics.cpp src/boot_diagnostics.cpp \
+		$(HOST_TEST_LDFLAGS) -o build/tests/boot-diagnostics
+	@build/tests/boot-diagnostics
+	@printf '%s\n' 'Startup notification layout and bounds checks passed.'
 
 .PHONY: test-elevation
 test-elevation:

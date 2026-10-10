@@ -19,6 +19,7 @@ extern "C"
     int atexit(Destructor callback);
     [[noreturn]] void exit(int status);
     int application_main(int argc, char **argv, char **envp) __asm__("main");
+    void tube5_boot_checkpoint(const char *) noexcept;
 
     extern Initializer __preinit_array_start[] __attribute__((weak));
     extern Initializer __preinit_array_end[] __attribute__((weak));
@@ -52,6 +53,11 @@ extern "C" __attribute__((weak)) void catchReturnFromMain(int status)
     (void)status;
 }
 
+// Applications without Tube5 diagnostics retain the original startup path.
+extern "C" __attribute__((weak, noinline)) void tube5_boot_checkpoint(const char *) noexcept
+{
+}
+
 extern "C" void _init()
 {
     run_forward(__preinit_array_start, __preinit_array_end);
@@ -66,15 +72,18 @@ extern "C" void _fini()
 extern "C" [[noreturn]] __attribute__((visibility("default"))) void
 _start(void *process_parameters, Destructor loader_teardown)
 {
+    tube5_boot_checkpoint("Tube5 D00: START - antes del runtime");
     const int argc = *static_cast<const int *>(process_parameters);
     auto *parameters = static_cast<std::uint8_t *>(process_parameters);
     auto **argv = reinterpret_cast<char **>(parameters + sizeof(std::uint64_t));
 
     _init_env(process_parameters);
+    tube5_boot_checkpoint("Tube5 D01: runtime inicializado");
     if (loader_teardown != nullptr)
         (void)atexit(loader_teardown);
     (void)atexit(_fini);
     _init();
+    tube5_boot_checkpoint("Tube5 D02: constructores completados");
     const int status = application_main(argc, argv, nullptr);
     catchReturnFromMain(status);
     exit(status);

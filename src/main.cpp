@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #define SDL_MAIN_HANDLED
+#include "boot_diagnostics.hpp"
 #include "demo_renderer.hpp"
 #include "media_player.hpp"
 #include "navigation.hpp"
@@ -11,6 +12,7 @@
 #ifndef TUBE5_HOST
 extern "C" int sceSystemServiceHideSplashScreen();
 extern "C" int sceUserServiceInitialize(const void *);
+extern "C" int sceKernelUsleep(std::uint32_t);
 #endif
 
 namespace
@@ -106,6 +108,13 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
 
 [[noreturn]] void fatal(const char *stage)
 {
+#if defined(TUBE5_DIAGNOSTICS) && !defined(TUBE5_HOST)
+    tube5_boot_checkpoint("Tube5 ERROR: etapa siguiente");
+    tube5_boot_checkpoint(stage);
+    tube5_boot_checkpoint(SDL_GetError());
+    for (;;)
+        (void)sceKernelUsleep(1000000);
+#else
     std::fprintf(stderr, "Tube5 %s: %s\n", stage, SDL_GetError());
 #ifdef TUBE5_HOST
     std::exit(1);
@@ -113,28 +122,41 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
     for (;;)
         SDL_Delay(1000);
 #endif
+#endif
 }
 } // namespace
 
 int main()
 {
+    tube5_boot_checkpoint("Tube5 D03: MAIN - leer etiqueta");
     ps5::demo::read_asset_text("/app0/build-label.txt", std::span{build_label}, "");
     for (char &character : build_label)
         if (character >= 'a' && character <= 'z')
             character = static_cast<char>(character - 'a' + 'A');
 #ifndef TUBE5_HOST
+    tube5_boot_checkpoint("Tube5 D04: iniciar UserService");
     (void)sceUserServiceInitialize(nullptr);
 #endif
+    tube5_boot_checkpoint("Tube5 D05: iniciar SDL VIDEO");
     SDL_SetMainReady();
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0)
-        fatal("SDL INIT");
+    if (SDL_Init(SDL_INIT_VIDEO) != 0)
+        fatal("SDL VIDEO");
+    tube5_boot_checkpoint("Tube5 D06: VIDEO OK - iniciar AUDIO");
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0)
+        fatal("SDL AUDIO");
+    tube5_boot_checkpoint("Tube5 D07: AUDIO OK - iniciar MANDO");
+    if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0)
+        fatal("SDL MANDO");
+    tube5_boot_checkpoint("Tube5 D08: MANDO OK - crear ventana");
     SDL_Window *window = SDL_CreateWindow("Tube5", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                           1920, 1080, SDL_WINDOW_SHOWN);
     if (!window)
         fatal("WINDOW");
+    tube5_boot_checkpoint("Tube5 D09: ventana OK - crear renderer");
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
     if (!renderer)
         fatal("RENDERER");
+    tube5_boot_checkpoint("Tube5 D10: renderer OK - framebuffer");
     (void)SDL_RenderSetLogicalSize(renderer, 1920, 1080);
     SDL_Texture *ui = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
                                         SDL_TEXTUREACCESS_STREAMING, 1920, 1080);
@@ -155,12 +177,14 @@ int main()
                 }
     };
     connect();
+    tube5_boot_checkpoint("Tube5 D11: UI OK - iniciar reproductor");
     tube5::Navigation nav;
     tube5::MediaPlayer media;
     char error[256]{};
     const bool kit_ready = Kit_Init(0) == 0;
     if (!kit_ready)
         std::snprintf(error, sizeof(error), "PLAYER INIT: %s", Kit_GetError());
+    tube5_boot_checkpoint("Tube5 D12: iniciar bucle de eventos");
     const auto command = [&](tube5::Command action)
     {
         if (nav.screen == tube5::Screen::player)
@@ -280,6 +304,12 @@ int main()
         if (nav.screen == tube5::Screen::player)
             media.draw(renderer, SDL_Rect{350, 260, 1220, 620});
         SDL_RenderPresent(renderer);
+        static bool first_frame = true;
+        if (first_frame)
+        {
+            tube5_boot_checkpoint("Tube5 D13: primer frame presentado");
+            first_frame = false;
+        }
 #ifdef TUBE5_HOST
         if (const char *preview = std::getenv("TUBE5_PREVIEW"))
         {
