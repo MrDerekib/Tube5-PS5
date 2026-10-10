@@ -13,6 +13,7 @@ extern "C"
 #ifdef TUBE5_NETWORK_WRAP
     int __real_avformat_open_input(AVFormatContext **, const char *, const AVInputFormat *,
                                    AVDictionary **);
+    int __real_avformat_find_stream_info(AVFormatContext *, AVDictionary **);
 #endif
 }
 namespace
@@ -86,6 +87,20 @@ const char *network_open_error() noexcept
 }
 } // namespace tube5
 #ifdef TUBE5_NETWORK_WRAP
+extern "C" int __wrap_avformat_find_stream_info(AVFormatContext *context, AVDictionary **options)
+{
+    if (context && context == network_context.load())
+    {
+        // Kitchensink's _ScanSource overwrites options with INT_MAX just before
+        // this call. Set the actual public fields here, not open_input options
+        // that would be silently replaced. These are probe limits, not a total
+        // heap cap and not limits on MP4 sample/index tables.
+        context->probesize = 5 * 1024 * 1024;
+        context->max_analyze_duration = 5 * AV_TIME_BASE;
+        context->max_probe_packets = 2500;
+    }
+    return __real_avformat_find_stream_info(context, options);
+}
 extern "C" int __wrap_avformat_open_input(AVFormatContext **context, const char *url,
                                           const AVInputFormat *format, AVDictionary **options)
 {

@@ -3,17 +3,24 @@
 #include <atomic>
 #include <cstdio>
 #include <limits>
+#include <cerrno>
 namespace
 {
 static_assert(std::atomic<std::size_t>::is_always_lock_free);
 std::atomic<unsigned> failures{0}, kind{0};
 std::atomic<std::size_t> failed_bytes{0};
 std::atomic<int> error{0};
+std::atomic<bool> out_of_memory{false};
 } // namespace
 namespace tube5
 {
+bool memory_out_of_memory() noexcept
+{
+    return out_of_memory.load();
+}
 void reset_memory_diagnostic() noexcept
 {
+    out_of_memory = false;
     failures = kind = 0;
     failed_bytes = 0;
     error = 0;
@@ -32,6 +39,10 @@ namespace
 {
 void record(unsigned allocation, std::size_t bytes, int result) noexcept
 {
+    // Only the aligned API supplies a reliable error code in this diagnostic.
+    // Do not confuse EINVAL (bad alignment) with allocator exhaustion.
+    if (result == ENOMEM)
+        out_of_memory = true;
     ++failures;
     kind = allocation;
     failed_bytes = bytes;

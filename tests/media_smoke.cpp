@@ -11,8 +11,14 @@ extern "C"
 {
 #include <libavutil/error.h>
     int __real__ZN5tube522network_playback_errorEv();
+    bool __real__ZN5tube520memory_out_of_memoryEv();
 }
 static bool inject_read_oom = false;
+static bool inject_allocator_oom = false;
+extern "C" bool __wrap__ZN5tube520memory_out_of_memoryEv()
+{
+    return inject_allocator_oom || __real__ZN5tube520memory_out_of_memoryEv();
+}
 // Host-test-only link wrapper: exercise teardown/guard without exhausting RAM.
 extern "C" int __wrap__ZN5tube522network_playback_errorEv()
 {
@@ -152,7 +158,8 @@ int main(int argc, char **argv)
         std::puts("HTTP cut passed: visible playback, bounded failure and local recovery.");
         return 0;
     }
-    if (argc > 2 && std::strcmp(argv[2], "--expect-read-oom") == 0)
+    if (argc > 2 && (std::strcmp(argv[2], "--expect-read-oom") == 0 ||
+                     std::strcmp(argv[2], "--expect-allocator-oom") == 0))
     {
         for (int i = 0; i < 40; ++i)
         {
@@ -160,9 +167,11 @@ int main(int argc, char **argv)
             SDL_Delay(16);
         }
         require(player.frames_uploaded() > 0, "playback before injected ENOMEM");
-        inject_read_oom = true;
+        inject_allocator_oom = std::strcmp(argv[2], "--expect-allocator-oom") == 0;
+        inject_read_oom = !inject_allocator_oom;
         require(player.check_network_failure(), "read ENOMEM handled");
         inject_read_oom = false;
+        inject_allocator_oom = false;
         for (int retry = 0; retry < 3; ++retry)
         {
             require(!player.begin_open(clip), "blocked repeated HTTP opens after ENOMEM");
@@ -183,6 +192,8 @@ int main(int argc, char **argv)
         return 0;
     }
     require(Kit_GetHint(KIT_HINT_THREAD_COUNT) == 1, "explicit single-thread codec baseline");
+    require(Kit_GetHint(KIT_HINT_AUDIO_BUFFER_FRAMES) == 8, "bounded PCM queue");
+    require(Kit_GetHint(KIT_HINT_AUDIO_BUFFER_PACKETS) == 16, "bounded audio packet queue");
     require(real_video ? player.duration() >= 20 && player.duration() <= 3600
                        : std::abs(player.duration() - 20.0) < 0.2,
             "clip duration");

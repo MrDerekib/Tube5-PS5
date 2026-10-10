@@ -24,11 +24,13 @@ class RangeTests(unittest.TestCase):
         thread.start()
         try:
             env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
-            result = subprocess.run(
-                ["build/media-smoke", f"http://127.0.0.1:{server.server_port}/test-clip.mp4",
-                 "--expect-read-oom"], env=env, capture_output=True, text=True, timeout=10)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn("HTTP OOM passed", result.stdout)
+            for mode in ["--expect-read-oom", "--expect-allocator-oom"]:
+                with self.subTest(mode=mode):
+                    result = subprocess.run(
+                        ["build/media-smoke", f"http://127.0.0.1:{server.server_port}/test-clip.mp4",
+                         mode], env=env, capture_output=True, text=True, timeout=10)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertIn("HTTP OOM passed", result.stdout)
         finally:
             server.shutdown()
             server.server_close()

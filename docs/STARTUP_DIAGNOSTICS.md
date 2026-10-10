@@ -464,10 +464,61 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-19-HTTP: presupuesto de probing y colas
+
+Prueba física DIAG18: el extracto reproduce con mejora audible reportada;
+IMG_4281 muestra reproducción y U0/E0/MEMFAIL0 en las muestras revisadas. El
+usuario confirma avances, retrocesos y salida. Queda un pequeño clic al saltar,
+aplazado como pulido. No se pudo escuchar directamente la pista de la grabación.
+
+Al servir el archivo completo se detuvo el servidor mientras la sesión anterior
+seguía abierta; el usuario reporta crash de esa sesión. Esa interrupción es un
+factor de confusión, no prueba la causa del crash. Después de reabrir la app,
+el archivo completo falla de nuevo: HTTP READ ENOMEM, MEMFAIL 118 ALIGN 368768B
+ERR12, W3/3, READ142/144 ERR-12. El tamaño es compatible con un framebuffer YUV
+acolchado, pero el contador no identifica la pila ni mide memoria libre.
+
+DIAG19 limita el probing HTTP a 5 MiB / 5 s de contenido / 2500 paquetes en
+`avformat_find_stream_info`, después de que `_ScanSource` lo suba a INT_MAX.
+Aplicarlo solo en las opciones de apertura no serviría: la biblioteca las
+sobrescribe antes del scan. Estas opciones públicas se documentan en
+[FFmpeg 7 AVFormatContext](https://ffmpeg.org/doxygen/7.0/structAVFormatContext.html).
+No son límites del heap ni de las tablas de muestras/índices del MP4.
+
+La cola PCM se reduce de 64 a 8 frames y la cola AAC de 64 a 16 paquetes,
+conservando dos frames de vídeo y sus 16 paquetes. En a2, a partir de 16 bloques
+PCM en cola el FIFO puede agrupar lotes de hasta unos 8192 samples antes de
+emitir: permanecer por debajo evita ese crecimiento durante la acumulación.
+No se cambia el allocator, libc.prx, códecs, vídeo, URL ni payloads. El getter
+de ENOMEM alineado conserva una bandera hasta reset: la UI cierra/bloquea en
+su siguiente tick aunque el fallo haya ocurrido en un decoder antes de READ.
+La apertura también rechaza una fuente o decoder que ya haya marcado ENOMEM;
+los errores de apertura conservan el bloqueo cuando esa bandera está activa.
+EINVAL no activa ese bloqueo. No garantiza evitar todos los crashes internos.
+
+Se prueban los límites después del sobrescrito de `_ScanSource`, fuentes
+no rastreadas intactas, hint de colas, bandera ENOMEM/EINVAL y cierre/bloqueo/
+instancia nueva mediante inyección host de allocator y de READ. La regresión
+PCM sigue activa. Es una corrección candidata: no demuestra la causa exacta,
+que haya una fuga, ni que el vídeo completo funcione en PS5.
+DIAG18 queda respaldada en `.local/boot-diag-18/`. Eboot DIAG19 SHA-256:
+`49ade867575647106373c6b058f09cbb08dd15a2ba3a41fb8fe2e0536d0aae40`.
+
+Validación PC: batería media con ASan/UBSan/LSan y smoke HTTP del MP4 completo
+(unos diez segundos iniciales, controles, seek a EOF y reapertura); no equivale
+a 28 minutos continuos ni reproduce el allocator PS5. Build nativa/FSELF válida.
+Formato de los fuentes modificados y sintaxis shell pasan. El lint global
+conserva los problemas previos de formato de self-update, fuera de esta tarea.
+
+Cerrar Tube5 completamente antes de copiar eboot/etiqueta. El servidor conserva
+el vídeo de 28:21. Primero basta probar la apertura y 30–60 s: no tiene sentido
+una prueba larga si vuelve a fallar al inicio. Si aparece error, fotografiar
+error/MEMFAIL/READ y no insistir. No cambiar servidor durante la reproducción.
+
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-18-HTTP \
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-19-HTTP \
   APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign Kit_LockVideoDecoderRaw Kit_BeginPacketBufferRead Kit_FinishPacketBufferRead Kit_CancelPacketBufferRead Kit_GetTimerElapsed av_frame_ref"
 ```
 

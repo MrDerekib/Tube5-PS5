@@ -3,7 +3,7 @@
 Este piloto descarga un vídeo en el PC, une sus pistas sin recodificar y sirve
 el MP4 preparado a Tube5 por HTTP LAN. **No es streaming directo de YouTube**,
 ni una integración de catálogo/búsqueda, ni SponsorBlock. El PC necesita estar
-encendido. La app conserva DIAG16; no se modifican sus payloads ni firmware.
+encendido. La candidata actual es DIAG19; no se modifican sus payloads ni firmware.
 
 ## Preparación
 
@@ -34,7 +34,9 @@ Usar únicamente contenido al que se tenga acceso autorizado.
 
 ## Servirlo a la PS5
 
-Detener primero el servidor anterior del puerto 8080. Desde la raíz del proyecto:
+Cerrar primero la reproducción en Tube5 y después detener el servidor anterior
+del puerto 8080. No cambiar archivos/servidor con una sesión HTTP abierta.
+Desde la raíz del proyecto:
 
 ```bash
 python3 tools/http-test-server.py --bind IP_DEL_PC --port 8080 \
@@ -45,7 +47,7 @@ La URL de la consola sigue siendo `http://IP_DEL_PC:8080/test-clip.mp4`; el nomb
 de esa ruta es un alias de pruebas, no indica que siga siendo el clip sintético.
 El servidor sigue exponiendo un solo MP4, con rangos HTTP para seeks, sin mostrar
 la caché, directorios ni metadatos. Se conserva la excepción del cortafuegos
-limitada a la PS5. En Tube5, seleccionar HTTP y abrir VIDEO EN RED con DIAG16.
+limitada a la PS5. En Tube5, seleccionar HTTP y abrir VIDEO EN RED con DIAG19.
 No hay que copiar el vídeo a la consola ni cambiar eboot.bin o la configuración.
 El texto de portada aún menciona el clip de 20 s; el contador usa la duración
 real del archivo. La identidad/metadatos de la fuente en la UI quedan pendientes.
@@ -103,8 +105,18 @@ El archivo completo permanece intacto. Un cambio de resultado solo orientaría
 el diagnóstico; no prueba por sí solo qué asignación o recurso provoca el fallo.
 Antes de probar, actualizar eboot.bin y build-label.txt a DIAG17 con la app
 cerrada. Abrir **una vez**; si falla, fotografiar el menú entero (error, MEMFAIL
-y READ), no insistir. Prueba física pendiente: audio, pausa/reanudación, ±5 s, salida y
-reapertura; comparar MEMFAIL, SYNC DROP y LOOP con DIAG16/sintético.
+y READ), no insistir. DIAG18 mejora el audio al conservar las muestras de cada
+bloque; el usuario confirma avances/retrocesos y salida. IMG_4281 muestra U0,
+E0 y MEMFAIL0 en las muestras revisadas, pero no valida el archivo completo.
+
+El completo vuelve a fallar en DIAG18 al reabrir la app: READ ENOMEM, MEMFAIL118,
+ALIGN368768B ERR12 y READ142/144 ERR-12. DIAG19 reduce colas de audio y limita el
+probing HTTP, conservando la corrección PCM y el bloqueo de reintentos. Véanse
+[los detalles y las limitaciones](STARTUP_DIAGNOSTICS.md#boot-diag-19-http-presupuesto-de-probing-y-colas).
+Probar primero apertura y 30–60 s del completo; solo si pasa iniciar una prueba
+larga continua. No hace falta verlo activamente, pero saltar al final no valida
+la estabilidad de toda la reproducción. No se ha confirmado todavía una fuga
+ni la causa exacta del agotamiento del allocator.
 
 La siguiente fase debe estudiar resolución de enlaces normales, entrega de los
 flujos sin descarga completa previa y audio/vídeo separados. No se presume que

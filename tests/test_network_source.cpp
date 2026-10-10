@@ -8,12 +8,26 @@ extern "C"
 #include <libavformat/avformat.h>
     int __wrap_avformat_open_input(AVFormatContext **, const char *, const AVInputFormat *,
                                    AVDictionary **);
+    int __wrap_avformat_find_stream_info(AVFormatContext *, AVDictionary **);
 }
 static unsigned calls = 0;
 static const char *timeout = "5000000";
 static Uint64 ticks = 100;
 static bool exceed_deadline = false;
 static bool succeed = false;
+static bool bounded_probe = false;
+extern "C" int __real_avformat_find_stream_info(AVFormatContext *context, AVDictionary **)
+{
+    if (bounded_probe)
+    {
+        assert(context->probesize == 5 * 1024 * 1024);
+        assert(context->max_analyze_duration == 5 * AV_TIME_BASE);
+        assert(context->max_probe_packets == 2500);
+    }
+    else
+        assert(context->probesize == 2147483647);
+    return 0;
+}
 extern "C" Uint64 __wrap_SDL_GetTicks64()
 {
     return ticks;
@@ -75,6 +89,16 @@ int main()
     tube5::begin_network_session();
     assert(__wrap_avformat_open_input(&context, "http://127.0.0.1/test.mp4", nullptr, nullptr) ==
            0);
+    // Match _ScanSource: it overwrites open options immediately before probing.
+    context->probesize = context->max_analyze_duration = 2147483647;
+    bounded_probe = true;
+    assert(__wrap_avformat_find_stream_info(context, nullptr) == 0);
+    AVFormatContext *local = avformat_alloc_context();
+    local->probesize = 2147483647;
+    bounded_probe = false;
+    assert(__wrap_avformat_find_stream_info(local, nullptr) == 0);
+    assert(local->probesize == 2147483647); // Untracked/local sources untouched.
+    avformat_free_context(local);
     // Probe reads must not be mistaken for playback failures.
     tube5::record_network_read(context, AVERROR(EIO), 0);
     assert(tube5::network_playback_error() == 0);

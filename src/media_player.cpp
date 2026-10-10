@@ -18,6 +18,8 @@ namespace tube5
 {
 bool MediaPlayer::fail(const char *stage, const char *detail) noexcept
 {
+    if (memory_out_of_memory())
+        memory_blocked_ = true;
     std::snprintf(error_, sizeof(error_), "%s: %s", stage, detail ? detail : "unknown error");
     close();
     return false;
@@ -108,6 +110,8 @@ MediaPlayer::OpenResult MediaPlayer::poll_open(SDL_Renderer *renderer) noexcept
 
 bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
 {
+    if (memory_out_of_memory())
+        return fail("SOURCE MEMORY", "ENOMEM - CIERRA Y REABRE TUBE5");
     const int video = Kit_GetBestSourceStream(source_, KIT_STREAMTYPE_VIDEO);
     const int audio = Kit_GetBestSourceStream(source_, KIT_STREAMTYPE_AUDIO);
     if (video < 0 || audio < 0)
@@ -128,11 +132,18 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
     // Establish a conservative native baseline before trying parallel codec
     // workers. This does NOT disable Kitchensink's demux/audio/video threads.
     Kit_SetHint(KIT_HINT_THREAD_COUNT, 1);
+    // a2 ramps FIFO batches to 8192 samples once >=16 output frames queue.
+    // Keep PCM queue below that threshold, rather than retaining up to 64
+    // growing blocks. Demux backpressure bounds the upstream audio packets.
+    Kit_SetHint(KIT_HINT_AUDIO_BUFFER_FRAMES, 8);
+    Kit_SetHint(KIT_HINT_AUDIO_BUFFER_PACKETS, 16);
     reset_codec_diagnostic();
     player_ =
         Kit_CreatePlayer(source_, video, audio, -1, &video_request, &audio_request, 1920, 1080);
     if (!player_)
         return fail("DECODER", codec_diagnostic()[0] ? codec_diagnostic() : Kit_GetError());
+    if (memory_out_of_memory())
+        return fail("DECODER MEMORY", "ENOMEM - CIERRA Y REABRE TUBE5");
     Kit_PlayerInfo info{};
     Kit_GetPlayerInfo(player_, &info);
     if (info.video_format.format != SDL_PIXELFORMAT_IYUV)
@@ -344,6 +355,12 @@ bool MediaPlayer::check_network_failure() noexcept
 {
     if (!network_ || !player_ || opening())
         return false;
+    if (memory_out_of_memory())
+    {
+        memory_blocked_ = true;
+        fail("MEMORY", "ENOMEM - CIERRA Y REABRE TUBE5");
+        return true;
+    }
     const int read_error = network_playback_error();
     if (read_error < 0)
     {

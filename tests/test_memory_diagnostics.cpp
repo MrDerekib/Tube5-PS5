@@ -12,6 +12,7 @@ namespace
 {
 char token;
 bool fail = false;
+int alignment_error = ENOMEM;
 void expect(const char *expected)
 {
     char text[128]{};
@@ -38,13 +39,14 @@ extern "C" int __real_posix_memalign(void **address, std::size_t alignment, std:
 {
     assert(alignment == 64 && bytes == 1024);
     if (fail)
-        return ENOMEM;
+        return alignment_error;
     *address = &token;
     return 0;
 }
 int main()
 {
     tube5::reset_memory_diagnostic();
+    assert(!tube5::memory_out_of_memory());
     void *aligned = nullptr;
     assert(__wrap_malloc(128) == &token && __wrap_calloc(4, 64) == &token);
     assert(__wrap_realloc(&token, 512) == &token);
@@ -58,9 +60,15 @@ int main()
     assert(__wrap_realloc(&token, 512) == nullptr);
     expect("MEMFAIL 3 REALLOC 512B ERR 0");
     assert(__wrap_posix_memalign(&aligned, 64, 1024) == ENOMEM && aligned == &token);
+    assert(tube5::memory_out_of_memory());
     expect("MEMFAIL 4 ALIGN 1024B ERR 12");
     assert(__wrap_malloc(0) == nullptr); // A zero-size NULL is not allocation failure.
     expect("MEMFAIL 4 ALIGN 1024B ERR 12");
     tube5::reset_memory_diagnostic();
+    assert(!tube5::memory_out_of_memory());
     expect("MEMFAIL 0 NONE 0B ERR 0");
+    alignment_error = EINVAL;
+    assert(__wrap_posix_memalign(&aligned, 64, 1024) == EINVAL);
+    assert(!tube5::memory_out_of_memory());
+    expect("MEMFAIL 1 ALIGN 1024B ERR 22");
 }
