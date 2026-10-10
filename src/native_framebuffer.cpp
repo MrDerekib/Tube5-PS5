@@ -29,8 +29,13 @@ int NativeFramebuffer::allocate(std::size_t bytes) noexcept
     if (rounded > pool || pool > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max()))
         return -12;
     std::int64_t physical = 0;
+    // This is CPU working storage, not a scanout buffer. SDL reads it while
+    // composing and the tiler reads every pixel. Type 3 is write-combined and
+    // makes those reads expensive; the PS5 Vulkan project's coherence probe
+    // confirms that type 12 with protection 0x33 is CPU cached.
+    constexpr int cpu_cached_memory = 12;
     int result = sceKernelAllocateDirectMemory(0, static_cast<std::int64_t>(pool), rounded,
-                                               alignment, 3, &physical);
+                                               alignment, cpu_cached_memory, &physical);
     if (result != 0)
         return result;
     void *mapped = nullptr;

@@ -48,6 +48,18 @@ TEST(CanvasTest, BlitAcceptsRowPitchAndRejectsShortSources)
     EXPECT_EQ(tiled[15423 + 1], source[127 * pitch + 127]);
     EXPECT_EQ(tiled[16384 + 1], source[128]);
     EXPECT_EQ(tiled[2206335 + 1], source[1079 * pitch + 1919]);
+    // Every visible pixel must retain the original address mapping, including
+    // the partial bottom tile. A few fixtures cannot catch a tile permutation.
+    for (unsigned y = 0; y < 1080; ++y)
+        for (unsigned x = 0; x < 1920; ++x)
+        {
+            const unsigned offset = ((y << 4) & 0x70U) ^ ((y << 5) & 0xf00U) ^
+                                    ((y << 9) & 0x1000U) ^ ((y << 8) & 0x4000U) ^
+                                    ((x << 2) & 0xcU) ^ ((x << 5) & 0x380U) ^ ((x << 4) & 0x400U) ^
+                                    ((x << 6) & 0x800U) ^ ((x << 9) & 0xa000U);
+            const std::size_t address = ((y / 128) * 15 + x / 128) * 16384 + offset / 4;
+            ASSERT_EQ(tiled[address + 1], source[y * pitch + x]) << x << "," << y;
+        }
     EXPECT_EQ(tiled.front(), guard);
     EXPECT_EQ(tiled.back(), guard);
 }

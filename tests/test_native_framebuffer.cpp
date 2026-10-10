@@ -18,7 +18,7 @@ extern "C" int sceKernelAllocateDirectMemory(std::int64_t start, std::int64_t en
                                              std::int64_t *physical)
 {
     assert(start == 0 && end == static_cast<std::int64_t>(pool));
-    assert(bytes == 0x800000 && alignment == 0x200000 && type == 3);
+    assert(bytes == 0x800000 && alignment == 0x200000 && type == 12);
     ++allocations;
     *physical = 0; // Physical address zero is valid and must still be released.
     return allocation_result;

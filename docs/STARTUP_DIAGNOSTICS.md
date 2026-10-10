@@ -187,19 +187,82 @@ una lectura raw si no hay frame disponible o aún no corresponde mostrarlo; esos
 campos ayudan a distinguir sincronización y entrega de audio. La causa aún no
 está confirmada.
 
+## BOOT-DIAG-10: rendimiento y decisiones de sincronización
+
+La grabación local de 61 segundos de la build 9 muestra una primera reproducción
+negra hasta 00:20 (`FR 0`, `RAW 0/64`, `BUF 2/2`). Al reanudar sin salir del player,
+se muestra un único frame del clip, timestamp 00:00:04.200/frame 126. La interfaz
+avanza de 00:13 a 00:20 pero la imagen y `FR 1` permanecen iguales. En esa sesión
+`MEMFAIL 0` y los errores de lectura/codec son cero. No demuestra reproducción
+continua ni audio correcto: Kitchensink puede devolver bytes de silencio.
+
+El código fijado de Kitchensink descarta frames con más de 50 ms de retraso;
+si termina de descartar una cola antes de que llegue un frame a tiempo, devuelve
+1 y Tube5 conserva negro o la última textura. Esto es una hipótesis compatible
+con la grabación, todavía no una causa confirmada.
+
+La build 10 corrige costes identificados en nuestra ruta:
+
+- El framebuffer de trabajo de SDL utiliza memoria directa tipo 12 con protección
+  `0x33`, en vez de tipo 3 write-combined. SDL y el tiler leen ese almacenamiento
+  desde CPU; los buffers finales VideoOut conservan tipo 3. El tipo 12 y su
+  comportamiento con caché se contrastaron con
+  [PS5_Vulkan, commit 5b5e4fc](https://github.com/mihawk-99/PS5_Vulkan/blob/5b5e4fc2d80fdb67a4f61ba9e6a8a424026bb8a5/driver/ps5vk_private.h)
+  y sus [mediciones de memoria](https://github.com/mihawk-99/PS5_Vulkan/blob/5b5e4fc2d80fdb67a4f61ba9e6a8a424026bb8a5/docs/HARDWARE_FINDINGS.md).
+- La copia tiled escribe en orden de direcciones físicas dentro de cada tile.
+  Conserva el mapeo de los píxeles visibles y rellena el padding inferior en negro.
+- Se elimina el checkpoint bloqueante de 700 ms al subir el primer frame;
+  `FR` sigue confirmando las subidas sin detener la reproducción.
+- Tras abrir el clip se descartan pulsaciones de activación acumuladas y se
+  esperan 350 ms antes de aceptar otra pausa. No corrige por sí solo un mando
+  que pierda pulsaciones entre lecturas del backend.
+
+El HUD añade `MS LOOP/UI/VIDEO/COPY`: milisegundos del último ciclo, composición
+UI, lectura/subida/dibujo de vídeo y copia tiled. LOOP incluye presentación,
+espera de refresco y pacing; los valores se dibujan con una iteración de retraso.
+
+`SYNC PTS/CLOCK` muestra en milisegundos el último candidato de vídeo y el reloj
+usado durante la lectura raw, no necesariamente el frame presentado. `PTS -1`
+significa que aún no se observó un timestamp válido. PacBrew añade 100 ms al
+primer candidato dentro del sincronizador; el HUD muestra el PTS del archivo.
+`DROP` cuenta frames retirados dentro de esa lectura; `WAIT`, lecturas canceladas
+sin consumir el frame; `EMPTY`, intentos que no obtuvieron nada de la cola.
+Los wrappers preservan argumentos, retornos y reglas de sincronización. No
+acceden a layouts de structs privados; filtran el hilo de lectura de vídeo.
+
+Se revisó también
+[BFplayer ad3bdc9](https://github.com/ItsBlurf/BFplayer/tree/ad3bdc9d7742606913701dac035f29e2ab49b080):
+su fork repara pausa/reanudación del reloj, consumo parcial de audio y utiliza
+audio como reloj maestro. No se ha trasladado ese fork completo a Tube5 ni se
+atribuye nuestro fallo al mismo bug de audio.
+
+Validación: compilación nativa y contenedor correctos; el test de copia comprueba
+los 2.073.600 píxeles visibles contra el mapeo anterior. Pasan los siete tests de
+canvas/navegación, los mocks de memoria y diagnóstico, y la reproducción real
+en PC con sanitizadores: imagen, pausa, saltos, EOF, reapertura y limpieza.
+También compila y genera preview el modo offscreen sin diagnóstico. El ELF
+nativo confirma que las llamadas internas de sincronización alcanzan los
+wrappers; los contadores específicos de esta ruta aún deben observarse en PS5.
+La compatibilidad y el rendimiento de esta modificación requieren la prueba
+en PS5 FW 13.20.
+La grabación privada queda excluida de Git y del paquete de la aplicación.
+
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-9 \
-  APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign"
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-10 \
+  APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file malloc calloc realloc posix_memalign Kit_LockVideoDecoderRaw Kit_BeginPacketBufferRead Kit_FinishPacketBufferRead Kit_CancelPacketBufferRead Kit_GetTimerElapsed av_frame_ref"
 ```
 
 Cerrar Tube5 y sustituir la carpeta completa `dist/PPSA99999/` en la consola,
 incluyendo `sce_module/`. No cambiar los payloads ni el firmware para esta prueba.
 Grabar los avisos y comunicar el último código Dxx visible.
-Si ya está instalada la build 8 completa, para esta actualización sólo cambian
+Si ya está instalada la build 8 o 9 completa, para esta actualización sólo cambian
 `eboot.bin` y `build-label.txt`; basta con sustituir esos dos archivos con Tube5
-cerrado. Si el vídeo sigue negro, comunicar `MEMFAIL` y las tres líneas del pipeline.
+cerrado. Abrir Vídeo de prueba con una pulsación de X y esperar unos segundos.
+Grabar la primera reproducción, después pausa/reanudación y un salto de 5 s.
+Si sigue negro o congelado, capturar `MS`, `SYNC`, `FR/RAW` y `MEMFAIL` junto con
+las tres líneas del pipeline. El aviso de primer frame ya no aparece en build 10.
 
 | Último aviso | La siguiente operación pendiente |
 | --- | --- |
@@ -227,7 +290,7 @@ cerrado. Si el vídeo sigue negro, comunicar `MEMFAIL` y las tres líneas del pi
 | TEXTURE: fallo original | Constructor de superficie para vídeo; anotar el mensaje siguiente y sus dimensiones |
 | CODEC: apertura fallida | Apertura de codec FFmpeg; anotar codec y mensaje `FFmpeg -N: ...` |
 | THREAD: no se pudo crear | Worker SDL fallido; anotar nombre, error SDL y retorno de pthread_create |
-| VIDEO: primer frame subido | Copia RGBA a textura correcta; todavía hay que confirmar imagen visible |
+| VIDEO: primer frame subido (builds 6–9) | Copia RGBA a textura correcta; no prueba imagen en movimiento; eliminado en build 10 |
 
 Los avisos se pueden encolar: el último visible es una pista, no una traza de
 crash. Si SDL devuelve un error, se muestran etapa y detalle y la app permanece

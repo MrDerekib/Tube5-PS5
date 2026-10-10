@@ -28,7 +28,7 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5
     "${libs[@]}" -o build/thread-diagnostics-test
 build/thread-diagnostics-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_DIAGNOSTICS \
-    -Isrc "${cflags[@]}" tests/test_pipeline_diagnostics.cpp src/pipeline_diagnostics.cpp \
+    -Isrc "${cflags[@]}" tests/test_pipeline_diagnostics.cpp src/pipeline_diagnostics.cpp src/video_sync_diagnostics.cpp \
     "${libs[@]}" -o build/pipeline-diagnostics-test
 build/pipeline-diagnostics-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
@@ -38,11 +38,11 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5
     -Isrc tests/test_memory_diagnostics.cpp src/memory_diagnostics.cpp -o build/memory-diagnostics-test
 build/memory-diagnostics-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
-    -DTUBE5_HOST -DTUBE5_DIAGNOSTICS -DTUBE5_PIPELINE_WRAP -Isrc -I"$source_root/include" "${cflags[@]}" tests/media_smoke.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp \
+    -DTUBE5_HOST -DTUBE5_DIAGNOSTICS -DTUBE5_PIPELINE_WRAP -Isrc -I"$source_root/include" "${cflags[@]}" tests/media_smoke.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp \
     build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" \
     -Wl,--wrap=av_read_frame,--wrap=avcodec_send_packet,--wrap=avcodec_receive_frame,--wrap=avformat_seek_file -o build/media-smoke
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/media-smoke
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_HOST -DTUBE5_OFFSCREEN -ffunction-sections -fdata-sections \
-    -Isrc -I"$source_root/include" "${cflags[@]}" src/main.cpp src/demo_renderer.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/native_sdl.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp \
+    -Isrc -I"$source_root/include" "${cflags[@]}" src/main.cpp src/demo_renderer.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/native_sdl.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp \
     build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" -Wl,--gc-sections -o build/tube5-host
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy TUBE5_PREVIEW=build/ui-preview.bmp build/tube5-host

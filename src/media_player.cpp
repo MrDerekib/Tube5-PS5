@@ -2,7 +2,6 @@
 #include "media_player.hpp"
 #include "codec_diagnostics.hpp"
 #include "thread_diagnostics.hpp"
-#include "boot_diagnostics.hpp"
 #include "pipeline_diagnostics.hpp"
 #include "memory_diagnostics.hpp"
 #include <algorithm>
@@ -203,8 +202,8 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
             {
                 frame_area_ = area;
                 ++frames_uploaded_;
-                if (frames_uploaded_ == 1)
-                    tube5_boot_checkpoint("Tube5 VIDEO: primer frame subido");
+                // Do not sleep for a diagnostic notification here. The boot
+                // checkpoint waits 700 ms, making following frames late.
             }
             Kit_UnlockPlayerVideoRawFrame(player_);
         }

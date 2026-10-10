@@ -245,6 +245,17 @@ void notify(std::string_view message) noexcept
     return (static_cast<std::size_t>(block_index) << 16) + offset;
 }
 
+// Invert one 128x128 tile once, so scanout writes follow physical addresses.
+// Row-by-row scattered writes exhaust write-combining buffers in WC memory.
+constexpr auto tile_sources = []
+{
+    std::array<std::uint16_t, 128 * 128> positions{};
+    for (unsigned y = 0; y < 128; ++y)
+        for (unsigned x = 0; x < 128; ++x)
+            positions[tiled_byte_offset(x, y) / 4] = static_cast<std::uint16_t>(y * 128 + x);
+    return positions;
+}();
+
 void put_pixel_unchecked(std::uint32_t *pixels, unsigned x, unsigned y, Color color,
                          bool linear) noexcept
 {
@@ -355,12 +366,28 @@ bool Canvas::blit_linear(std::span<const std::uint32_t> source, unsigned pitch_p
         static_cast<std::size_t>(frame_height - 1) * pitch_pixels + frame_width;
     if (pitch_pixels < frame_width || source.size() < required)
         return false;
-    for (unsigned y = 0; y < frame_height; ++y)
-        for (unsigned x = 0; x < frame_width; ++x)
-            put_pixel_unchecked(
-                pixels_, x, y,
-                static_cast<Color>(source[static_cast<std::size_t>(y) * pitch_pixels + x]),
-                linear_);
+    if (linear_)
+    {
+        for (unsigned y = 0; y < frame_height; ++y)
+            for (unsigned x = 0; x < frame_width; ++x)
+                pixels_[y * frame_width + x] =
+                    source[static_cast<std::size_t>(y) * pitch_pixels + x];
+        return true;
+    }
+    constexpr unsigned blocks_per_row = frame_width / 128;
+    for (unsigned tile_y = 0; tile_y < (frame_height + 127) / 128; ++tile_y)
+        for (unsigned tile_x = 0; tile_x < blocks_per_row; ++tile_x)
+        {
+            auto *tile = pixels_ + (tile_y * blocks_per_row + tile_x) * tile_sources.size();
+            for (std::size_t i = 0; i < tile_sources.size(); ++i)
+            {
+                const unsigned local = tile_sources[i];
+                const unsigned y = tile_y * 128 + local / 128;
+                const unsigned x = tile_x * 128 + local % 128;
+                tile[i] = y < frame_height ? source[static_cast<std::size_t>(y) * pitch_pixels + x]
+                                           : 0xff000000U;
+            }
+        }
     return true;
 }
 

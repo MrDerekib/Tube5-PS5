@@ -13,6 +13,8 @@
 | [Microsoft DirectXTex](https://github.com/microsoft/DirectXTex) | `texconv` presentation-image preparation |
 | [FFmpeg](https://ffmpeg.org/) | Developer-supplied selection-audio preparation |
 | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) | Directory-style deployment and hardware validation |
+| [ItsBlurf/BFplayer](https://github.com/ItsBlurf/BFplayer) | Playback, audio-clock and presentation reference; its fork is not bundled |
+| [mihawk-99/PS5_Vulkan](https://github.com/mihawk-99/PS5_Vulkan) | Public direct-memory definitions and CPU-cache measurements used to select the SDL working framebuffer's memory type; no driver code bundled |
 | [ArkSama/PS5-Lapy-JB-Daemon](https://github.com/ArkSama/PS5-Lapy-JB-Daemon) | Original Lapy project and owned-root design |
 | [mpereiraesaa/PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon) | Exact-title one-shot helper and cooperative elevation protocol |
 

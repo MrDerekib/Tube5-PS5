@@ -9,6 +9,7 @@ hardware can prove.
 | --- | --- |
 | `make test-deps` | Fetch and verify the pinned host-only GoogleTest source. |
 | `make test-unit` | Compile and run the host-native GoogleTest application tests. |
+| `bash tools/test-host-media.sh` | With the pinned host Kitchensink checkout prepared: sanitizer checks for native-memory boundaries, diagnostic mocks, real local video/audio, pause, seeks, EOF/reopen, and an offscreen UI preview. Native sync hooks and console output still require PS5. |
 | `make test-integration` | Exercise repository scripts through subprocesses and temporary files. |
 | `make test-update-check` | Check the [update check](UPDATE_CHECK.md): versions, parsing, decisions, hostile input, under sanitizers. |
 | `make test` | Run every host test suite. |

@@ -8,6 +8,7 @@
 #include "pipeline_diagnostics.hpp"
 #include "memory_diagnostics.hpp"
 #include "native_framebuffer.hpp"
+#include "video_sync_diagnostics.hpp"
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -28,6 +29,9 @@ constexpr auto panel = static_cast<Color>(0xff382c21);
 constexpr auto accent = static_cast<Color>(0xff8261ff);
 constexpr auto muted = static_cast<Color>(0xffbbaea5);
 std::array<char, 48> build_label{};
+#ifdef TUBE5_DIAGNOSTICS
+std::array<char, 128> frame_timing{};
+#endif
 
 void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &media, bool connected,
            const char *error)
@@ -96,6 +100,9 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(350, 900, status, 4, Color::white);
 #ifdef TUBE5_DIAGNOSTICS
         char diagnostics[192]{};
+        canvas.text(800, 125, frame_timing.data(), 2, muted);
+        tube5::video_sync_diagnostic_status(diagnostics, sizeof(diagnostics));
+        canvas.text(350, 980, diagnostics, 2, muted);
         media.diagnostic_status(diagnostics, sizeof(diagnostics));
         canvas.text(350, 950, diagnostics, 2, muted);
         for (unsigned row = 0; row < 3; ++row)
@@ -275,12 +282,17 @@ int main()
     if (!kit_ready)
         std::snprintf(error, sizeof(error), "PLAYER INIT: %s", Kit_GetError());
     tube5_boot_checkpoint("Tube5 D12: iniciar bucle de eventos");
+    Uint32 select_ready_at = 0;
+    bool opening_player = false;
     const auto command = [&](tube5::Command action)
     {
         if (nav.screen == tube5::Screen::player)
         {
             if (action == tube5::Command::select)
-                media.toggle_pause();
+            {
+                if (static_cast<Sint32>(SDL_GetTicks() - select_ready_at) >= 0)
+                    media.toggle_pause();
+            }
             else if (action == tube5::Command::previous || action == tube5::Command::next)
                 media.seek(action == tube5::Command::previous ? -5.0 : 5.0);
             else if (action == tube5::Command::back)
@@ -292,6 +304,7 @@ int main()
         }
         if (nav.apply(action))
         {
+            opening_player = true;
             error[0] = '\0';
 #ifdef TUBE5_HOST
             constexpr const char *clip = "assets/test-clip.mp4";
@@ -305,6 +318,12 @@ int main()
                 std::fprintf(stderr, "Tube5: %s\n", error);
                 nav.screen = tube5::Screen::home;
             }
+            // Opening codecs can take long enough for repeated Cross presses
+            // to queue up. They must not immediately pause the new player.
+            SDL_PumpEvents();
+            SDL_FlushEvent(SDL_CONTROLLERBUTTONDOWN);
+            SDL_FlushEvent(SDL_KEYDOWN);
+            select_ready_at = SDL_GetTicks() + 350;
         }
     };
 #ifndef TUBE5_HOST
@@ -316,6 +335,10 @@ int main()
     auto render_frame = [&](Canvas *destination) noexcept
     {
         const Uint32 frame_start = SDL_GetTicks();
+        static Uint32 previous_frame_start = frame_start;
+        const Uint32 interval = frame_start - previous_frame_start;
+        previous_frame_start = frame_start;
+        opening_player = false;
         SDL_Event event{};
         while (SDL_PollEvent(&event))
         {
@@ -384,6 +407,8 @@ int main()
             else if (event.type == SDL_QUIT)
                 running = false;
 #endif
+            if (opening_player)
+                break;
         }
         if (nav.screen == tube5::Screen::player && media.finished())
         {
@@ -392,6 +417,7 @@ int main()
         }
         if (output && SDL_LockSurface(output) != 0)
             fatal("UI SURFACE LOCK");
+        const Uint32 paint_start = SDL_GetTicks();
         paint(canvas, nav, media, controller != nullptr, error);
         if (output)
             SDL_UnlockSurface(output);
@@ -401,12 +427,14 @@ int main()
                 SDL_RenderCopy(renderer, ui, nullptr, nullptr) != 0)
                 fatal("UI UPLOAD");
         }
+        const Uint32 video_start = SDL_GetTicks();
         if (nav.screen == tube5::Screen::player)
         {
             media.draw(renderer, SDL_Rect{350, 260, 1220, 620});
             if (media.error()[0])
                 std::snprintf(error, sizeof(error), "%s", media.error());
         }
+        const Uint32 video_end = SDL_GetTicks();
         SDL_RenderPresent(renderer);
 #ifdef TUBE5_HOST
         static bool first_frame = true;
@@ -426,6 +454,7 @@ int main()
             running = false;
         }
 #endif
+        const Uint32 blit_start = SDL_GetTicks();
         if (destination && output)
         {
             const unsigned pitch = static_cast<unsigned>(output->pitch / 4);
@@ -439,6 +468,17 @@ int main()
             }
         }
         const Uint32 elapsed = SDL_GetTicks() - frame_start;
+#ifdef TUBE5_DIAGNOSTICS
+        std::snprintf(frame_timing.data(), frame_timing.size(), "MS LOOP %u UI %u VIDEO %u COPY %u",
+                      interval, video_start - paint_start, video_end - video_start,
+                      SDL_GetTicks() - blit_start);
+#else
+        (void)interval;
+        (void)paint_start;
+        (void)video_start;
+        (void)video_end;
+        (void)blit_start;
+#endif
         if (elapsed < 33)
             SDL_Delay(33 - elapsed);
     };

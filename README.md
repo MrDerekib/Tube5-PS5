@@ -18,26 +18,28 @@ SDL_kitchensink y FFmpeg, con decodificación por software.
 - Cruceta: navegar; izquierda/derecha durante el vídeo: saltar 5 segundos.
 - X: abrir o pausar/reanudar. Círculo: volver. Options: ajustes fuera del vídeo.
 
-La versión inicial arrancó en una PS5 Fat con FW 13.20 y kstuff activo.
-Este nuevo prototipo pasó las pruebas en PC con sanitizadores. La primera build
-de reproducción falló con CE-108255-1; cargar Keyboard eliminó ese crash, pero
-el renderer de ventana SDL devolvió un error. El menú dibujado directamente en
-la superficie propia con VideoOut nativo ya funciona en esa consola: cruceta,
-X, Ajustes, Acerca de y Options confirmados. Con un hilo de decodificación el
-vídeo local ya abre la pantalla del reproductor y responde a pausa, pero el área
-de vídeo permanece negra y los saltos no funcionan en PS5. En la build 6 los
-contadores de frames y colas permanecen en cero; la cruceta registra peticiones
-de seek. En la build 7 los workers completan su preparación, pero la lectura
-devuelve `-12` (ENOMEM), el codec registra datos no válidos y sólo recibe un
-frame. En la build 8 se leen 241 paquetes y el codec entrega 77 frames, pero el
-buffer se llena y la app no sube ninguno. La build 9 mide la lectura raw y el
-callback de audio; pendiente de validar en PS5. Está en diagnóstico; no se garantiza
-compatibilidad con otros firmwares. Consulta [el diagnóstico de arranque](docs/STARTUP_DIAGNOSTICS.md)
-para compilar la variante con puntos de control.
+El arranque, menú, cruceta, X, Ajustes, Acerca de y Options están confirmados en
+PS5 Fat FW 13.20 con kstuff activo. Cargar Keyboard y usar composición offscreen
+con VideoOut nativo eliminaron los fallos iniciales. La reproducción, pausa,
+saltos y reapertura pasan las pruebas en PC con sanitizadores, pero el vídeo
+todavía no funciona correctamente en esa PS5: la grabación de BOOT-DIAG-9 muestra
+la primera reproducción negra y un único frame congelado después de reanudar.
+Leer y decodificar paquetes no garantiza que se presenten fotogramas.
+
+BOOT-DIAG-10 usa memoria con caché para el framebuffer de trabajo, escribe la
+copia tiled en orden físico, elimina un aviso bloqueante durante reproducción
+y evita pausas por pulsaciones acumuladas al abrir. Añade tiempos de dibujo y
+contadores de decisiones del sincronizador. Está compilada y comprobada en PC;
+su resultado en consola sigue pendiente. No se garantiza compatibilidad con
+otros firmwares. Consulta [el diagnóstico de arranque](docs/STARTUP_DIAGNOSTICS.md)
+para compilar la variante con puntos de control y registrar la prueba.
 
 Para actualizar la prueba: cerrar Tube5 y copiar **toda** la carpeta
 `dist/PPSA99999/` a `/data/homebrew/PPSA99999/`, sustituyendo la anterior.
-Incluye `eboot.bin`, `sce_sys/`, `sce_module/` y `assets/`; no basta con el ejecutable.
+Incluye `eboot.bin`, `sce_sys/`, `sce_module/` y `assets/`; no basta con el ejecutable
+para una instalación inicial. Si ya tienes la carpeta completa de la build 8 o
+9, la prueba 10 necesita sustituir `eboot.bin` y `build-label.txt`; el paquete
+también actualiza los créditos en `THIRD_PARTY_NOTICES.md`.
 
 ## Primera arquitectura
 

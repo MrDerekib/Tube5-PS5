@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pipeline_diagnostics.hpp"
+#include "video_sync_diagnostics.hpp"
 #include <atomic>
 #include <cstdio>
 
@@ -18,6 +19,7 @@ void begin_pipeline_diagnostic() noexcept
     active = false;
     entered = ready = exited = reads = packets = sends = decoded = lock_failures = seeks = 0;
     read_result = send_error = decode_error = seek_result = 0;
+    reset_video_sync_diagnostic();
     active = true;
 }
 void end_pipeline_diagnostic() noexcept
@@ -58,7 +60,16 @@ extern "C" int __wrap_av_read_frame(AVFormatContext *context, AVPacket *packet)
     {
         read_result = result;
         if (result >= 0)
+        {
             ++packets;
+            if (packet->stream_index >= 0 &&
+                static_cast<unsigned>(packet->stream_index) < context->nb_streams)
+            {
+                const AVStream *stream = context->streams[packet->stream_index];
+                if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
+                    tube5::video_sync_time_base(stream->time_base.num, stream->time_base.den);
+            }
+        }
     }
     return result;
 }
