@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pipeline_diagnostics.hpp"
+#include "seek_preroll.hpp"
 #include <cassert>
 #include <cerrno>
 #include <cstring>
@@ -30,6 +31,7 @@ AVFrame frame{};
 SDL_Thread thread{};
 SDL_mutex mutex{};
 int read_return = 0, send_return = 0, receive_return = 0, seek_return = 0;
+int receive_pts = -1;
 void expect(unsigned row, const char *expected)
 {
     char status[128]{};
@@ -50,6 +52,11 @@ extern "C" int __real_avcodec_send_packet(AVCodecContext *context, const AVPacke
 extern "C" int __real_avcodec_receive_frame(AVCodecContext *context, AVFrame *out)
 {
     assert(context == &codec && out == &frame);
+    if (receive_pts >= 0)
+    {
+        out->best_effort_timestamp = receive_pts;
+        receive_pts += 100;
+    }
     return receive_return;
 }
 extern "C" int __real_avformat_seek_file(AVFormatContext *context, int stream, int64_t minimum,
@@ -109,5 +116,19 @@ int main()
     expect(0, "W 0/0/0 READ 0/0 ERR 0");
     expect(1, "VSEND 0 VDEC 0 ERR 0/0");
     expect(2, "LOCKFAIL 0 SEEKEXEC 0 ERR 0");
+    // A successful seek decodes and unreferences preroll before returning
+    // the first frame at/after the target. Failed seeks preserve the target.
+    codec.codec_type = AVMEDIA_TYPE_VIDEO;
+    codec.pkt_timebase = {1, 1000000};
+    seek_return = receive_return = 0;
+    assert(__wrap_avformat_seek_file(&format, -1, -100, 50, 100, 0) == 0);
+    receive_pts = 0;
+    assert(__wrap_avcodec_receive_frame(&codec, &frame) == 0);
+    assert(receive_pts == 200 && frame.best_effort_timestamp == 100);
+    expect(1, "VSEND 0 VDEC 1 ERR 0/0");
+    seek_return = AVERROR(EINVAL);
+    assert(__wrap_avformat_seek_file(&format, -1, -100, 50, 100, 0) == seek_return);
+    assert(tube5::seek_preroll::target_us == 50);
     tube5::end_pipeline_diagnostic();
+    assert(tube5::seek_preroll::target_us == AV_NOPTS_VALUE);
 }

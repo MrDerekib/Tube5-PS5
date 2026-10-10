@@ -464,6 +464,46 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-28-HTTP: descartar preroll y probar 1080p
+
+El propietario informa que DIAG27 reproduce 720p correctamente con imagen y
+audio. No se considera validada una sesión larga ni 60 fps. Se investiga primero
+el fallo de seek observado en el smoke de 1080p.
+
+El clip permanece intacto: primer keyframe en 0 s, segundo en 6,133333 s.
+Con el player anterior, un seek desde 0,786 a 5,786 s acaba en 1,909 s tras
+el plazo del test, con `SEEKEXEC 2 ERR 0`. Kitchensink busca mediante
+avformat_seek_file, pero ajusta su reloj al primer frame decodificado después
+del seek. No descarta el tramo desde el keyframe anterior hasta el destino.
+
+DIAG28 registra el destino temporal solo después de un seek correcto. Los
+wrappers de receive_frame decodifican y sueltan frames de audio/vídeo anteriores
+al destino, sin entregarlos a Kitchensink ni reajustar con ellos su reloj.
+Se usan best_effort_timestamp (o pts) y pkt_timebase, comparados con av_compare_ts.
+No se omiten paquetes comprimidos necesarios para decodificar los frames nuevos.
+El audio se recorta por frames completos, no por muestras: puede perder el
+fragmento de un bloque que cruza el destino. No es un fade ni un seek exacto
+a nivel de muestra. Sin timestamp/timebase válidos se conserva el comportamiento
+anterior. El destino se reemplaza también al retroceder y se reinicia al abrir
+y tras cerrar/join de los workers; no afecta al probing fuera de reproducción.
+
+La corrección se incluye también con diagnósticos desactivados mediante
+TUBE5_SEEK_WRAP. VDEC cuenta frames entregados, no los descartados de preroll.
+Tests: frontera del destino, audio/vídeo con distintas bases temporales,
+retroceso, timestamps ausentes, índices inválidos, seek fallido que conserva
+el destino, descarte/unref en el wrapper y reset al cerrar.
+Pasan con sanitizadores la batería host y los smoke HD: 720p HTTP, 1080p local
+y 1080p HTTP, incluyendo imagen, diez segundos continuos, pausa, seeks, EOF,
+reapertura y limpieza. No validan un minuto entero ni rendimiento de PS5.
+
+Servidor cambiado al mismo minuto real de 1080p/30 fps, H.264 Main/AAC, sin
+alterar GOP, calidad ni URL. Con la app cerrada, copiar dist/PPSA99999 y verificar
+BOOT-DIAG-28-HTTP. Reproducir el minuto sin saltos; después comprobar pausa,
+seek, salida y reapertura. Falta validación física de esta build en PS5.
+Build/FSELF válida, ELF y eboot respaldados en `.local/boot-diag-28/`.
+SHA-256 eboot:
+`23013c1ed08be58e3fcf3cc4a4ec2d77fd1b5abd1cd20631e33051b40eb02346`.
+
 ## BOOT-DIAG-27-HTTP: evitar el buffer RGB temporal de SDL
 
 La captura privada IMG_4283.HEIC confirma DIAG26 y retorno al menú tras ocho

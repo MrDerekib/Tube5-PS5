@@ -265,6 +265,12 @@ int main(int argc, char **argv)
         SDL_RenderPresent(renderer);
         SDL_Delay(33);
     }
+    if (player.position() < forward_from + 4.0)
+    {
+        tube5::pipeline_diagnostic_status(2, pipeline, sizeof(pipeline));
+        std::printf("Forward seek from %.3f target %.3f reached %.3f: %s (%s)\n", forward_from,
+                    forward_from + 5.0, player.position(), pipeline, player.error());
+    }
     require(player.position() >= forward_from + 4.0, "playing forward seek actually changes clock");
     const double backward_from = player.position();
     player.seek(-5.0);

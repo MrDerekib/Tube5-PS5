@@ -3,6 +3,7 @@
 #include "video_sync_diagnostics.hpp"
 #include "video_conversion.hpp"
 #include "network_source.hpp"
+#include "seek_preroll.hpp"
 #include <atomic>
 #include <cstdio>
 
@@ -23,11 +24,13 @@ void begin_pipeline_diagnostic() noexcept
     read_result = send_error = decode_error = seek_result = 0;
     reset_video_sync_diagnostic();
     reset_video_conversion();
+    seek_preroll::reset();
     active = true;
 }
 void end_pipeline_diagnostic() noexcept
 {
     active = false;
+    seek_preroll::reset();
 }
 void pipeline_diagnostic_status(unsigned row, char *text, std::size_t capacity) noexcept
 {
@@ -85,8 +88,6 @@ extern "C" int __wrap_av_read_frame(AVFormatContext *context, AVPacket *packet)
 extern "C"
 {
     int __real_avcodec_send_packet(AVCodecContext *, const AVPacket *);
-    int __real_avcodec_receive_frame(AVCodecContext *, AVFrame *);
-    int __real_avformat_seek_file(AVFormatContext *, int, int64_t, int64_t, int64_t, int);
 }
 extern "C" int __wrap_avcodec_send_packet(AVCodecContext *context, const AVPacket *packet)
 {
@@ -98,10 +99,27 @@ extern "C" int __wrap_avcodec_send_packet(AVCodecContext *context, const AVPacke
         send_error = result;
     return result;
 }
+#endif
+#if defined(TUBE5_SEEK_WRAP) ||                                                                    \
+    (defined(TUBE5_DIAGNOSTICS) && (!defined(TUBE5_HOST) || defined(TUBE5_PIPELINE_WRAP)))
+extern "C"
+{
+    int __real_avcodec_receive_frame(AVCodecContext *, AVFrame *);
+    int __real_avformat_seek_file(AVFormatContext *, int, int64_t, int64_t, int64_t, int);
+}
 extern "C" int __wrap_avcodec_receive_frame(AVCodecContext *context, AVFrame *frame)
 {
     const bool track = active.load() && context && context->codec_type == AVMEDIA_TYPE_VIDEO;
-    const int result = __real_avcodec_receive_frame(context, frame);
+    int result;
+    // Demux seeks land on a preceding keyframe. Decode dependencies, but do
+    // not queue pre-target audio/video or let them reset Kitchensink's clock.
+    do
+    {
+        result = __real_avcodec_receive_frame(context, frame);
+        if (result < 0 || !active.load() || !tube5::seek_preroll::discard(context, frame))
+            break;
+        av_frame_unref(frame);
+    } while (true);
     if (track)
     {
         if (result >= 0)
@@ -118,6 +136,8 @@ extern "C" int __wrap_avformat_seek_file(AVFormatContext *context, int stream, i
     if (track)
         ++seeks;
     const int result = __real_avformat_seek_file(context, stream, minimum, target, maximum, flags);
+    if (result >= 0 && track)
+        tube5::seek_preroll::set(context, stream, target, flags);
     if (track)
         seek_result = result;
     return result;

@@ -5,11 +5,12 @@ el MP4 preparado a Tube5 por HTTP LAN. **No es streaming directo de YouTube**,
 ni una integración de catálogo/búsqueda, ni SponsorBlock. El PC necesita estar
 encendido. El propietario confirma apertura del vídeo completo con DIAG25,
 pausa, seek, salida y reapertura. No se considera validada su duración completa.
-La candidata actual es DIAG27 para repetir 720p tras el fallo de imagen de DIAG26.
+El propietario confirma imagen y audio en 720p con DIAG27. La candidata actual
+es DIAG28, con descarte de preroll en seeks, para probar un minuto de 1080p.
 No se modifican payloads ni firmware. HTTP es la fuente predeterminada en
 DIAG26; LOCAL sigue disponible en Ajustes.
 
-## Pruebas de resolución: DIAG26/DIAG27
+## Pruebas de resolución: DIAG26/DIAG27/DIAG28
 
 Preparar un minuto de cada resolución desde sus pistas HD reales, sin ampliar
 el vídeo de 360p:
@@ -31,22 +32,23 @@ AAC-LC estéreo/44,1 kHz y 60,000363 s. Tamaños: 10.459.796 y 20.000.646 bytes.
 
 DIAG26 amplía el máximo por AVBuffer directo a 4 MiB, con 32 slots y un máximo
 de 128 MiB simultáneos, para admitir frames YUV de 1080p. No activa decodificación
-por hardware. Primero se sirve el clip de 720p en la URL habitual:
+por hardware. El servidor actual sirve el clip de 1080p en la URL habitual:
 
 ```bash
 python3 tools/http-test-server.py --bind IP_DEL_PC --port 8080 \
-  --clip .local/youtube/qf31PkeESoU/resolution-720p-60s.mp4
+  --clip .local/youtube/qf31PkeESoU/resolution-1080p-60s.mp4
 ```
 
 Con Tube5 completamente cerrada, copiar `dist/PPSA99999/` y verificar
-BOOT-DIAG-27-HTTP. DIAG26 tuvo audio pero ninguna imagen: falló una reserva
+BOOT-DIAG-28-HTTP. DIAG26 tuvo audio pero ninguna imagen: falló una reserva
 SDL de 3.686.400 bytes. DIAG27 usa textura STREAMING para evitar el RGB temporal
 de cada actualización, sin modificar el servidor ni la calidad del clip.
 Reproducir el minuto sin saltos y observar fluidez/audio;
 después probar pausa, seek, salida y reapertura. Si falla, conservar los
-contadores y no insistir. Solo después de validar 720p, cerrar la reproducción
-y resolver el fallo de seek del smoke PC de 1080p antes de cambiar el servidor
-a `resolution-1080p-60s.mp4`. La URL no cambia.
+contadores y no insistir. El fallo de seek de 1080p se corrige en DIAG28:
+se decodifica pero no se entrega el tramo previo al destino desde el keyframe
+anterior. Pasan el smoke local y HTTP de 1080p y la regresión HTTP de 720p;
+la validación de esta nueva build en PS5 sigue pendiente. La URL no cambia.
 La portada todavía menciona 20 s; el contador utiliza la duración real.
 
 El resto del documento conserva el historial de las pruebas de 360p.
