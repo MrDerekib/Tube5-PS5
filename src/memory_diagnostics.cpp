@@ -14,6 +14,7 @@ std::atomic<bool> out_of_memory{false};
 std::atomic<const char *> current_stage{"IDLE"}, failure_stage{"NONE"};
 std::atomic<std::size_t> flexible_bytes_before_open{0};
 std::atomic<int> flexible_query_result{-1};
+std::atomic<bool> playback_audio_output{false}, playback_video_output{false};
 #if defined(TUBE5_DIAGNOSTICS) && defined(TUBE5_PS5_NATIVE)
 extern "C" int sceKernelAvailableFlexibleMemorySize(std::size_t *size);
 #endif
@@ -34,6 +35,8 @@ void reset_memory_diagnostic() noexcept
     failure_stage = "NONE";
     flexible_bytes_before_open = 0;
     flexible_query_result = -1;
+    playback_audio_output = false;
+    playback_video_output = false;
 #if defined(TUBE5_DIAGNOSTICS) && defined(TUBE5_PS5_NATIVE)
     std::size_t available = 0;
     const int result = sceKernelAvailableFlexibleMemorySize(&available);
@@ -46,6 +49,10 @@ void memory_set_stage(const char *stage) noexcept
 {
     current_stage = stage ? stage : "UNKNOWN";
 }
+void memory_mark_playback_output(bool video) noexcept
+{
+    (video ? playback_video_output : playback_audio_output) = true;
+}
 void memory_diagnostic_status(char *text, std::size_t capacity) noexcept
 {
     constexpr const char *names[] = {"NONE", "MALLOC", "CALLOC", "REALLOC", "ALIGN"};
@@ -56,7 +63,8 @@ void memory_diagnostic_status(char *text, std::size_t capacity) noexcept
 }
 void memory_failure_stage_status(char *text, std::size_t capacity) noexcept
 {
-    std::snprintf(text, capacity, "ALLOC FAIL STAGE %s", failure_stage.load());
+    std::snprintf(text, capacity, "ALLOC FAIL STAGE %s AUDIO %u VIDEO %u", failure_stage.load(),
+                  playback_audio_output.load() ? 1U : 0U, playback_video_output.load() ? 1U : 0U);
 }
 void flexible_memory_status(char *text, std::size_t capacity) noexcept
 {

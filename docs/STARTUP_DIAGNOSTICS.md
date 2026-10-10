@@ -464,6 +464,23 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-23-HTTP: conservar la primera salida de audio/vídeo
+
+En DIAG22 el propietario confirma que `ALLOC FAIL STAGE PLAYING` aparece y que
+los demás contadores siguen iguales. `PLAYING` significa que la llamada
+`Kit_PlayerPlay` ya retornó; no confirma que el decodificador haya producido un
+frame ni que SDL lo haya mostrado. DIAG23 conserva dos indicadores atómicos
+desde el inicio de cada apertura: `AUDIO 1` tras recibir bytes de audio y
+`VIDEO 1` tras subir correctamente el primer frame a la textura. No se borran al
+cerrar el reproductor después del fallo.
+
+En una única prueba, `AUDIO 0 VIDEO 0` significa que la reserva fallida ocurrió
+antes de observar salida de cualquiera de las rutas; `AUDIO 1 VIDEO 0` confirma
+entrega de audio pero no subida de vídeo; `VIDEO 1` confirma al menos una subida
+correcta. Ninguna combinación identifica por sí sola la llamada que falló, y
+`AUDIO 0` no prueba que el decoder de audio no haya trabajado. No repetir si
+aparece ENOMEM.
+
 ## BOOT-DIAG-22-HTTP: localizar la fase de la reserva fallida
 
 DIAG21 se probó en PS5 Fat 13.20 y añadió `FMEM BEFORE OPEN 936 MiB` a los datos
@@ -482,7 +499,8 @@ adaptador nativo, así que la fase es una pista fiable y acotada para el próxim
 paso, no una traza simbólica.
 
 Si vuelve a fallar, anotar juntos `FMEM BEFORE OPEN`, `ALLOC FAIL STAGE`,
-`MEMFAIL` y `READ`; no repetir intentos.
+`MEMFAIL` y `READ`; DIAG23 añade `AUDIO`/`VIDEO` a la línea de fase. No repetir
+intentos.
 
 ## BOOT-DIAG-21-HTTP: medir la memoria flexible efectiva
 

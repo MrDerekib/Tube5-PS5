@@ -207,6 +207,7 @@ void MediaPlayer::audio_callback(void *userdata, Uint8 *stream, int length) noex
             }
             filled += result;
             self->audio_bytes_ += static_cast<std::size_t>(result);
+            memory_mark_playback_output(false);
         }
     }
 }
@@ -334,6 +335,7 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
             {
                 frame_area_ = area;
                 ++frames_uploaded_;
+                memory_mark_playback_output(true);
                 last_frame_at_ = now;
                 // Do not sleep for a diagnostic notification here. The boot
                 // checkpoint waits 700 ms, making following frames late.
