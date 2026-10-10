@@ -3,6 +3,7 @@
 #include "codec_diagnostics.hpp"
 #include "thread_diagnostics.hpp"
 #include "boot_diagnostics.hpp"
+#include "pipeline_diagnostics.hpp"
 #include <algorithm>
 #include <cstdio>
 
@@ -71,6 +72,7 @@ bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
     if (!audio_)
         return fail("AUDIO", SDL_GetError());
     reset_thread_diagnostic();
+    begin_pipeline_diagnostic();
     Kit_PlayerPlay(player_);
     if (thread_diagnostic()[0])
         return fail("THREAD", thread_diagnostic());
@@ -94,6 +96,7 @@ void MediaPlayer::close() noexcept
     audio_ = 0;
     if (player_)
         Kit_ClosePlayer(player_);
+    end_pipeline_diagnostic();
     player_ = nullptr;
     if (texture_)
         SDL_DestroyTexture(texture_);

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #define SDL_MAIN_HANDLED
 #include "media_player.hpp"
+#include "pipeline_diagnostics.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -49,6 +50,15 @@ int main()
     require(player.position() > 0.4, "playback advances");
     require(player.frames_uploaded() > 0, "decoded RGBA frames explicitly uploaded");
     require(!player.error()[0], "no hidden frame upload/draw errors");
+    char pipeline[128]{};
+    unsigned sent = 0, decoded = 0;
+    int send_error = 0, decode_error = 0;
+    tube5::pipeline_diagnostic_status(1, pipeline, sizeof(pipeline));
+    require(std::sscanf(pipeline, "VSEND %u VDEC %u ERR %d/%d", &sent, &decoded, &send_error,
+                        &decode_error) == 4 &&
+                sent > 0 && decoded >= player.frames_uploaded() && send_error == 0 &&
+                decode_error == 0,
+            "live FFmpeg pipeline counters");
     // Capture pixels and prove actual decoded frames are being displayed.
     SDL_Surface *capture = SDL_CreateRGBSurfaceWithFormat(0, 640, 360, 32, SDL_PIXELFORMAT_RGBA32);
     require(capture != nullptr, "capture allocation");
@@ -107,6 +117,13 @@ int main()
     require(player.position() <= backward_from - 4.0,
             "playing backward seek actually changes clock");
     require(!player.error()[0], "no hidden seek errors");
+    unsigned lock_errors = 0, seeks = 0;
+    int seek_error = 0;
+    tube5::pipeline_diagnostic_status(2, pipeline, sizeof(pipeline));
+    require(std::sscanf(pipeline, "LOCKFAIL %u SEEKEXEC %u ERR %d", &lock_errors, &seeks,
+                        &seek_error) == 3 &&
+                seeks >= 3 && seek_error == 0,
+            "seeks executed by the demuxer, not just requested");
     player.seek(100.0);
     for (int i = 0; i < 90 && !player.finished(); ++i)
     {

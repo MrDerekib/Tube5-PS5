@@ -116,11 +116,40 @@ saltos hacia delante y atrás DURANTE reproducción, seek en pausa y EOF. Los
 tests de hilos inyectan fallo y verifican los argumentos, resultado y conservación
 del primer error.
 
+## BOOT-DIAG-7: ejecución real del pipeline
+
+El propietario observa `FRAMES 0`, `BUF 0/2`, `PKT 0/16` de forma persistente.
+La cruceta incrementa SEEK, pero no produce salto observable. No se ha confirmado
+sonido ni progreso del reloj. Las colas vacías no prueban por sí solas un fallo
+de lectura, hilos o decodificación; el consumidor de textura no ha recibido frames.
+
+Sin cambiar el backend, la build 7 cuenta llamadas reales mediante wrappers que
+preservan argumentos y retornos. Los contadores son atómicos, sin heap ni avisos
+por paquete. Se activan DESPUÉS del probing de la fuente y antes de Play, y se
+desactivan después de unir los workers. Así se excluye la lectura de cabeceras.
+
+- `W entrada/setup/salida`: workers que entraron en `SDL_RunThread`, terminaron
+  su setup y salieron. No incluye el hilo de audio que empezó antes de Play.
+- `READ paquetes/llamadas ERR retorno`: lecturas efectivas de `av_read_frame`;
+  si llamadas crece pero paquetes no, el retorno orienta el fallo de lectura.
+  Un retorno negativo puede ser EOF normal, no siempre un error fatal.
+- `VSEND`: intentos de enviar paquetes al codec de vídeo; `VDEC`: frames
+  recibidos correctamente. `ERR envío/recepción` excluye EAGAIN y EOF normales.
+- `LOCKFAIL`: errores de bloqueo de mutex SDL; no detecta un bloqueo que nunca
+  retorna. `SEEKEXEC`: llamadas efectivas a `avformat_seek_file`, con su retorno.
+  Es distinto de SEEK enviados/solicitados de la línea inferior.
+
+Los tests simulan etapas, errores, EAGAIN normal, audio excluido y reinicio por
+sesión. La prueba de vídeo real en PC también enlaza los wrappers de FFmpeg y
+comprueba paquetes enviados, frames recibidos y seeks realmente ejecutados.
+Los hooks internos SDL se verifican en el ejecutable nativo; su comportamiento
+en PS5 sigue pendiente de una foto de los contadores, tras unos segundos y seek.
+
 ## Build con puntos de control
 
 ```bash
-PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-6 \
-  APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create"
+PS5_CLANG=clang USE_CCACHE=0 make APP_DEFINITIONS=TUBE5_DIAGNOSTICS BUILD_LABEL=BOOT-DIAG-7 \
+  APP_WRAP_SYMBOLS="PS5_Keyboard_Init PS5_Keyboard_Open sceVideoOutOpen SDL_CreateRGBSurface_REAL avcodec_open2 SDL_CreateThread_REAL pthread_create SDL_RunThread SDL_SYS_SetupThread SDL_LockMutex_REAL av_read_frame avcodec_send_packet avcodec_receive_frame avformat_seek_file"
 ```
 
 Cerrar Tube5 y sustituir la carpeta completa `dist/PPSA99999/` en la consola,

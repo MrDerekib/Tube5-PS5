@@ -5,6 +5,7 @@
 #include "media_player.hpp"
 #include "navigation.hpp"
 #include "native_sdl.hpp"
+#include "pipeline_diagnostics.hpp"
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -95,6 +96,11 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         char diagnostics[128]{};
         media.diagnostic_status(diagnostics, sizeof(diagnostics));
         canvas.text(350, 950, diagnostics, 2, muted);
+        for (unsigned row = 0; row < 3; ++row)
+        {
+            tube5::pipeline_diagnostic_status(row, diagnostics, sizeof(diagnostics));
+            canvas.text(800, 185 + row * 30, diagnostics, 2, muted);
+        }
 #endif
     }
     if (error[0])
