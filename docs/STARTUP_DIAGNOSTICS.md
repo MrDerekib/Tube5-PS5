@@ -27,8 +27,14 @@ por sí sola la corrección visual. ABI contrastada con ProsperoLight.
 
 Tests host ASan/UBSan: diez ciclos, fallos en cada etapa de creación,
 flush diferido, puntero de salida inválido, asset ausente y cuarentena por
-fallo de delete/handle ambiguo. Suite completa pasada. Prueba PS5 pendiente:
-abrir el menú y recuperar el informe; no hace falta reproducir otro vídeo.
+fallo de delete/handle ambiguo. Suite completa pasada. Prueba PS5 FW13.20
+completada: decode y flush retornan cero; una imagen válida 1920x1088,
+pitch 2048 y buffer propio. Las 2170 muestras de luma coinciden exactamente
+con la referencia software (sum/min/max). Cleanup retorna cero, sin cuarentena.
+La memoria flexible disponible baja 1048576 bytes: no atribuir aún a fuga ni
+a inicialización persistente; comprobar varios ciclos en el mismo proceso.
+Esto valida un frame, no presentación ni reproducción continua. Informe
+exacto conservado en .local/boot-diag-55/ps5-hardware-frame.log.
 ELF y artefactos exactos conservados en .local/boot-diag-55; SHA-256 eboot.bin:
 `cba5107f2f99cd3804020aff42b4e16333423b7d3dfb31ea7cad627e0825ff14`.
 

@@ -79,8 +79,10 @@ exitosas. Validación limitada a esta consola FW13.20 y al vídeo probado.
 DIAG54: consultas VideoDec2 (módulo decimal 207), compute y requisitos de
 memoria H.264 High 1080p/1440p/2160p confirmadas con retorno cero en FW13.20.
 Un query exitoso NO valida decodificación, presentación ni rendimiento.
-DIAG55 preparada: un frame H.264 sintético, lifecycle create/decode/reset/delete
-y log FTP, sin presentación ni cambio del player. Validación PS5 pendiente.
+DIAG55 validada en FW13.20: un frame H.264 sintético decodificado por hardware,
+flush/cleanup correctos y 2170 muestras de luma idénticas a la referencia.
+Sin presentación ni cambio del player. Pendiente repetir ciclos en un mismo
+proceso: diferencia inicial de 1 MiB flexible todavía sin causa confirmada.
 Después: integración
 1080p con audio/reloj/seeks, presentación GPU, VP9 SDR 1440p y 2160p. Conservar
 software como alternativa. No asumir AV1 por hardware ni HDR antes de pruebas.
