@@ -73,18 +73,51 @@ El hardware no resuelve DNS, extracción del enlace, publicidad ni autenticació
 
 ### Calidad directa, no variantes preparadas en PC
 
+Prioridad acordada: formatos separados antes de ampliar la búsqueda. NewPipe
+es referencia de extracción/reproducción, no plantilla visual ni una dependencia
+Android. El teclado nativo sigue pendiente; ID/URL es una entrada provisional.
+
+Investigación 2026-10-11: `tools/probe-youtube-adaptive.py` reproduce la secuencia
+visitor_id → VISIONOS player observada en NewPipeExtractor. En host, para
+`bHIhgxav9LY`, devuelve 32 formatos con 32 URLs directas, frente a una URL con
+el perfil ANDROID actual. Se validaron rangos MP4 de 4096 bytes, HTTP 206 y TLS
+del sistema para H.264 720p (itag 136) y AAC (itag 139). No demuestra reproducción
+conjunta, sincronización, autonomía PS5 ni exclusión de anuncios. La herramienta
+no guarda ni imprime URLs firmadas/tokens, no descarga el vídeo completo y no
+forma parte del runtime. DIAG47 porta esta extracción al cliente HTTPS nativo,
+selecciona AAC default hasta 192 kb/s y sincroniza dos fuentes con reloj común.
+El propietario confirma 480p y 720p en PS5. 1080p llega a audio/vídeo pero falla
+con ENOMEM en buffers de trabajo del parser; DIAG49 añade un pool acotado para
+las reservas identificadas. Su validación física sigue pendiente.
+
+### Interfaz final, no menús de diagnóstico
+
+La UI actual es un banco de pruebas. El producto necesita portada con tarjetas,
+miniaturas, títulos, canal, duración y visualizaciones; resultados visuales,
+foco visible y navegación fluida con mando; controles de reproducción superpuestos
+y teclado nativo. Likes y otros datos solo cuando la extracción los proporcione;
+sin inventar estadísticas. Portada propia sin cuenta y recomendaciones personales
+son hitos distintos: estas últimas dependen de autenticación. No portar Cobalt
+ni dar por disponible un navegador completo por existir componentes WebKit.
+
+### Validaciones de calidad pendientes
+
 - [ ] Validar DIAG46: nueva URL/ID, identidad de fuente y segmentos, selector,
   pausa/seeks/reapertura y rechazo de una calidad no compatible sin crash.
-- [ ] Unir vídeo y audio adaptativos desde dos fuentes HTTPS, conservando rangos,
+- [x] Unir vídeo y audio adaptativos desde dos fuentes HTTPS, conservando rangos,
   TLS, memoria acotada, reloj común y seek/cancelación de ambas fuentes.
 - [ ] Resolver ausencia de URLs, firmas/tokens o manifiestos cuando sean
   necesarios; no presentar esos formatos como reproducibles por inventariarlos.
-- [ ] Probar 720p/1080p desde YouTube sobre esa ruta; no extrapolar las pruebas LAN.
+- [x] Validar 480p/720p separados desde YouTube en PS5.
+- [ ] Validar 1080p desde YouTube, incluido el pool de parsing DIAG49; no extrapolar LAN.
 - [ ] Evaluar VP9/AV1/Opus, perfiles/fps y hardware antes de habilitar 4K.
 
 DIAG46 Auto mantiene <=360p; manual solo permite MP4 combinado H.264/AAC con
 URL HTTPS permitida hasta 1080p si realmente se ofrece. Los formatos separados
 y los códecs no habilitados se muestran pendientes, sin selección reproducible.
+Desde DIAG47, las alturas candidatas H.264 MP4 hasta 1080p/30 se consultan
+nativamente y se combinan con AAC en reproducción (sin remux ni descarga previa).
+Auto mantiene el combinado 360p. VP9/AV1/Opus, 60 fps y 4K siguen deshabilitados.
 La calidad no cambia durante el play ni se persiste todavía.
 
 ### Diagnóstico de DNS para el usuario

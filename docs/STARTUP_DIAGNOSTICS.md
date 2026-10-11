@@ -1,5 +1,73 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-49-PARSER: buffers de trabajo H.264 en memoria nativa
+
+Corrección candidata para IMG_4294: pool PBUF de ocho slots, 128 KiB a 4 MiB
+por reserva (máximo 32 MiB), separado de RBUF/SBUF/DBUF. Solo intercepta los
+dos callsites alineados de fast_malloc y el mallocz RBSP de
+ff_h2645_packet_split del FFmpeg PacBrew fijado. Conserva el crecimiento,
+límites y puesta a cero originales. No cambia fuentes, códecs ni calidades.
+
+av_freep y fast_malloc pueden saltarse av_free y usar free directamente:
+free reconoce exclusivamente direcciones del nuevo pool y envía las restantes
+al allocator original. Liberaciones fallidas se ponen en cuarentena.
+realloc sobre un buffer propio copia a una reserva nueva; el fallo conserva el
+original y la migración fuera del límite usa almacenamiento libc. El build
+comprueba las rutas de asignación, free, av_freep, refcount y realloc antes de
+firmar; si cambia el ABI, rechaza la compilación. Esta ruta es experimental y
+solo se habilita en builds diagnósticas hasta validar en la consola.
+
+PBUF aparece en el menú y en el panel de error. Prueba PS5 pendiente: reiniciar
+Tube5, Reproducir > YouTube, mismo vídeo de Veritasium bHIhgxav9LY, 1080p;
+comprobar imagen/audio durante un minuto, pausa, seeks y salida/reapertura.
+Tras cerrar, PBUF debe quedar en 0/8 y 0 KiB (ALLOC es acumulativo).
+Si falla, capturar todos los diagnósticos sin reintentar.
+
+SHA-256 de eboot.bin:
+`dc4f770c20a43d113ed9814e3240038cb54b519dfa7bc9146011664872587866`.
+Pasan make test-unit y la suite host con ASan/UBSan/LSan: reservas/bounds,
+zeroing, slots agotados, crecimiento y migración, fallo de realloc conservando
+datos, cuarentena en errores de liberación, cien ciclos y guard ABI negativo.
+Los syscalls nativos se simulan en estos tests; no sustituyen la prueba PS5.
+La build 48 y su ELF con símbolos se conservan en .local/boot-diag-48.
+Referencia de comparación: FFmpeg n7.1 libavutil/mem.c fast_malloc
+y libavcodec/h2645_parse.c alloc_rbsp_buffer; ABI contrastado contra el ELF
+PacBrew fijado de Tube5. Implementación propia, sin
+copiar estructuras privadas del parser ni cambiar las bibliotecas del SDK.
+
+## BOOT-DIAG-48-SOURCES: reproducción unificada y error visible
+
+Primera tarjeta: Reproducir. Abre un selector con YouTube (primero y por defecto),
+HTTP/biblioteca LAN y clip local. YouTube y biblioteca vuelven al selector con
+Círculo; al cerrar un vídeo vuelven a su fuente. Ajustes ya no inicia YouTube ni
+cambia entre HTTP/local. Options dentro de YouTube conserva el selector de calidad.
+
+Los errores de apertura/reproducción que regresan a YouTube muestran ahora
+MEMFAIL, ALLOC FAIL STAGE, FMEM BEFORE OPEN, FIRSTFAIL y FFALLOC, además de los
+contadores de buffers. El panel tapa las indicaciones inferiores para que no se
+superpongan; los contadores no se reinician al cerrar el reproductor. Se conservan
+hasta la próxima apertura; tomar la captura antes de reintentar.
+
+En build 47 el usuario confirmó 480p y 720p separados en PS5; 1080p falla con
+ENOMEM. Esta build cambia navegación/visibilidad, no el decodificador ni los
+allocators. Prueba pendiente: abrir directamente 1080p tras reiniciar Tube5 y
+capturar el panel del fallo. No usar el antiguo vídeo qf31PkeESoU en nuevas pruebas.
+
+SHA-256 de eboot.bin:
+`626c623e32fcbdec413c160edb61102b4465806f872ac99108ed158d5d6889eb`.
+
+Captura IMG_4294.HEIC: 1080p itag 137 + AAC 140, apertura HTTPS correcta.
+Fallo durante PLAYING, AUDIO 1 / VIDEO 1. MEMFAIL 2 ALIGN 578452B ERR 12;
+FMEM BEFORE OPEN 962 MiB. RBUF/SBUF/DBUF FAIL 0 tras cerrar.
+FIRSTFAIL ALIGN 299924B A64 REL 0X118ADDC; FFALLOC MALLOCZ 578452B A0
+REL 0X53F5E6. Resolución con build/llvm-pie.elf de esta build:
+primer caller fast_malloc+0xeb (mem.c); FFmpeg ff_h2645_packet_split+0x125
+(h2645_parse.c). Apunta a reservas de parsing H.264 fuera de los pools actuales,
+no a un fallo de DNS/obtención de formatos. FMEM es anterior a abrir, no una
+medición en el instante del fallo. Corrección pendiente: no ampliar/interceptar
+allocators sin comprobar propiedad, realloc/free y límites. Usuario pidió dejar
+el arreglo para otra sesión salvo que fuera trivial; no se modificó el código.
+
 ## BOOT-DIAG-46-VIDEO-QUALITY: ID/URL y selector autónomos
 
 R1 desde pantalla directa abre un teclado de 72 teclas con mayúsculas/minúsculas

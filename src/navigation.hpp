@@ -13,7 +13,8 @@ enum class Screen
     search,
     online,
     video_input,
-    quality
+    quality,
+    sources
 };
 enum class Command
 {
@@ -32,7 +33,7 @@ struct Navigation
     Screen screen = Screen::home;
     int selected = 0;
 
-    // Returns true only when the user requests the test video.
+    // Home opens the source picker; playback requires an explicit source choice.
     bool apply(Command command) noexcept
     {
         if (command == Command::back)
@@ -53,10 +54,10 @@ struct Navigation
             selected = (selected + 1) % 3;
         else if (command == Command::select)
         {
-            screen = selected == 0   ? Screen::player
+            screen = selected == 0   ? Screen::sources
                      : selected == 1 ? Screen::settings
                                      : Screen::about;
-            return selected == 0;
+            return false;
         }
         return false;
     }

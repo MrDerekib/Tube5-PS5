@@ -42,6 +42,14 @@ int main()
     assert(result.quality_count == 2 && result.qualities[1].playable);
     assert(tube5::parse_youtube_formats(combined, result, 720) && result.selected_height == 720);
     assert(result.selected_itag == 22);
+    const char *pair =
+        R"({"playabilityStatus":{"status":"OK"},"streamingData":{"adaptiveFormats":[{"itag":136,"height":720,"fps":30,"mimeType":"video/mp4; codecs=\"avc1.64001f\"","url":"https://rr1.googlevideo.com/videoplayback?video=1"},{"itag":139,"bitrate":48000,"mimeType":"audio/mp4; codecs=\"mp4a.40.2\"","url":"https://rr1.googlevideo.com/videoplayback?audio=low"},{"itag":140,"bitrate":128000,"mimeType":"audio/mp4; codecs=\"mp4a.40.2\"","url":"https://rr1.googlevideo.com/videoplayback?audio=good"},{"itag":298,"height":720,"fps":60,"mimeType":"video/mp4; codecs=\"avc1.640020\"","url":"https://rr1.googlevideo.com/videoplayback?video=60"}]}})";
+    assert(tube5::parse_youtube_formats(pair, result, 720));
+    assert(result.selected_height == 720 && result.selected_itag == 136 &&
+           result.audio_itag == 140);
+    assert(result.selected_fps == 30 && result.audio_source[0] && result.qualities[0].playable);
+    assert(tube5::parse_youtube_formats(pair, result) && !result.source[0]);
+    assert(tube5::parse_youtube_formats(pair, result, 1080) && !result.source[0]);
     assert(tube5::parse_youtube_formats(combined, result, 1080) && !result.source[0]);
     assert(tube5::parse_youtube_formats(
         R"({"playabilityStatus":{"status":"LOGIN_REQUIRED","reason":"Sign in"}})", result));

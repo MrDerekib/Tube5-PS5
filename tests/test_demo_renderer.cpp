@@ -18,15 +18,17 @@
 
 namespace
 {
-TEST(CanvasTest, LowercaseTextUsesVisibleUppercaseGlyphs)
+TEST(CanvasTest, LowercaseTextUsesVisibleCaseSensitiveGlyphs)
 {
     std::vector<std::uint32_t> mixed(1920 * 1080, 0), upper(1920 * 1080, 0);
     ps5::demo::Canvas mixed_canvas{mixed.data(), true}, upper_canvas{upper.data(), true};
-    mixed_canvas.text(120, 400, "El Algoritmo de TikTok Creo Un Circo Humano Moderno...", 2,
-                      ps5::demo::Color::white);
-    upper_canvas.text(120, 400, "EL ALGORITMO DE TIKTOK CREO UN CIRCO HUMANO MODERNO...", 2,
-                      ps5::demo::Color::white);
-    EXPECT_EQ(mixed, upper);
+    mixed_canvas.text(120, 400, "Abc Youtube Video", 2, ps5::demo::Color::white);
+    upper_canvas.text(120, 400, "ABC YOUTUBE VIDEO", 2, ps5::demo::Color::white);
+    EXPECT_NE(mixed, upper);
+    bool visible = false;
+    for (const auto pixel : mixed)
+        visible = visible || pixel != 0;
+    EXPECT_TRUE(visible);
 }
 
 TEST(CanvasTest, BlitAcceptsRowPitchAndRejectsShortSources)

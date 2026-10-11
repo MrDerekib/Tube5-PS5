@@ -152,12 +152,20 @@ fi
 # Tube5's conversion guard is required even when diagnostic wrappers are off.
 # Keep it scoped to the root player, not the template's separate examples.
 app_wrap_symbols=${APP_WRAP_SYMBOLS:-}
+if [[ $app_source_dir == src && -f $root/src/shared_playback_clock.cpp ]]; then
+    app_wrap_symbols+=" Kit_CreateTimer Kit_CreateSecondaryTimer"
+fi
 if [[ $app_source_dir == src && -f $root/src/native_https_support.c ]]; then
     pacbrew_packages+=(libcurl json-c openssl)
 fi
 if [[ $app_source_dir == src && -f $root/src/native_refstruct_buffers.cpp ]]; then
     definitions+=(TUBE5_REFSTRUCT_BUFFER_WRAP)
     app_wrap_symbols+=" av_malloc av_free"
+fi
+if [[ $app_source_dir == src && " ${definitions[*]} " == *" TUBE5_DIAGNOSTICS "* &&
+      -f $root/src/native_parser_buffers.cpp ]]; then
+    definitions+=(TUBE5_PARSER_BUFFER_WRAP)
+    app_wrap_symbols+=" free realloc posix_memalign av_mallocz"
 fi
 if [[ $app_source_dir == src && -f $root/src/native_surface_buffers.cpp ]]; then
     definitions+=(TUBE5_SURFACE_BUFFER_WRAP)
@@ -305,6 +313,9 @@ ninja_edge CONVERT "$build/eboot.elf" "$tool" link --in "$build/llvm-pie.elf" --
 ninja_run
 if [[ " ${definitions[*]} " == *" TUBE5_REFSTRUCT_BUFFER_WRAP "* ]]; then
     python3 "$root/tools/check-refstruct-wrap.py" "$build/llvm-pie.elf"
+fi
+if [[ " ${definitions[*]} " == *" TUBE5_PARSER_BUFFER_WRAP "* ]]; then
+    python3 "$root/tools/check-parser-wrap.py" "$build/llvm-pie.elf"
 fi
 
 app="$dist/$title_id"

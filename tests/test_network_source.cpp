@@ -61,6 +61,23 @@ extern "C" int __real_avformat_open_input(AVFormatContext **context, const char 
 }
 int main()
 {
+    {
+        AVFormatContext first{}, second{}, other{};
+        tube5::begin_network_session();
+        tube5::prepare_custom_network(&first);
+        tube5::prepare_custom_network(&second);
+        tube5::finish_network_open();
+        tube5::record_network_read(&other, AVERROR(EIO), 0);
+        assert(!tube5::network_playback_error());
+        tube5::record_network_read(&first, AVERROR(EIO), 0);
+        assert(tube5::network_playback_error() == AVERROR(EIO));
+        tube5::begin_network_session();
+        tube5::prepare_custom_network(&first);
+        tube5::prepare_custom_network(&second);
+        tube5::finish_network_open();
+        tube5::record_network_read(&second, AVERROR(ENOMEM), 0);
+        assert(tube5::network_playback_error() == AVERROR(ENOMEM));
+    }
     AVFormatContext *context = nullptr;
     tube5::begin_network_session();
     assert(__wrap_avformat_open_input(&context, "assets/test-clip.mp4", nullptr, nullptr) == -5);

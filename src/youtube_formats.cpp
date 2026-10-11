@@ -112,6 +112,9 @@ bool parse_youtube_formats(std::string_view json, YouTubeFormats &out,
     out.hls = !string_member(stream, "hlsManifestUrl").empty();
     out.dash = !string_member(stream, "dashManifestUrl").empty();
     bool bounded = true;
+    json_object *selected_video = nullptr, *selected_audio = nullptr;
+    bool audio_default = false;
+    unsigned audio_bitrate = 0;
     for (const char *group : {"formats", "adaptiveFormats"})
     {
         auto *formats = member(stream, group, json_type_array);
@@ -133,6 +136,7 @@ bool parse_youtube_formats(std::string_view json, YouTubeFormats &out,
             out.cipher += !string_member(format, "signatureCipher").empty() ||
                           !string_member(format, "cipher").empty();
             const auto height = integer_member(format, "height");
+            const auto fps = integer_member(format, "fps");
             out.max_height = std::max(out.max_height, height);
             const bool avc = mime.find("avc1.") != std::string_view::npos;
             const bool aac = mime.find("mp4a.") != std::string_view::npos;
@@ -147,6 +151,30 @@ bool parse_youtube_formats(std::string_view json, YouTubeFormats &out,
             const bool eligible = status == "OK" && !separate && height && height <= 1080 &&
                                   mime.starts_with("video/mp4;") && avc && aac &&
                                   youtube_media_host(url, host);
+            const bool candidate = separate && height && height <= 1080 && fps && fps <= 30 &&
+                                   mime.starts_with("video/mp4;") && avc && !aac &&
+                                   string_member(format, "type") != "FORMAT_STREAM_TYPE_OTF";
+            const bool adaptive = status == "OK" && candidate && youtube_media_host(url, host);
+            if (requested_height && adaptive && height == requested_height && !selected_video)
+                selected_video = format;
+            if (status == "OK" && separate && !height && mime.starts_with("audio/mp4;") && aac &&
+                string_member(format, "type") != "FORMAT_STREAM_TYPE_OTF" &&
+                youtube_media_host(url, host))
+            {
+                const auto bitrate = integer_member(format, "bitrate");
+                auto *track = member(format, "audioTrack", json_type_object);
+                auto *is_default = member(track, "audioIsDefault", json_type_boolean);
+                const bool preferred =
+                    !track || (is_default && json_object_get_boolean(is_default));
+                if (bitrate && bitrate <= 192000 &&
+                    (!selected_audio || preferred > audio_default ||
+                     (preferred == audio_default && bitrate > audio_bitrate)))
+                {
+                    selected_audio = format;
+                    audio_default = preferred;
+                    audio_bitrate = bitrate;
+                }
+            }
             if (height)
             {
                 unsigned q = 0;
@@ -164,6 +192,7 @@ bool parse_youtube_formats(std::string_view json, YouTubeFormats &out,
                 }
                 out.qualities[q].playable |= eligible;
                 out.qualities[q].separate |= separate;
+                out.qualities[q].candidate |= candidate;
             }
             if (eligible && (requested_height ? height == requested_height : height <= 360) &&
                 height > out.selected_height)
@@ -175,6 +204,21 @@ bool parse_youtube_formats(std::string_view json, YouTubeFormats &out,
                 out.selected_height = height;
             }
         }
+    }
+    if (!out.source[0] && selected_video && selected_audio && bounded)
+    {
+        const auto video_url = string_member(selected_video, "url");
+        const auto audio_url = string_member(selected_audio, "url");
+        std::copy(video_url.begin(), video_url.end(), out.source.begin());
+        std::copy(audio_url.begin(), audio_url.end(), out.audio_source.begin());
+        (void)youtube_media_host(video_url, out.source_host);
+        out.selected_itag = integer_member(selected_video, "itag");
+        out.selected_height = integer_member(selected_video, "height");
+        out.selected_fps = integer_member(selected_video, "fps");
+        out.audio_itag = integer_member(selected_audio, "itag");
+        for (unsigned q = 0; q < out.quality_count; ++q)
+            if (out.qualities[q].height == out.selected_height)
+                out.qualities[q].playable = true;
     }
     std::sort(out.qualities.begin(), out.qualities.begin() + out.quality_count,
               [](const auto &a, const auto &b) { return a.height < b.height; });

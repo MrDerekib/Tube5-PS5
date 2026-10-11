@@ -7,6 +7,7 @@
 #include "native_sdl.hpp"
 #include "pipeline_diagnostics.hpp"
 #include "memory_diagnostics.hpp"
+#include "native_parser_buffers.hpp"
 #include "native_media_buffers.hpp"
 #include "native_surface_buffers.hpp"
 #include "native_refstruct_buffers.hpp"
@@ -57,6 +58,7 @@ tube5::SearchKeyboard search_keyboard;
 tube5::SearchData search_results;
 unsigned search_selected = 0;
 bool network_test = true;
+unsigned source_selected = 0;
 bool sponsor_enabled = true;
 bool preference_saved = true;
 tube5::SponsorNotice sponsor_notice;
@@ -119,15 +121,18 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         tube5::native_media_buffer_status(pools, sizeof(pools));
         canvas.text(800, 95, pools, 2, muted);
 #endif
+#ifdef TUBE5_PARSER_BUFFER_WRAP
+        tube5::native_parser_buffer_status(pools, sizeof(pools));
+        canvas.text(800, 125, pools, 2, muted);
+#endif
     }
 #endif
     if (nav.screen == tube5::Screen::home)
     {
         canvas.text(120, 310, "VAMOS A PROBARLO", 6, Color::white);
-        const char *titles[] = {network_test ? "BIBLIOTECA LAN" : "VIDEO DE PRUEBA", "AJUSTES",
-                                "ACERCA DE"};
-        const char *details[] = {network_test ? "HTTP DESDE TU PC" : "IMAGEN Y SONIDO",
-                                 "PRUEBA CON DUALSENSE", "PROYECTO Y CREDITOS"};
+        const char *titles[] = {"REPRODUCIR", "AJUSTES", "ACERCA DE"};
+        const char *details[] = {"YOUTUBE - HTTP - LOCAL", "PRUEBA CON DUALSENSE",
+                                 "PROYECTO Y CREDITOS"};
         for (unsigned i = 0; i < 3; ++i)
         {
             const unsigned x = 120 + i * 570;
@@ -147,10 +152,22 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             canvas.text(x + 30, 650, titles[i], 4, Color::white);
             canvas.text(x + 30, 715, details[i], 3, muted);
         }
-        canvas.text(120, 830,
-                    network_test ? "VIDEO HTTP. PC EN LA MISMA RED."
-                                 : "CLIP LOCAL DE 20 SEGUNDOS. NO REQUIERE INTERNET.",
-                    3, muted);
+        canvas.text(120, 830, "YOUTUBE DIRECTO DESDE LA CONSOLA. SIN PC.", 3, muted);
+    }
+    else if (nav.screen == tube5::Screen::sources)
+    {
+        canvas.text(120, 310, "REPRODUCIR - ELIGE FUENTE", 5, Color::white);
+        const char *titles[] = {"YOUTUBE", "HTTP - BIBLIOTECA LAN", "LOCAL - CLIP DE PRUEBA"};
+        const char *details[] = {"DIRECTO. SIN PC. VIDEO Y CALIDAD.",
+                                 "PRUEBAS CON EL SERVIDOR DEL PC.",
+                                 "20 SEGUNDOS. SIN CONEXION."};
+        for (unsigned i = 0; i < 3; ++i)
+        {
+            const int y = 420 + static_cast<int>(i) * 130;
+            canvas.rectangle(120, y, 1540, 110, source_selected == i ? accent : panel);
+            canvas.text(150, y + 15, titles[i], 4, Color::white);
+            canvas.text(150, y + 65, details[i], 3, muted);
+        }
     }
     else if (nav.screen == tube5::Screen::library)
     {
@@ -269,9 +286,10 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             canvas.rectangle(120, y, 1540, 43, i == quality_selected ? accent : panel);
             char label[128]{};
             std::snprintf(label, sizeof(label), "%uP - %s", quality.height,
-                          quality.playable   ? "LISTA: MP4 H.264 + AAC"
-                          : quality.separate ? "PENDIENTE: AUDIO/VIDEO SEPARADOS"
-                                             : "NO COMPATIBLE CON LA RUTA ACTUAL");
+                          quality.playable    ? "LISTA: MP4 H.264 + AAC"
+                          : quality.candidate ? "CONSULTAR: H.264 + AUDIO SEPARADO"
+                          : quality.separate  ? "NO COMPATIBLE: CODEC/FPS/URL"
+                                              : "NO COMPATIBLE CON LA RUTA ACTUAL");
             canvas.text(145, y + 10, label, 3, Color::white);
         }
         canvas.text(120, 925, "AUTO: MAXIMO 360P. NO CAMBIA CALIDAD DURANTE EL PLAY.", 2, muted);
@@ -315,10 +333,10 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
                           formats.avc, formats.vp9, formats.av1, formats.aac, formats.opus);
             canvas.text(120, 675, detail, 2, muted);
             std::snprintf(detail, sizeof(detail),
-                          "STREAM ITAG %u %uP  HTTP %ld CURL %d CERT %ld  BYTES %u MP4 %s",
-                          formats.selected_itag, formats.selected_height, result.source_http,
-                          result.source_curl, result.source_verify, result.source_bytes,
-                          result.source_mp4 ? "SI" : "NO");
+                          "STREAM ITAG %u %uP AAC %u  HTTP %ld CURL %d CERT %ld  BYTES %u MP4 %s",
+                          formats.selected_itag, formats.selected_height, formats.audio_itag,
+                          result.source_http, result.source_curl, result.source_verify,
+                          result.source_bytes, result.source_mp4 ? "SI" : "NO");
             canvas.text(120, 725, detail, 2, result.source_mp4 ? Color::white : Color::yellow);
             canvas.text(120, 775, result.title.data(), 2, Color::white);
             canvas.text(120, 825, result.error.data(), 2, Color::yellow);
@@ -331,7 +349,8 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
                 canvas.text(120, 865, detail, 1, muted);
             }
         }
-        canvas.text(120, 925, "OPTIONS CALIDAD - R1 CAMBIAR VIDEO - TLS VERIFICADO", 2, muted);
+        if (!error[0])
+            canvas.text(120, 925, "OPTIONS CALIDAD - R1 CAMBIAR VIDEO - TLS VERIFICADO", 2, muted);
     }
     else if (nav.screen == tube5::Screen::settings)
     {
@@ -349,13 +368,7 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             std::snprintf(storage_status, sizeof(storage_status), "NO GUARDADO: %s E%d",
                           preferences.stage(), preferences.error());
         canvas.text(650, 630, storage_status, 2, preference_saved ? muted : Color::yellow);
-        canvas.text(120, 660, "REPRODUCCION", 4, muted);
-        canvas.text(650, 660, network_test ? "HTTP - X CAMBIAR" : "LOCAL - X CAMBIAR", 4,
-                    Color::white);
-        canvas.text(120, 765,
-                    network_url[0] ? network_url.data() : "HTTP: CONFIGURA NETWORK-TEST-URL.TXT", 2,
-                    muted);
-        canvas.text(120, 815, "TRIANGULO: PROBAR YOUTUBE DIRECTO SIN PC", 3, Color::white);
+        canvas.text(120, 750, "VIDEOS: MENU PRINCIPAL - REPRODUCIR", 3, muted);
     }
     else if (nav.screen == tube5::Screen::about)
     {
@@ -493,12 +506,13 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(playing_screen ? 350 : 120, playing_screen ? 930 : 865, line.data(),
                     playing_screen ? 2 : 3, Color::yellow);
 #ifdef TUBE5_DIAGNOSTICS
-        if (!playing_screen && !media.opening() && nav.screen != tube5::Screen::online &&
+        if (!playing_screen && !media.opening() &&
             nav.screen != tube5::Screen::video_input && nav.screen != tube5::Screen::quality)
         {
             // Keep the allocation and demux failure readable after teardown.
             // Retrying a fatal read ENOMEM no longer resets these counters.
             char failure[192]{};
+            canvas.rectangle(100, 890, 1660, 100, panel);
 #ifdef TUBE5_REFSTRUCT_BUFFER_WRAP
             tube5::native_refstruct_buffer_status(failure, sizeof(failure));
             canvas.text(800, 65, failure, 2, Color::yellow);
@@ -510,6 +524,10 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
 #ifdef TUBE5_MEDIA_BUFFER_WRAP
             tube5::native_media_buffer_status(failure, sizeof(failure));
             canvas.text(800, 890, failure, 2, Color::yellow);
+#endif
+#ifdef TUBE5_PARSER_BUFFER_WRAP
+            tube5::native_parser_buffer_status(failure, sizeof(failure));
+            canvas.text(800, 125, failure, 2, Color::yellow);
 #endif
             tube5::memory_diagnostic_status(failure, sizeof(failure));
             canvas.text(120, 915, failure, 2, Color::yellow);
@@ -527,7 +545,7 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
 #endif
     }
     canvas.text(
-        120, nav.screen == tube5::Screen::player ? 1040 : 995,
+        120, nav.screen == tube5::Screen::player || error[0] ? 1040 : 995,
         nav.screen == tube5::Screen::player
             ? (selection.active() ? "IZQ/DER 5 SEG  L1/R1 30 SEG  X CONFIRMAR  CIRCULO CANCELAR"
                                   : "X PAUSA  IZQ/DER 5 SEG  TRIANGULO BUSCAR  CIRCULO VOLVER")
@@ -714,7 +732,7 @@ int main()
     {
         return direct_playback    ? tube5::Screen::online
                : library_playback ? tube5::Screen::library
-                                  : tube5::Screen::home;
+                                  : tube5::Screen::sources;
     };
     std::array<char, 256> active_media_url{};
     char error[256]{};
@@ -741,8 +759,11 @@ int main()
         const bool configured = direct_playback || !network_test ||
                                 (source && std::string_view{source}.starts_with("http://"));
         if (!kit_ready || !configured ||
-            !((network_test || direct_playback) ? media.begin_open(source)
-                                                : media.open(renderer, clip)))
+            !((network_test || direct_playback)
+                  ? media.begin_open(
+                        source, direct_playback ? youtube_probe.result().formats.audio_source.data()
+                                                : nullptr)
+                  : media.open(renderer, clip)))
         {
             std::snprintf(error, sizeof(error), "%s",
                           !kit_ready    ? "PLAYER INIT FAILED"
@@ -765,6 +786,41 @@ int main()
     };
     const auto command = [&](tube5::Command action)
     {
+        if (nav.screen == tube5::Screen::sources)
+        {
+            if (action == tube5::Command::previous)
+                source_selected = (source_selected + 2) % 3;
+            else if (action == tube5::Command::next)
+                source_selected = (source_selected + 1) % 3;
+            else if (action == tube5::Command::back)
+            {
+                nav.screen = tube5::Screen::home;
+                error[0] = 0;
+            }
+            else if (action == tube5::Command::select)
+            {
+                error[0] = 0;
+                if (source_selected == 0)
+                    nav.screen = tube5::Screen::online;
+                else if (source_selected == 1)
+                {
+                    network_test = true;
+                    nav.screen = tube5::Screen::library;
+                    if (!catalog.data().count)
+                        load_catalog();
+                }
+                else
+                {
+                    network_test = false;
+                    direct_playback = library_playback = false;
+                    nav.screen = tube5::Screen::player;
+                    start_player(nullptr);
+                }
+            }
+            else if (action == tube5::Command::settings)
+                nav.screen = tube5::Screen::settings;
+            return;
+        }
         if (nav.screen == tube5::Screen::video_input)
         {
             if (action == tube5::Command::back)
@@ -817,7 +873,8 @@ int main()
                      (action == tube5::Command::select && formats.quality_count))
             {
                 const bool automatic = action == tube5::Command::search;
-                if (!automatic && !formats.qualities[quality_selected].playable)
+                if (!automatic && !formats.qualities[quality_selected].playable &&
+                    !formats.qualities[quality_selected].candidate)
                     std::snprintf(error, sizeof(error),
                                   "CALIDAD PENDIENTE - ELIGE UNA OPCION LISTA");
                 else
@@ -836,7 +893,8 @@ int main()
             if (action == tube5::Command::back)
             {
                 youtube_probe.cancel();
-                nav.screen = tube5::Screen::settings;
+                nav.screen = tube5::Screen::sources;
+                error[0] = 0;
             }
             else if (!youtube_probe.loading())
             {
@@ -880,12 +938,6 @@ int main()
                     }
                 }
             }
-            return;
-        }
-        if (nav.screen == tube5::Screen::settings && action == tube5::Command::search)
-        {
-            nav.screen = tube5::Screen::online;
-            error[0] = 0;
             return;
         }
         if (nav.screen == tube5::Screen::search)
@@ -962,15 +1014,6 @@ int main()
             }
             return;
         }
-        if (nav.screen == tube5::Screen::home && nav.selected == 0 && network_test &&
-            action == tube5::Command::select)
-        {
-            nav.screen = tube5::Screen::library;
-            error[0] = 0;
-            if (!catalog.data().count)
-                load_catalog();
-            return;
-        }
         if (nav.screen == tube5::Screen::library)
         {
             if (action == tube5::Command::search && !catalog.loading())
@@ -995,7 +1038,7 @@ int main()
                 load_catalog();
             else if (action == tube5::Command::back)
             {
-                nav.screen = tube5::Screen::home;
+                nav.screen = tube5::Screen::sources;
                 error[0] = 0;
             }
             else if (action == tube5::Command::select &&
@@ -1013,11 +1056,6 @@ int main()
             (action == tube5::Command::previous || action == tube5::Command::next))
         {
             toggle_sponsor();
-            return;
-        }
-        if (nav.screen == tube5::Screen::settings && action == tube5::Command::select)
-        {
-            network_test = !network_test;
             return;
         }
         if (nav.screen == tube5::Screen::player)
@@ -1084,12 +1122,7 @@ int main()
             }
             return;
         }
-        if (nav.apply(action))
-        {
-            library_playback = false;
-            direct_playback = false;
-            start_player(network_url.data());
-        }
+        (void)nav.apply(action);
     };
 #ifndef TUBE5_HOST
     (void)sceSystemServiceHideSplashScreen();
@@ -1110,6 +1143,8 @@ int main()
             nav.screen = tube5::Screen::player;
         else if (std::string_view{screen} == "online")
             nav.screen = tube5::Screen::online;
+        else if (std::string_view{screen} == "sources")
+            nav.screen = tube5::Screen::sources;
         else if (std::string_view{screen} == "video-input")
         {
             nav.screen = tube5::Screen::video_input;

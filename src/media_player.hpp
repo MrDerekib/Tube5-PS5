@@ -4,6 +4,7 @@
 #include <kitchensink2/kitchensink.h>
 #include <atomic>
 #include <cstddef>
+#include <cstring>
 #include "youtube_stream.hpp"
 
 namespace tube5
@@ -27,7 +28,7 @@ class MediaPlayer final
         failed,
         cancelled
     };
-    bool begin_open(const char *path) noexcept;
+    bool begin_open(const char *path, const char *audio_path = nullptr) noexcept;
     OpenResult poll_open(SDL_Renderer *renderer) noexcept;
     void cancel_open() noexcept;
     bool opening() const noexcept
@@ -71,7 +72,18 @@ class MediaPlayer final
     }
     void youtube_status(char *text, std::size_t capacity) const noexcept
     {
+        if (!text || !capacity)
+            return;
         youtube_stream_.status(text, capacity);
+        if (audio_source_)
+        {
+            const auto used = std::strlen(text);
+            if (used + 4 < capacity)
+            {
+                std::memcpy(text + used, " A: ", 4);
+                youtube_audio_stream_.status(text + used + 4, capacity - used - 4);
+            }
+        }
     }
     const char *error() const noexcept
     {
@@ -87,6 +99,10 @@ class MediaPlayer final
     bool network_ = false;
     bool youtube_ = false;
     YouTubeStream youtube_stream_;
+    YouTubeStream youtube_audio_stream_;
+    Kit_Source *audio_source_ = nullptr;
+    Kit_Player *audio_player_ = nullptr;
+    char opening_audio_path_[8192]{};
     // A native ENOMEM followed by repeated opens has crashed on hardware.
     // Preserve the first failure and require a fresh app session, not retries.
     bool memory_blocked_ = false;

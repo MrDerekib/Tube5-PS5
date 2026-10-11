@@ -7,6 +7,7 @@
 #include "pipeline_diagnostics.hpp"
 #include "memory_diagnostics.hpp"
 #include "network_source.hpp"
+#include "shared_playback_clock.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -51,6 +52,8 @@ int MediaPlayer::open_source_worker(void *userdata) noexcept
     memory_set_stage("SOURCE_OPEN");
     self->source_ = self->youtube_ ? self->youtube_stream_.open(self->opening_path_)
                                    : Kit_CreateSourceFromUrl(self->opening_path_);
+    if (self->source_ && self->opening_audio_path_[0] && !network_session_interrupted())
+        self->audio_source_ = self->youtube_audio_stream_.open(self->opening_audio_path_);
     finish_network_open();
     if (!self->source_)
     {
@@ -60,12 +63,15 @@ int MediaPlayer::open_source_worker(void *userdata) noexcept
         std::snprintf(self->error_, sizeof(self->error_), "SOURCE: %s",
                       detail ? detail : "unknown error");
     }
+    else if (self->opening_audio_path_[0] && !self->audio_source_)
+        std::snprintf(self->error_, sizeof(self->error_), "AUDIO SOURCE: %s",
+                      self->youtube_audio_stream_.error());
     // Publish all source/error writes before the UI thread adopts them.
     self->opening_done_.store(true, std::memory_order_release);
     return 0;
 }
 
-bool MediaPlayer::begin_open(const char *path) noexcept
+bool MediaPlayer::begin_open(const char *path, const char *audio_path) noexcept
 {
     if (memory_blocked_)
         return false;
@@ -74,6 +80,13 @@ bool MediaPlayer::begin_open(const char *path) noexcept
     if (!path || std::strlen(path) >= sizeof(opening_path_))
         return fail("SOURCE", "invalid or oversized URL");
     std::snprintf(opening_path_, sizeof(opening_path_), "%s", path);
+    if (audio_path && *audio_path)
+    {
+        if (std::strlen(audio_path) >= sizeof(opening_audio_path_) ||
+            std::strncmp(path, "https://", 8) != 0)
+            return fail("AUDIO SOURCE", "invalid separate stream URL");
+        std::snprintf(opening_audio_path_, sizeof(opening_audio_path_), "%s", audio_path);
+    }
     youtube_ = std::strncmp(path, "https://", 8) == 0;
     network_ = youtube_ || std::strncmp(path, "http://", 7) == 0;
     begin_network_session();
@@ -106,7 +119,7 @@ MediaPlayer::OpenResult MediaPlayer::poll_open(SDL_Renderer *renderer) noexcept
         error_[0] = '\0';
         return OpenResult::cancelled;
     }
-    if (!source_)
+    if (!source_ || (opening_audio_path_[0] && !audio_source_))
     {
         close();
         return OpenResult::failed;
@@ -120,7 +133,8 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
     if (memory_out_of_memory())
         return fail("SOURCE MEMORY", "ENOMEM - CIERRA Y REABRE TUBE5");
     const int video = Kit_GetBestSourceStream(source_, KIT_STREAMTYPE_VIDEO);
-    const int audio = Kit_GetBestSourceStream(source_, KIT_STREAMTYPE_AUDIO);
+    const int audio =
+        Kit_GetBestSourceStream(audio_source_ ? audio_source_ : source_, KIT_STREAMTYPE_AUDIO);
     if (video < 0 || audio < 0)
         return fail("STREAMS", "test clip must contain video and audio");
     Kit_VideoFormatRequest video_request{};
@@ -146,14 +160,31 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
     Kit_SetHint(KIT_HINT_AUDIO_BUFFER_PACKETS, 16);
     reset_codec_diagnostic();
     memory_set_stage("PLAYER_CREATE");
-    player_ =
-        Kit_CreatePlayer(source_, video, audio, -1, &video_request, &audio_request, 1920, 1080);
-    if (!player_)
+    if (audio_source_)
+    {
+        const double video_duration = Kit_GetSourceDuration(source_);
+        const double audio_duration = Kit_GetSourceDuration(audio_source_);
+        if (!std::isfinite(video_duration) || !std::isfinite(audio_duration) ||
+            video_duration <= 0 || std::abs(video_duration - audio_duration) > 2.0)
+            return fail("STREAMS", "audio/video duration mismatch");
+        (void)create_separate_players(source_, video, audio_source_, audio, &video_request,
+                                      &audio_request, player_, audio_player_);
+    }
+    else
+        player_ =
+            Kit_CreatePlayer(source_, video, audio, -1, &video_request, &audio_request, 1920, 1080);
+    if (!player_ || (audio_source_ && !audio_player_))
         return fail("DECODER", codec_diagnostic()[0] ? codec_diagnostic() : Kit_GetError());
     if (memory_out_of_memory())
         return fail("DECODER MEMORY", "ENOMEM - CIERRA Y REABRE TUBE5");
     Kit_PlayerInfo info{};
     Kit_GetPlayerInfo(player_, &info);
+    if (audio_player_)
+    {
+        Kit_PlayerInfo audio_info{};
+        Kit_GetPlayerInfo(audio_player_, &audio_info);
+        info.audio_format = audio_info.audio_format;
+    }
     if (info.video_format.format != SDL_PIXELFORMAT_IYUV)
         return fail("VIDEO", "raw frame path requires IYUV");
     width_ = info.video_format.width;
@@ -184,6 +215,8 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
     reset_thread_diagnostic();
     begin_pipeline_diagnostic();
     Kit_PlayerPlay(player_);
+    if (audio_player_)
+        Kit_PlayerPlay(audio_player_);
     memory_set_stage("PLAYING");
     if (thread_diagnostic()[0])
         return fail("THREAD", thread_diagnostic());
@@ -203,8 +236,9 @@ void MediaPlayer::audio_callback(void *userdata, Uint8 *stream, int length) noex
         while (filled < length)
         {
             const int result =
-                Kit_GetPlayerAudioData(self->player_, static_cast<std::size_t>(filled),
-                                       stream + filled, static_cast<std::size_t>(length - filled));
+                Kit_GetPlayerAudioData(self->audio_player_ ? self->audio_player_ : self->player_,
+                                       static_cast<std::size_t>(filled), stream + filled,
+                                       static_cast<std::size_t>(length - filled));
             if (result <= 0)
             {
                 if (result < 0)
@@ -238,6 +272,9 @@ void MediaPlayer::close() noexcept
         SDL_CloseAudioDevice(audio_);
     audio_ = 0;
     reset_audio_reader();
+    if (audio_player_)
+        Kit_ClosePlayer(audio_player_);
+    audio_player_ = nullptr;
     if (player_)
         Kit_ClosePlayer(player_);
     end_pipeline_diagnostic();
@@ -248,6 +285,9 @@ void MediaPlayer::close() noexcept
     if (source_ && !youtube_)
         Kit_CloseSource(source_);
     youtube_stream_.close();
+    youtube_audio_stream_.close();
+    audio_source_ = nullptr;
+    opening_audio_path_[0] = 0;
     source_ = nullptr;
     paused_ = false;
     frames_uploaded_ = 0;
@@ -278,11 +318,17 @@ void MediaPlayer::toggle_pause() noexcept
     const bool was_paused = paused();
     SDL_PauseAudioDevice(audio_, 1);
     if (was_paused)
+    {
         Kit_PlayerPlay(player_);
+        if (audio_player_)
+            Kit_PlayerPlay(audio_player_);
+    }
     else
     {
         paused_position_ = Kit_GetPlayerPosition(player_);
         Kit_PlayerPause(player_);
+        if (audio_player_)
+            Kit_PlayerPause(audio_player_);
     }
     paused_ = !was_paused;
     if (was_paused)
@@ -343,7 +389,9 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
     {
         SDL_PauseAudioDevice(audio_, 1);
         reset_audio_reader();
-        if (Kit_PlayerSeek(player_, pending_seek_) != 0)
+        const int video_seek = Kit_PlayerSeek(player_, pending_seek_);
+        const int audio_seek = audio_player_ ? Kit_PlayerSeek(audio_player_, pending_seek_) : 0;
+        if (video_seek != 0 || audio_seek != 0)
         {
             std::snprintf(error_, sizeof(error_), "SEEK: %s", Kit_GetError());
             initial_seek_target_ = -1.0;

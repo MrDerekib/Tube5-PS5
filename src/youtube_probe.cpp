@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "youtube_probe.hpp"
 #include "verified_https.hpp"
+#include "youtube_visitor.hpp"
+#include <openssl/rand.h>
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -62,6 +64,12 @@ constexpr const char *player_agent =
     "com.google.android.youtube/21.26.364 (Linux; U; Android 11) gzip";
 constexpr const char *player_body_format =
     R"({"context":{"client":{"clientName":"ANDROID","clientVersion":"21.26.364","androidSdkVersion":30,"osName":"Android","osVersion":"11","userAgent":"com.google.android.youtube/21.26.364 (Linux; U; Android 11) gzip","hl":"es","gl":"ES"}},"videoId":"%s","contentCheckOk":true,"racyCheckOk":true})";
+// Protocol profile/sequence from NewPipeExtractor dev, inspected 2026-10-11.
+// Independently implemented; no Java runtime/extractor or PC service involved.
+constexpr const char *vision_agent =
+    "com.google.visionos.youtube/1.04(RealityDevice17,1; U; CPU visionOS 26_6_0 like Mac OS X; ES)";
+constexpr const char *vision_context =
+    R"({"context":{"client":{"clientName":"VISIONOS","clientVersion":"1.04","clientScreen":"WATCH","platform":"MOBILE","deviceMake":"Apple","deviceModel":"RealityDevice17,1","osName":"visionOS","osVersion":"26.6.0.23O770","hl":"es","gl":"ES","utcOffsetMinutes":0,"visitorData":"%s"},"request":{"internalExperimentFlags":[],"useSsl":true},"user":{"lockedSafetyMode":false}})";
 } // namespace
 namespace tube5
 {
@@ -162,7 +170,10 @@ int YouTubeProbe::worker(void *opaque) noexcept
 {
     auto &probe = *static_cast<YouTubeProbe *>(opaque);
     auto &out = probe.pending_;
-    char url[256]{}, player_body[768]{};
+    char url[256]{}, player_body[6144]{};
+    const bool adaptive =
+        out.mode == ProbeMode::formats && out.requested_height && out.requested_height != 360;
+    char cpn[17]{}, parameter[13]{}, adaptive_url[256]{};
     std::snprintf(url, sizeof(url),
                   "https://www.youtube.com/"
                   "oembed?url=https%%3A%%2F%%2Fwww.youtube.com%%2Fwatch%%3Fv%%3D%s&format=json",
@@ -217,7 +228,7 @@ int YouTubeProbe::worker(void *opaque) noexcept
 #endif
                 set(CURLOPT_HTTP_VERSION, static_cast<long>(CURL_HTTP_VERSION_1_1));
                 set(CURLOPT_USERAGENT, out.mode == ProbeMode::formats
-                                           ? player_agent
+                                           ? (adaptive ? vision_agent : player_agent)
                                            : "Tube5-development/0.1 (direct-connectivity-probe)");
                 set(CURLOPT_ACCEPT_ENCODING, "");
                 set(CURLOPT_CONNECTTIMEOUT_MS, 5000L);
@@ -229,6 +240,14 @@ int YouTubeProbe::worker(void *opaque) noexcept
                 if (post)
                 {
                     headers = curl_slist_append(nullptr, "Content-Type: application/json");
+                    if (adaptive && headers)
+                    {
+                        auto *next = curl_slist_append(headers, "X-Goog-Api-Format-Version: 2");
+                        if (next)
+                            headers = next;
+                        else
+                            code = CURLE_OUT_OF_MEMORY;
+                    }
                     if (!headers)
                         code = CURLE_OUT_OF_MEMORY;
                     set(CURLOPT_HTTPHEADER, headers);
@@ -251,11 +270,71 @@ int YouTubeProbe::worker(void *opaque) noexcept
             curl_slist_free_all(headers);
             return code;
         };
+        const char *request_host = host;
+        std::array<char, 16> api_address = out.ip;
+        if (adaptive)
+        {
+            Body visitor_body;
+            std::snprintf(player_body, sizeof(player_body), vision_context, "");
+            std::strcat(player_body, "}");
+            long visitor_http = 0, visitor_verify = -1;
+            const auto visitor_code =
+                request(host, out.ip.data(),
+                        "https://www.youtube.com/youtubei/v1/visitor_id?prettyPrint=false",
+                        player_body, false, visitor_body, visitor_http, visitor_verify);
+            std::array<char, 4097> visitor{};
+            unsigned char random[28]{};
+            if (visitor_code != CURLE_OK || visitor_http != 200 || visitor_verify != 0 ||
+                !youtube_visitor({visitor_body.bytes.get(), visitor_body.used}, visitor) ||
+                RAND_bytes(random, sizeof(random)) != 1)
+            {
+                std::snprintf(out.error.data(), out.error.size(),
+                              "VISITOR: HTTP %ld CURL %d CERT %ld", visitor_http, visitor_code,
+                              visitor_verify);
+                probe.done_ = true;
+                return 0;
+            }
+            constexpr char alphabet[] =
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+            for (unsigned i = 0; i < 16; ++i)
+                cpn[i] = alphabet[random[i] & 63];
+            for (unsigned i = 0; i < 12; ++i)
+                parameter[i] = alphabet[random[i + 16] & 63];
+            const int used =
+                std::snprintf(player_body, sizeof(player_body), vision_context, visitor.data());
+            if (used < 0 || static_cast<std::size_t>(used) + 128 >= sizeof(player_body))
+            {
+                std::snprintf(out.error.data(), out.error.size(),
+                              "PLAYER: PETICION FUERA DE LIMITES");
+                probe.done_ = true;
+                return 0;
+            }
+            std::snprintf(
+                player_body + used, sizeof(player_body) - used,
+                ",\"videoId\":\"%s\",\"cpn\":\"%s\",\"contentCheckOk\":true,\"racyCheckOk\":true}",
+                out.video_id.data(), cpn);
+            request_host = "youtubei.googleapis.com";
+            std::snprintf(
+                adaptive_url, sizeof(adaptive_url),
+                "https://youtubei.googleapis.com/youtubei/v1/player?prettyPrint=false&t=%s&id=%s",
+                parameter, out.video_id.data());
+            if (resolve_https_ipv4(request_host, api_address.data(), api_address.size(),
+                                   out.dns_error) ||
+                blocked_https_ipv4(api_address.data()))
+            {
+                std::snprintf(out.error.data(), out.error.size(),
+                              "PLAYER: DNS API FALLA O BLOQUEADA");
+                probe.done_ = true;
+                return 0;
+            }
+        }
         Body body(out.mode == ProbeMode::formats ? youtube_player_limit : 16384);
-        const auto code =
-            request(host, out.ip.data(), out.mode == ProbeMode::formats ? player_url : url,
-                    out.mode == ProbeMode::formats ? player_body : nullptr, false, body, out.http,
-                    out.verify);
+        const auto code = request(request_host, api_address.data(),
+                                  adaptive                         ? adaptive_url
+                                  : out.mode == ProbeMode::formats ? player_url
+                                                                   : url,
+                                  out.mode == ProbeMode::formats ? player_body : nullptr, false,
+                                  body, out.http, out.verify);
         out.curl_error = code;
         out.bytes = static_cast<unsigned>(body.used);
         if (code != CURLE_OK)
@@ -281,9 +360,25 @@ int YouTubeProbe::worker(void *opaque) noexcept
                               "PLAYER: ID DE VIDEO NO COINCIDE");
             else if (!out.formats.source[0])
                 std::snprintf(out.error.data(), out.error.size(),
-                              "SIN MP4 COMBINADO PARA ESTA CALIDAD - OPTIONS CALIDAD");
+                              "SIN PAREJA MP4 COMPATIBLE PARA ESTA CALIDAD");
             else
             {
+                if (adaptive)
+                    for (auto *target : {&out.formats.source, &out.formats.audio_source})
+                    {
+                        if (!(*target)[0])
+                            continue;
+                        const auto length = std::strlen(target->data());
+                        if (length + 21 >= target->size())
+                        {
+                            std::snprintf(out.error.data(), out.error.size(),
+                                          "STREAM: URL FUERA DE LIMITES");
+                            probe.done_ = true;
+                            return 0;
+                        }
+                        std::snprintf(target->data() + length, target->size() - length, "&cpn=%s",
+                                      cpn);
+                    }
                 out.title = out.formats.title;
                 probe.stage_ = ProbeStage::source;
                 std::array<char, 16> address{};

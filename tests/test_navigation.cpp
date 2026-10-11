@@ -19,7 +19,7 @@ TEST(Navigation, FocusWrapsAndBackPreservesSelection)
     EXPECT_EQ(nav.selected, 0);
 }
 
-TEST(Navigation, PlaybackOnlyStartsFromTheVideoCard)
+TEST(Navigation, PlaybackCardOpensSourcesWithoutStartingVideo)
 {
     tube5::Navigation nav;
     nav.apply(Command::next);
@@ -28,9 +28,11 @@ TEST(Navigation, PlaybackOnlyStartsFromTheVideoCard)
     EXPECT_FALSE(nav.apply(Command::select));
     nav.apply(Command::back);
     nav.apply(Command::previous);
-    EXPECT_TRUE(nav.apply(Command::select));
-    EXPECT_EQ(nav.screen, Screen::player);
     EXPECT_FALSE(nav.apply(Command::select));
+    EXPECT_EQ(nav.screen, Screen::sources);
+    EXPECT_FALSE(nav.apply(Command::select));
+    EXPECT_EQ(nav.screen, Screen::sources);
+    nav.screen = Screen::player;
     EXPECT_FALSE(nav.apply(Command::settings));
     EXPECT_EQ(nav.screen, Screen::player);
     nav.apply(Command::back);

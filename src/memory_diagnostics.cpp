@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "memory_diagnostics.hpp"
 #include "native_refstruct_buffers.hpp"
+#include "native_parser_buffers.hpp"
 #include <atomic>
 #include <cstdio>
 #include <limits>
@@ -168,13 +169,25 @@ extern "C" void *__wrap_calloc(std::size_t count, std::size_t size)
 }
 extern "C" void *__wrap_realloc(void *address, std::size_t bytes)
 {
-    void *result = __real_realloc(address, bytes);
+    void *result = nullptr;
+#ifdef TUBE5_PARSER_BUFFER_WRAP
+    if (!tube5::reallocate_owned_parser_buffer(address, bytes, result))
+#endif
+        result = __real_realloc(address, bytes);
     if (!result && bytes)
         record(3, bytes, 0, 0, __builtin_return_address(0));
     return result;
 }
 extern "C" int __wrap_posix_memalign(void **address, std::size_t alignment, std::size_t bytes)
 {
+#ifdef TUBE5_PARSER_BUFFER_WRAP
+    if (alignment == 64 && tube5::parser_aligned_caller(__builtin_return_address(0)))
+        if (void *native = tube5::allocate_parser_buffer(bytes, false))
+        {
+            *address = native;
+            return 0;
+        }
+#endif
     const int result = __real_posix_memalign(address, alignment, bytes);
     if (result != 0 && bytes)
         record(4, bytes, result, alignment, __builtin_return_address(0));
@@ -187,6 +200,11 @@ extern "C" void *__real_av_malloc(std::size_t);
 extern "C" void *__real_av_mallocz(std::size_t);
 extern "C" void *__wrap_av_mallocz(std::size_t bytes)
 {
+#ifdef TUBE5_PARSER_BUFFER_WRAP
+    if (tube5::parser_zero_caller(__builtin_return_address(0)))
+        if (void *native = tube5::allocate_parser_buffer(bytes, true))
+            return native;
+#endif
     void *result = __real_av_mallocz(bytes);
     if (!result && bytes)
         record_origin(true, 5, bytes, 0, __builtin_return_address(0));

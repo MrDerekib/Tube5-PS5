@@ -23,6 +23,7 @@ namespace
 std::atomic<Uint64> deadline{0};
 std::atomic<bool> cancelled{false}, playing{false};
 std::atomic<const void *> network_context{nullptr};
+std::atomic<const void *> second_network_context{nullptr};
 std::atomic<int> playback_error{0};
 AVIOInterruptCB original_interrupt{};
 int open_error = 0;
@@ -45,6 +46,7 @@ void begin_network_session() noexcept
     cancelled = false;
     playing = false;
     network_context = nullptr;
+    second_network_context = nullptr;
     playback_error = 0;
     deadline = 0;
     open_error = 0;
@@ -57,7 +59,10 @@ void prepare_custom_network(void *opaque) noexcept
 {
     auto *context = static_cast<AVFormatContext *>(opaque);
     original_interrupt = context->interrupt_callback;
-    network_context = context;
+    if (network_context.load() && network_context.load() != context)
+        second_network_context = context;
+    else
+        network_context = context;
     context->interrupt_callback = {interrupt_open, nullptr};
     deadline = SDL_GetTicks64() + 8000;
 }
@@ -67,7 +72,9 @@ bool network_session_interrupted() noexcept
 }
 void record_network_read(const void *context, int result, int io_error) noexcept
 {
-    if (!context || !playing.load() || context != network_context.load() || cancelled.load())
+    if (!context || !playing.load() ||
+        (context != network_context.load() && context != second_network_context.load()) ||
+        cancelled.load())
         return;
     const int error = result == AVERROR_EOF ? io_error : result;
     if (error < 0 && error != AVERROR(EAGAIN) && error != AVERROR_EOF)
@@ -102,7 +109,7 @@ const char *network_open_error() noexcept
 #ifdef TUBE5_NETWORK_WRAP
 extern "C" int __wrap_avformat_find_stream_info(AVFormatContext *context, AVDictionary **options)
 {
-    if (context && context == network_context.load())
+    if (context && (context == network_context.load() || context == second_network_context.load()))
     {
         tube5::memory_set_stage("HTTP_STREAM_SCAN");
         // Kitchensink's _ScanSource overwrites options with INT_MAX just before

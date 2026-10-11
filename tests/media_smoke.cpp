@@ -40,6 +40,8 @@ static void require(bool value, const char *message)
 int main(int argc, char **argv)
 {
     const bool youtube = argc > 1 && std::strcmp(argv[1], "--youtube-direct") == 0;
+    const bool native_sponsor = (argc > 2 && std::strcmp(argv[2], "--sponsor-native") == 0) ||
+                                (argc > 4 && std::strcmp(argv[4], "--sponsor-native") == 0);
     const char *clip = argc > 1 ? argv[1] : "assets/test-clip.mp4";
     const bool real_video = youtube || (argc > 2 && std::strcmp(argv[2], "--real-video") == 0);
     SDL_SetMainReady();
@@ -50,7 +52,9 @@ int main(int argc, char **argv)
     {
         const char *input =
             argc > 2 && std::strncmp(argv[2], "--", 2) != 0 ? argv[2] : "bHIhgxav9LY";
-        require(probe.begin(tube5::ProbeMode::formats, input), "launch direct resolver");
+        const unsigned height =
+            argc > 3 ? static_cast<unsigned>(std::strtoul(argv[3], nullptr, 10)) : 0;
+        require(probe.begin(tube5::ProbeMode::formats, input, height), "launch direct resolver");
         const auto started = SDL_GetTicks64();
         while (probe.loading())
         {
@@ -78,7 +82,9 @@ int main(int argc, char **argv)
     const auto async_open = [&](const char *path, bool cancel, unsigned cancel_delay = 0)
     {
         const Uint64 started = SDL_GetTicks64();
-        require(player.begin_open(path), "launch source worker");
+        require(
+            player.begin_open(path, youtube ? probe.result().formats.audio_source.data() : nullptr),
+            "launch source worker");
         require(SDL_GetTicks64() - started < 250, "opening returns without waiting for network");
         if (cancel)
         {
@@ -103,7 +109,7 @@ int main(int argc, char **argv)
             if (result == tube5::MediaPlayer::OpenResult::pending)
                 require(SDL_GetTicks64() - tick < 250, "UI tick does not wait for opening worker");
             ++responsive_frames;
-            require(SDL_GetTicks64() - started < 11000, "async open is bounded");
+            require(SDL_GetTicks64() - started < 19000, "async two-source open is bounded");
             SDL_Delay(16);
         } while (result == tube5::MediaPlayer::OpenResult::pending);
         require(responsive_frames > 0, "UI updates while source opens");
@@ -145,13 +151,16 @@ int main(int argc, char **argv)
         std::puts("HTTP cancel passed: repeated cancellation and local recovery.");
         return 0;
     }
+    if (youtube && probe.result().formats.audio_source[0])
+        require(async_open(clip, true) == tube5::MediaPlayer::OpenResult::cancelled,
+                "cancel separate-source opening before playback");
     if (std::strncmp(clip, "http://", 7) == 0 || youtube)
         require(async_open(clip, false) == tube5::MediaPlayer::OpenResult::ready, player.error());
     else
         require(player.open(renderer, clip), player.error());
-    if (argc > 2 && (std::strcmp(argv[2], "--sponsor-test") == 0 ||
-                     std::strcmp(argv[2], "--sponsor-real") == 0 ||
-                     std::strcmp(argv[2], "--sponsor-native") == 0))
+    if (native_sponsor || (argc > 2 && (std::strcmp(argv[2], "--sponsor-test") == 0 ||
+                                        std::strcmp(argv[2], "--sponsor-real") == 0 ||
+                                        std::strcmp(argv[2], "--sponsor-native") == 0)))
     {
         tube5::SponsorData data;
         data.state = tube5::SponsorState::ready;
@@ -159,7 +168,7 @@ int main(int argc, char **argv)
         const unsigned end_ms = static_cast<unsigned>(std::round(player.duration() * 1000));
         data.ranges[1] = {end_ms - 5000, end_ms};
         data.count = 2;
-        if (std::strcmp(argv[2], "--sponsor-native") == 0)
+        if (native_sponsor)
         {
             require(youtube, "native SponsorBlock requires the direct resolver");
             data = tube5::aligned_sponsor(probe.result().sponsor, player.duration());
@@ -333,6 +342,15 @@ int main(int argc, char **argv)
     }
     require(player.position() > 8.0, "uninterrupted playback advances beyond eight seconds");
     require(player.frames_uploaded() > 100, "IYUV frames continue uploading beyond startup");
+    char player_status[256]{};
+    player.diagnostic_status(player_status, sizeof(player_status));
+    const auto *audio_status = std::strstr(player_status, "AUD ");
+    unsigned audio_callbacks = 0;
+    std::size_t audio_bytes = 0;
+    require(audio_status &&
+                std::sscanf(audio_status, "AUD %u/%zu", &audio_callbacks, &audio_bytes) == 2 &&
+                audio_bytes > 100000,
+            "decoded audio reaches the callback alongside video");
     require(!player.error()[0], "no hidden frame upload/draw errors");
     char pipeline[128]{};
     unsigned sent = 0, decoded = 0;
@@ -436,7 +454,16 @@ int main(int argc, char **argv)
         std::puts(pipeline);
     }
     player.close();
-    require(player.open(renderer, clip), "reopen after end");
+    require(youtube ? async_open(clip, false) == tube5::MediaPlayer::OpenResult::ready
+                    : player.open(renderer, clip),
+            "reopen after end with both sources");
+    for (unsigned i = 0; i < 90 && player.frames_uploaded() < 10; ++i)
+    {
+        player.draw(renderer, SDL_Rect{0, 0, 640, 360});
+        require(!player.check_network_failure(), "healthy reopened playback");
+        SDL_Delay(33);
+    }
+    require(player.frames_uploaded() >= 10, "reopened video actually decodes");
     player.close();
     player.close();
     Kit_Quit();

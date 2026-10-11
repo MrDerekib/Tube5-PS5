@@ -13,6 +13,7 @@
 | [Microsoft DirectXTex](https://github.com/microsoft/DirectXTex) | `texconv` presentation-image preparation |
 | [FFmpeg](https://ffmpeg.org/) | Developer-supplied selection-audio preparation |
 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | External, developer-supplied tool for the private PC-side YouTube pilot; not bundled or linked into the PS5 app |
+| [TeamNewPipe/NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) | Protocol reference for the VISIONOS visitor/player flow; independent native C++ implementation, no Java code bundled |
 | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) | Directory-style deployment and hardware validation |
 | [ItsBlurf/BFplayer](https://github.com/ItsBlurf/BFplayer) | Playback, audio-clock and presentation reference; its fork is not bundled |
 | [mihawk-99/PS5_Vulkan](https://github.com/mihawk-99/PS5_Vulkan) | Public direct-memory definitions and CPU-cache measurements used to select the SDL working framebuffer's memory type; no driver code bundled |
