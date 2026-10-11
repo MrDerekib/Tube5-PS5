@@ -65,8 +65,7 @@ diseñado para exponerse a Internet o a una LAN no confiable: los medios de
 Las pruebas usan el clip sintético existente, no descargan vídeos: URL y
 perfiles permitidos, límite de biblioteca, publicación, reutilización,
 persistencia, aislamiento de caché, autenticación, fallo sin publicación y
-actualización del catálogo/Range sin reiniciar el servidor. La adquisición
-de una URL nueva en Internet queda pendiente de prueba real.
+actualización del catálogo/Range sin reiniciar el servidor.
 
 La suite completa pasa nueve pruebas de renderer/navegación y 37 de integración,
 además de las comprobaciones de tooling. El servicio real recibe la URL
@@ -79,3 +78,11 @@ No se da por validada la reproducción continua de los 28 minutos completos.
 El smoke test host de su ruta `/media/yt-qf31PkeESoU-360-60.mp4` pasa apertura,
 decodificación, pausa, seeks, salto al final, reapertura y liberación. No
 equivale a haber reproducido los 28 minutos continuos en la consola.
+
+El propietario añade la URL nueva `https://youtu.be/C9sSIz5VSo4` mediante el
+cliente local. Confirma transición de `preparing` a `ready`, refresco de la
+biblioteca, aparición de la cuarta entrada y reproducción en PS5. Comunica
+una duración de aproximadamente doce minutos a 360p. Queda validado el flujo
+completo de adquisición, preparación, publicación y apertura de una URL nueva.
+No se da por confirmada su reproducción continua hasta el final ni una prueba
+específica de todos los controles sobre esta entrada.

@@ -24,6 +24,7 @@ clip sintético, sin etiquetarlo como un supuesto ID de vídeo.
 Consultar [el piloto LAN](docs/YOUTUBE_TEST.md) para iniciar el servidor.
 El [servicio local de URLs](docs/BRIDGE_SERVICE.md) permite añadir vídeos desde
 el PC y refrescar la biblioteca sin cambiar la build de consola.
+El flujo completo con una URL nueva a 360p está confirmado en PS5.
 Las secciones siguientes conservan el historial del prototipo.
 
 ## Prototipo 01.000.001
