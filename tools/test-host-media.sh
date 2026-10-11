@@ -25,7 +25,7 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc tests/test_sponsor_skip.cpp -o build/sponsor-skip-test
 build/sponsor-skip-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
-    -Isrc tests/test_preferences.cpp -o build/preferences-test
+    -Isrc tests/test_preferences.cpp -Wl,--wrap=fsync -o build/preferences-test
 build/preferences-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_DIAGNOSTICS \
     -Isrc "${cflags[@]}" tests/test_texture_diagnostics.cpp src/texture_diagnostics.cpp \

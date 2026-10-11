@@ -41,12 +41,17 @@ Los vídeos sin marcas o con error de red siguen reproduciéndose sin saltos.
 ## Controles
 
 SponsorBlock está ON inicialmente. Desde DIAG38, el ajuste se guarda al
-cambiarlo y se recupera al arrancar: `/data/tube5/settings.conf` en PS5 y
+cambiarlo y se recupera al arrancar: `/download0/settings.conf` en PS5 desde
+DIAG39 y
 `.local/tube5/settings.conf` en host. Se conserva fuera de `/app0`, por lo que
 copiar una nueva build no lo reemplaza. Escritura temporal, fsync y rename;
 archivo privado versionado y acotado. Si falta o es inválido, se usa ON; un
 error de guardado muestra NO GUARDADO y mantiene el cambio solo en memoria.
-La escritura real en PS5 aún debe comprobarse con DIAG38.
+DIAG38 intentó `/data/tube5/settings.conf` y el propietario reportó NO GUARDADO.
+DIAG39 emplea `/download0`, reservado por downloadDataSize, sin intentar crear
+o inspeccionar ese punto de montaje. Mantiene validación de archivo y guardado
+atómico; muestra operación y errno en caso de fallo. La corrección aún debe
+comprobarse en PS5. No se solicita elevación ni otro payload para guardar ajustes.
 Options en el reproductor cambia ON/OFF;
 en la biblioteca Options sigue recargando. En Ajustes, cruceta cambia ON/OFF,
 y X conserva el selector HTTP/LOCAL. ON solo actúa si hay segmentos listos.

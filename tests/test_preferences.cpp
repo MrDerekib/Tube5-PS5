@@ -5,6 +5,17 @@
 #include <cstdlib>
 #include <limits>
 #include <string>
+static bool fail_sync = false;
+extern "C" int __real_fsync(int);
+extern "C" int __wrap_fsync(int fd)
+{
+    if (fail_sync)
+    {
+        errno = EIO;
+        return -1;
+    }
+    return __real_fsync(fd);
+}
 int main()
 {
     char pattern[] = "/tmp/tube5-preferences-XXXXXX";
@@ -26,11 +37,21 @@ int main()
     assert(file && std::fputs("TUBE5_SETTINGS_V2\nSPONSORBLOCK=0\n", file) >= 0);
     assert(std::fclose(file) == 0);
     assert(store.load(enabled) == tube5::Preferences::Load::invalid && enabled);
+    assert(std::strcmp(store.stage(), "LOAD_FORMAT") == 0 && store.error() == EINVAL);
     assert(store.save(false));
     assert(store.load(enabled) == tube5::Preferences::Load::loaded && !enabled);
+    fail_sync = true;
+    assert(!store.save(true));
+    assert(std::strcmp(store.stage(), "SYNC") == 0 && store.error() == EIO);
+    fail_sync = false;
+    assert(store.load(enabled) == tube5::Preferences::Load::loaded && !enabled);
+    tube5::Preferences mounted(directory.c_str(), false);
+    assert(mounted.save(false));
+    assert(mounted.load(enabled) == tube5::Preferences::Load::loaded && !enabled);
     const std::string temporary = directory + "/settings.tmp";
     assert(::symlink(path.c_str(), temporary.c_str()) == 0);
     assert(!store.save(true));
+    assert(std::strcmp(store.stage(), "OPEN") == 0 && store.error() == ELOOP);
     assert(store.load(enabled) == tube5::Preferences::Load::loaded && !enabled);
     assert(::unlink(temporary.c_str()) == 0);
     assert(::unlink(path.c_str()) == 0);

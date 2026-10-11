@@ -1,5 +1,38 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-39-SPONSOR-STORAGE: almacenamiento del título
+
+El propietario confirma que DIAG38 muestra NO GUARDADO - SOLO ESTA SESION al
+cambiar SponsorBlock en Ajustes/Options. No se obtuvo todavía operación/errno,
+así que no se da por identificada la syscall exacta que falla.
+
+Se detecta una elección incorrecta de ruta: el proyecto recomienda
+`/download0` para configuración persistente, ya reservado mediante
+`downloadDataSize: 256`. Además, `examples/sandbox-elevation/src/elevation.cpp`
+documenta que ShadowMountPlus puede permitir escrituras en `/data` y denegar
+listado/lstat. DIAG38 requería mkdir/lstat de `/data/tube5` antes de escribir.
+Eso es una explicación candidata del fallo reportado, no una traza de la consola.
+
+DIAG39 guarda `/download0/settings.conf` y usa `/download0/settings.tmp` para
+el reemplazo atómico. No crea ni inspecciona el montaje. Host conserva
+`.local/tube5/` con sus comprobaciones. Sigue exigiendo escritura completa,
+fsync, close y rename; un error conserva la preferencia anterior en disco y
+el cambio actual en memoria. Ajustes informa PATH/MKDIR/LSTAT/DIRECTORY/OPEN/
+WRITE/SYNC/CLOSE/RENAME y errno, para no confundir fallos de permisos con sync.
+No se cambia el player, los avisos ni se pide elevación.
+
+Tests nuevos: fallo de fsync inyectado con EIO, conservación del ajuste
+anterior, informe SYNC/EIO, escritura sobre un directorio ya provisionado
+sin mkdir/lstat e informe OPEN/ELOOP ante enlace temporal. Prueba física
+pendiente: poner OFF, cerrar completamente y reabrir; repetir ON. Ante fallo,
+reportar la línea amarilla de Ajustes completa.
+
+La suite host completa con sanitizadores pasa; tras añadir diagnósticos de
+lectura se repite el test de preferencias, incluido LOAD_FORMAT/EINVAL.
+Build/FSELF e integridad/guard ABI correctos. SHA-256 de eboot.bin:
+`c9a8c587ce0a9af2b554788bf4f49d7fba1db5474f0aa319c5aed19fc1eaee6d`.
+Respaldo privado `.local/boot-diag-39/`. Persistencia física aún no confirmada.
+
 ## BOOT-DIAG-38-SPONSOR-PREFS: preferencias y aviso de salto
 
 SponsorBlock ON/OFF se guarda al cambiarlo desde Ajustes o mediante Options
@@ -20,6 +53,7 @@ inválido, permisos 0600, fallo de escritura sin perder el ajuste anterior,
 rechazo de enlace temporal y FIFO sin bloqueo. Modelo de aviso: duración,
 cancelación, entradas inválidas y desbordamiento del contador de milisegundos.
 La persistencia real de `/data` y los avisos en consola quedan pendientes.
+Posteriormente el propietario reporta fallo de guardado en consola; ver DIAG39.
 La suite host completa pasa con ASan/UBSan/LSan, incluyendo reproducción,
 saltos y fallos HTTP. Capturas host de Ajustes, aviso del player y aviso de
 biblioteca revisadas sin solapamientos. Las capturas de avisos usan el modo

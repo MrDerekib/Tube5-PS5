@@ -46,7 +46,7 @@ tube5::SponsorNotice sponsor_notice;
 #ifdef TUBE5_HOST
 tube5::Preferences preferences(".local/tube5");
 #else
-tube5::Preferences preferences("/data/tube5");
+tube5::Preferences preferences("/download0", false);
 #endif
 void toggle_sponsor() noexcept
 {
@@ -177,9 +177,13 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(650, 560, sponsor_enabled ? "ON - IZQ/DER CAMBIAR" : "OFF - IZQ/DER CAMBIAR", 3,
                     Color::white);
         canvas.text(120, 605, "DATOS: SPONSOR.AJAY.APP - CC BY-NC-SA 4.0", 2, muted);
-        canvas.text(650, 630,
-                    preference_saved ? "PREFERENCIA PERSISTENTE" : "NO GUARDADO - SOLO ESTA SESION",
-                    2, preference_saved ? muted : Color::yellow);
+        char storage_status[96]{};
+        if (preference_saved)
+            std::snprintf(storage_status, sizeof(storage_status), "PREFERENCIA PERSISTENTE");
+        else
+            std::snprintf(storage_status, sizeof(storage_status), "NO GUARDADO: %s E%d",
+                          preferences.stage(), preferences.error());
+        canvas.text(650, 630, storage_status, 2, preference_saved ? muted : Color::yellow);
         canvas.text(120, 660, "REPRODUCCION", 4, muted);
         canvas.text(650, 660, network_test ? "HTTP - X CAMBIAR" : "LOCAL - X CAMBIAR", 4,
                     Color::white);
