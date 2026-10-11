@@ -485,7 +485,9 @@ bool MediaPlayer::check_network_failure() noexcept
         char detail[AV_ERROR_MAX_STRING_SIZE]{};
         av_strerror(read_error, detail, sizeof(detail));
         fail(youtube_ ? "YT READ" : "HTTP READ",
-             youtube_ && youtube_stream_.error()[0] ? youtube_stream_.error() : detail);
+             youtube_ && youtube_stream_.error()[0]         ? youtube_stream_.error()
+             : youtube_ && youtube_audio_stream_.error()[0] ? youtube_audio_stream_.error()
+                                                            : detail);
         return true;
     }
     if (finished() && position() + 2.0 < duration())

@@ -159,8 +159,7 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(120, 310, "REPRODUCIR - ELIGE FUENTE", 5, Color::white);
         const char *titles[] = {"YOUTUBE", "HTTP - BIBLIOTECA LAN", "LOCAL - CLIP DE PRUEBA"};
         const char *details[] = {"DIRECTO. SIN PC. VIDEO Y CALIDAD.",
-                                 "PRUEBAS CON EL SERVIDOR DEL PC.",
-                                 "20 SEGUNDOS. SIN CONEXION."};
+                                 "PRUEBAS CON EL SERVIDOR DEL PC.", "20 SEGUNDOS. SIN CONEXION."};
         for (unsigned i = 0; i < 3; ++i)
         {
             const int y = 420 + static_cast<int>(i) * 130;
@@ -506,41 +505,56 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(playing_screen ? 350 : 120, playing_screen ? 930 : 865, line.data(),
                     playing_screen ? 2 : 3, Color::yellow);
 #ifdef TUBE5_DIAGNOSTICS
-        if (!playing_screen && !media.opening() &&
-            nav.screen != tube5::Screen::video_input && nav.screen != tube5::Screen::quality)
+        if (!playing_screen && !media.opening() && nav.screen != tube5::Screen::video_input &&
+            nav.screen != tube5::Screen::quality)
         {
             // Keep the allocation and demux failure readable after teardown.
             // Retrying a fatal read ENOMEM no longer resets these counters.
             char failure[192]{};
-            canvas.rectangle(100, 890, 1660, 100, panel);
+            // close() clears youtube_direct(); the numeric snapshots survive.
+            if (std::strstr(error, "YT HTTPS"))
+            {
+                tube5::memory_diagnostic_status(failure, sizeof(failure));
+                canvas.text(800, 155, failure, 2, Color::yellow);
+                canvas.rectangle(100, 890, 1660, 140, panel);
+                for (unsigned row = 0; row < 6; ++row)
+                {
+                    media.youtube_diagnostic(row, failure, sizeof(failure));
+                    canvas.text(120, 900 + row * 22, failure, 2, Color::yellow);
+                }
+            }
+            else
+            {
+                canvas.rectangle(100, 890, 1660, 100, panel);
 #ifdef TUBE5_REFSTRUCT_BUFFER_WRAP
-            tube5::native_refstruct_buffer_status(failure, sizeof(failure));
-            canvas.text(800, 65, failure, 2, Color::yellow);
+                tube5::native_refstruct_buffer_status(failure, sizeof(failure));
+                canvas.text(800, 65, failure, 2, Color::yellow);
 #endif
 #ifdef TUBE5_SURFACE_BUFFER_WRAP
-            tube5::native_surface_buffer_status(failure, sizeof(failure));
-            canvas.text(800, 95, failure, 2, Color::yellow);
+                tube5::native_surface_buffer_status(failure, sizeof(failure));
+                canvas.text(800, 95, failure, 2, Color::yellow);
 #endif
 #ifdef TUBE5_MEDIA_BUFFER_WRAP
-            tube5::native_media_buffer_status(failure, sizeof(failure));
-            canvas.text(800, 890, failure, 2, Color::yellow);
+                tube5::native_media_buffer_status(failure, sizeof(failure));
+                canvas.text(800, 890, failure, 2, Color::yellow);
 #endif
 #ifdef TUBE5_PARSER_BUFFER_WRAP
-            tube5::native_parser_buffer_status(failure, sizeof(failure));
-            canvas.text(800, 125, failure, 2, Color::yellow);
+                tube5::native_parser_buffer_status(failure, sizeof(failure));
+                canvas.text(800, 125, failure, 2, Color::yellow);
 #endif
-            tube5::memory_diagnostic_status(failure, sizeof(failure));
-            canvas.text(120, 915, failure, 2, Color::yellow);
-            tube5::memory_failure_stage_status(failure, sizeof(failure));
-            canvas.text(800, 915, failure, 2, Color::yellow);
-            tube5::flexible_memory_status(failure, sizeof(failure));
-            canvas.text(120, 975, failure, 2, Color::yellow);
-            tube5::pipeline_diagnostic_status(0, failure, sizeof(failure));
-            canvas.text(120, 945, failure, 2, Color::yellow);
-            tube5::memory_allocation_origin_status(0, failure, sizeof(failure));
-            canvas.text(800, 945, failure, 2, Color::yellow);
-            tube5::memory_allocation_origin_status(1, failure, sizeof(failure));
-            canvas.text(800, 975, failure, 2, Color::yellow);
+                tube5::memory_diagnostic_status(failure, sizeof(failure));
+                canvas.text(120, 915, failure, 2, Color::yellow);
+                tube5::memory_failure_stage_status(failure, sizeof(failure));
+                canvas.text(800, 915, failure, 2, Color::yellow);
+                tube5::flexible_memory_status(failure, sizeof(failure));
+                canvas.text(120, 975, failure, 2, Color::yellow);
+                tube5::pipeline_diagnostic_status(0, failure, sizeof(failure));
+                canvas.text(120, 945, failure, 2, Color::yellow);
+                tube5::memory_allocation_origin_status(0, failure, sizeof(failure));
+                canvas.text(800, 945, failure, 2, Color::yellow);
+                tube5::memory_allocation_origin_status(1, failure, sizeof(failure));
+                canvas.text(800, 975, failure, 2, Color::yellow);
+            }
         }
 #endif
     }

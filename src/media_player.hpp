@@ -4,6 +4,7 @@
 #include <kitchensink2/kitchensink.h>
 #include <atomic>
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
 #include "youtube_stream.hpp"
 
@@ -88,6 +89,15 @@ class MediaPlayer final
     const char *error() const noexcept
     {
         return error_;
+    }
+    void youtube_diagnostic(unsigned row, char *text, std::size_t capacity) const noexcept
+    {
+        if (!text || !capacity)
+            return;
+        char detail[192]{};
+        (row < 3 ? youtube_stream_ : youtube_audio_stream_)
+            .diagnostic(row % 3, detail, sizeof(detail));
+        std::snprintf(text, capacity, "%s: %s", row < 3 ? "VIDEO" : "AUDIO", detail);
     }
 
   private:

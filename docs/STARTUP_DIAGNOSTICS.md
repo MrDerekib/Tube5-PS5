@@ -1,5 +1,50 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-50-YTREAD: primera lectura HTTPS rechazada
+
+En DIAG49 el usuario confirma 1080p, pausa y SponsorBlock, pero recibe HTTP 403
+con CURL/CERT/RANGE 0 al buscar y también al reproducir sin intervención: segundo
+31 tanto con SponsorBlock ON como OFF. Otro error reportado, TEXTURE: Out of
+memory, ocurre al iniciar el player, no en ese punto de reproducción. No atribuir
+ambos errores a la misma causa. [Pruebas PC](YOUTUBE_RANGE_TESTS.md): no reproducen
+el rechazo; no prueban una corrección de método o User-Agent.
+
+DIAG50 no cambia GET/Android, HTTPS verificado, HTTP 1.1, rangos de 512 KiB,
+calidad, buffers ni política de reintentos. Añade tres líneas por pista y las
+conserva tras unir los workers y cerrar las fuentes, incluso tras un segundo
+close. La primera petición fallida queda congelada ante reintentos; la siguiente
+apertura limpia la instantánea de esa fuente. También permite mostrar el error
+HTTPS de la pista de audio, no solamente el del vídeo.
+
+El panel inferior muestra VIDEO y AUDIO: REQ (número de la petición registrada),
+OK, FAIL (fallos acumulativos), HTTP/CURL/CERT/RANGE; BYTES (rango solicitado),
+RX (bytes recibidos en esa petición), AGE (ms desde la apertura de esa fuente,
+no desde la extracción/firma de YouTube), DT (duración en ms), NEWCONN
+(conexiones nuevas de curl para esa petición); LAST OK (último rango válido),
+total recibido y SEEKS (llamadas AVIO de posicionamiento, incluidas las internas
+de FFmpeg, no solo pulsaciones). NEWCONN 0 indica que curl no creó una conexión
+nueva; no prueba por sí solo la causa del rechazo. Solo hay números y constantes:
+no se imprimen URLs, firmas, cpn, IPs ni tokens.
+
+Se conserva el panel de allocators para TEXTURE/ENOMEM y otros errores no HTTPS.
+El panel HTTPS muestra además MEMFAIL arriba. El estado youtube_direct se limpia
+al cerrar: la pantalla identifica el error retenido, no depende de ese flag para
+mostrar los seis renglones después de teardown.
+
+Prueba: cerrar completamente Tube5, copiar la carpeta completa, verificar
+BOOT-DIAG-50-YTREAD, mismo vídeo/calidad 1080p, SB OFF, reproducir sin controles.
+Fotografiar toda la pantalla al fallar (las seis líneas VIDEO/AUDIO). No
+reintentar antes de capturar. Si falla al abrir con TEXTURE, capturar ese panel
+y reportar ese caso en lugar de insistir.
+
+Suite host ASan/UBSan/LSan y prueba offline de transporte: 403 en apertura,
+403 durante lectura de una fuente abierta tras rangos correctos, siguiente
+respuesta 200 no reemplaza el primer 403, close repetido conserva diagnóstico,
+nueva apertura limpia el estado y no se filtran identificadores privados.
+Build nativa firmada, ABI de parser/refstruct e integridad FSELF validados.
+SHA-256 de eboot.bin:
+`1a9f98321193ab917582db46cdee4f2949a2c9b9534371409d7fb744214597d7`.
+
 ## BOOT-DIAG-49-PARSER: buffers de trabajo H.264 en memoria nativa
 
 Corrección candidata para IMG_4294: pool PBUF de ocho slots, 128 KiB a 4 MiB

@@ -23,10 +23,13 @@ class YouTubeStream final
     // Runtime error is read only after the demux failure has been published.
     const char *error() const noexcept;
     void status(char *text, std::size_t capacity) const noexcept;
+    // Numeric-only diagnostics, retained after teardown until the next open.
+    void diagnostic(unsigned row, char *text, std::size_t capacity) const noexcept;
 
   private:
     struct State;
     State *state_ = nullptr;
     char error_[128]{};
+    char retained_[3][192]{};
 };
 } // namespace tube5

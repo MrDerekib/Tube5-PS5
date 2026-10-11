@@ -3,6 +3,7 @@
 #include "youtube_formats.hpp"
 #include "verified_https.hpp"
 #include "network_source.hpp"
+#include <SDL.h>
 #include <algorithm>
 #include <atomic>
 #include <cstdio>
@@ -66,7 +67,38 @@ struct YouTubeStream::State
     bool valid_range = false;
     std::atomic<unsigned> requests{0}, failures{0};
     std::atomic<std::uint64_t> bytes{0};
+    const Uint64 opened_at = SDL_GetTicks64();
+    std::atomic<std::uint64_t> request_start{0}, request_end{0}, last_good_start{0},
+        last_good_end{0}, age_ms{0}, elapsed_ms{0}, response_bytes{0};
+    std::atomic<unsigned> good_requests{0}, seek_calls{0}, new_connections{0};
+    std::atomic<unsigned> recorded_request{0};
+    std::atomic<long> http_status{0}, certificate{-1};
+    std::atomic<int> curl_result{0}, range_result{0};
     char error[128]{};
+    void diagnostic(unsigned row, char *text, std::size_t size) const noexcept
+    {
+        if (row == 0)
+            std::snprintf(text, size, "REQ %u OK %u FAIL %u HTTP %ld CURL %d CERT %ld RANGE %d",
+                          recorded_request.load(), good_requests.load(), failures.load(),
+                          http_status.load(), curl_result.load(), certificate.load(),
+                          range_result.load());
+        else if (row == 1)
+            std::snprintf(text, size, "BYTES %llu-%llu RX %llu AGE %llu MS DT %llu MS NEWCONN %u",
+                          static_cast<unsigned long long>(request_start.load()),
+                          static_cast<unsigned long long>(request_end.load()),
+                          static_cast<unsigned long long>(response_bytes.load()),
+                          static_cast<unsigned long long>(age_ms.load()),
+                          static_cast<unsigned long long>(elapsed_ms.load()),
+                          new_connections.load());
+        else if (row == 2)
+            std::snprintf(text, size,
+                          "LAST OK %llu-%llu TOTAL RX %llu KIB SEEKS %u GET ANDROID H1.1",
+                          static_cast<unsigned long long>(last_good_start.load()),
+                          static_cast<unsigned long long>(last_good_end.load()),
+                          static_cast<unsigned long long>(bytes.load() / 1024), seek_calls.load());
+        else if (size)
+            text[0] = 0;
+    }
     ~State()
     {
         avformat_close_input(&format);
@@ -129,16 +161,39 @@ struct YouTubeStream::State
         received = 0;
         cached = 0;
         valid_range = false;
+        const auto started = SDL_GetTicks64();
+        const bool record = failures.load() == 0;
+        if (record)
+        {
+            request_start = position;
+            request_end = position + capacity - 1;
+            age_ms = started - opened_at;
+        }
         char range[64]{};
         std::snprintf(range, sizeof(range), "%llu-%llu", static_cast<unsigned long long>(position),
                       static_cast<unsigned long long>(position + capacity - 1));
         CURLcode code = curl_easy_setopt(curl, CURLOPT_RANGE, range);
         ++requests;
+        if (record)
+            recorded_request = requests.load();
         if (code == CURLE_OK)
             code = curl_easy_perform(curl);
-        long http = 0, verify = -1;
+        long http = 0, verify = -1, connections = 0;
         (void)curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http);
         (void)curl_easy_getinfo(curl, CURLINFO_SSL_VERIFYRESULT, &verify);
+        (void)curl_easy_getinfo(curl, CURLINFO_NUM_CONNECTS, &connections);
+        // Freeze the first failed request: a later retry or cancellation
+        // must not replace its HTTP 403 with a different result.
+        if (record)
+        {
+            http_status = http;
+            certificate = verify;
+            curl_result = code;
+            range_result = valid_range;
+            response_bytes = received;
+            elapsed_ms = SDL_GetTicks64() - started;
+            new_connections = connections > 0 ? static_cast<unsigned>(connections) : 0;
+        }
         if (code != CURLE_OK || http != 206 || verify || !valid_range ||
             (total && total != response_total) || received != expected_end - position + 1)
         {
@@ -153,6 +208,12 @@ struct YouTubeStream::State
         cache_start = position;
         cached = received;
         bytes += received;
+        if (record)
+        {
+            last_good_start = position;
+            last_good_end = expected_end;
+            ++good_requests;
+        }
         return 0;
     }
     static int read(void *opaque, std::uint8_t *destination, int size)
@@ -190,6 +251,7 @@ struct YouTubeStream::State
         }
         if (whence == AVSEEK_SIZE)
             return static_cast<std::int64_t>(self.total);
+        ++self.seek_calls;
         const auto mode = whence & ~AVSEEK_FORCE;
         const std::int64_t base = mode == SEEK_SET   ? 0
                                   : mode == SEEK_CUR ? self.position
@@ -205,6 +267,7 @@ Kit_Source *YouTubeStream::open(const char *url) noexcept
 {
     close();
     error_[0] = 0;
+    std::memset(retained_, 0, sizeof(retained_));
     std::array<char, 256> host{};
     if (!url || !youtube_media_host(url, host))
     {
@@ -302,8 +365,20 @@ Kit_Source *YouTubeStream::open(const char *url) noexcept
 }
 void YouTubeStream::close() noexcept
 {
+    if (state_)
+        for (unsigned row = 0; row < 3; ++row)
+            state_->diagnostic(row, retained_[row], sizeof(retained_[row]));
     delete state_;
     state_ = nullptr;
+}
+void YouTubeStream::diagnostic(unsigned row, char *text, std::size_t capacity) const noexcept
+{
+    if (!text || !capacity)
+        return;
+    if (state_)
+        state_->diagnostic(row, text, capacity);
+    else
+        std::snprintf(text, capacity, "%s", row < 3 ? retained_[row] : "");
 }
 const char *YouTubeStream::error() const noexcept
 {

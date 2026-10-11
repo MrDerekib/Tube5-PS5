@@ -13,6 +13,10 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <curl/curl.h>
+extern "C"
+{
+#include <libavformat/avformat.h>
+}
 namespace
 {
 enum class Reply
@@ -22,6 +26,7 @@ enum class Reply
     wrong_range,
     missing_range,
     http_200,
+    http_403,
     truncated,
     oversized
 };
@@ -98,10 +103,14 @@ extern "C" CURLcode __wrap_curl_easy_getinfo(CURL *, int requested, ...)
     va_start(args, requested);
     const auto info = static_cast<CURLINFO>(requested);
     auto *out = va_arg(args, long *);
-    assert(info == CURLINFO_RESPONSE_CODE || info == CURLINFO_SSL_VERIFYRESULT);
-    *out = info == CURLINFO_RESPONSE_CODE ? (reply == Reply::http_200 ? 200 : 206)
-           : reply == Reply::tls_error    ? 62
-                                          : 0;
+    assert(info == CURLINFO_RESPONSE_CODE || info == CURLINFO_SSL_VERIFYRESULT ||
+           info == CURLINFO_NUM_CONNECTS);
+    *out = info == CURLINFO_NUM_CONNECTS    ? 1
+           : info == CURLINFO_RESPONSE_CODE ? (reply == Reply::http_200   ? 200
+                                               : reply == Reply::http_403 ? 403
+                                                                          : 206)
+           : reply == Reply::tls_error      ? 62
+                                            : 0;
     va_end(args);
     return CURLE_OK;
 }
@@ -110,6 +119,8 @@ extern "C" CURLcode __wrap_curl_easy_perform(CURL *)
     ++performs;
     if (reply == Reply::tls_error)
         return CURLE_PEER_FAILED_VERIFICATION;
+    if (reply == Reply::http_403)
+        return CURLE_OK;
     unsigned long long first = 0, last = 0;
     assert(std::sscanf(range, "%llu-%llu", &first, &last) == 2);
     assert(first < media.size());
@@ -142,7 +153,7 @@ int main()
     constexpr const char *url = "https://rr1.googlevideo.com/videoplayback?fixture=1";
     for (const auto scenario :
          {Reply::valid, Reply::tls_error, Reply::wrong_range, Reply::missing_range, Reply::http_200,
-          Reply::truncated, Reply::oversized, Reply::valid})
+          Reply::http_403, Reply::truncated, Reply::oversized, Reply::valid})
     {
         reply = scenario;
         tube5::begin_network_session();
@@ -153,11 +164,58 @@ int main()
             assert(source.error()[0]);
         source.close();
         source.close();
+        char diagnostic[192]{};
+        source.diagnostic(0, diagnostic, sizeof(diagnostic));
+        if (scenario == Reply::http_403)
+        {
+            assert(std::strstr(diagnostic, "HTTP 403 CURL 0 CERT 0 RANGE 0"));
+            assert(std::strstr(diagnostic, "REQ 1 OK 0 FAIL "));
+        }
+        if (scenario == Reply::valid)
+            assert(std::strstr(diagnostic, "FAIL 0 HTTP 206"));
+        for (unsigned row = 0; row < 3; ++row)
+        {
+            source.diagnostic(row, diagnostic, sizeof(diagnostic));
+            assert(!std::strstr(diagnostic, "googlevideo"));
+            assert(!std::strstr(diagnostic, "fixture"));
+        }
+        source.diagnostic(9, diagnostic, sizeof(diagnostic));
+        assert(!*diagnostic);
     }
+    // Failure while reading an already-open source, not just startup. Keep
+    // the first 403 and the preceding good range even if FFmpeg retries.
+    reply = Reply::valid;
+    tube5::begin_network_session();
+    auto *opened = source.open(url);
+    tube5::finish_network_open();
+    assert(opened);
+    auto *io = static_cast<AVFormatContext *>(opened->format_ctx)->pb;
+    std::uint8_t sample[16]{};
+    assert(io->seek(io->opaque, 0, SEEK_SET) == 0);
+    assert(io->read_packet(io->opaque, sample, sizeof(sample)) == sizeof(sample));
+    assert(io->seek(io->opaque, 1048576, SEEK_SET) == 1048576);
+    reply = Reply::http_403;
+    assert(io->read_packet(io->opaque, sample, sizeof(sample)) < 0);
+    reply = Reply::http_200;
+    assert(io->read_packet(io->opaque, sample, sizeof(sample)) < 0);
+    source.close();
+    source.close();
+    char diagnostic[192]{};
+    source.diagnostic(0, diagnostic, sizeof(diagnostic));
+    assert(std::strstr(diagnostic, "HTTP 403 CURL 0 CERT 0 RANGE 0"));
+    source.diagnostic(1, diagnostic, sizeof(diagnostic));
+    assert(std::strstr(diagnostic, "BYTES 1048576-1572863 RX 0"));
+    assert(std::strstr(diagnostic, "NEWCONN 1"));
+    source.diagnostic(2, diagnostic, sizeof(diagnostic));
+    assert(std::strstr(diagnostic, "LAST OK 0-524287"));
+    source.diagnostic(0, nullptr, 0);
     tube5::begin_network_session();
     tube5::cancel_network_session();
     const auto before = performs;
     assert(!source.open(url));
     assert(performs == before);
     source.close();
+    source.diagnostic(0, diagnostic, sizeof(diagnostic));
+    assert(std::strstr(diagnostic, "REQ 0 OK 0 FAIL 0"));
+    assert(!std::strstr(diagnostic, "HTTP 403"));
 }
