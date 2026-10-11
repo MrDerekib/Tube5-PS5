@@ -39,10 +39,11 @@ se registra la mejora, no la desaparición absoluta de todos los destellos.
 
 DIAG38 guarda SponsorBlock ON/OFF entre sesiones y muestra durante 2,5 s un
 aviso discreto tras el salto. Si termina el vídeo, el aviso aparece en la
-biblioteca. Persistencia y avisos pendientes de prueba física.
+biblioteca. Los avisos aún no tienen confirmación física específica.
 El guardado de DIAG38 falla en consola (NO GUARDADO). DIAG39 usa el
 almacenamiento del título `/download0` y muestra operación/errno si falla;
-corrección pendiente de prueba física.
+el propietario confirma que guarda el ajuste y lo recupera tras cerrar y
+reabrir la app. Persistencia de DIAG39 validada por reporte en PS5 Fat FW 13.20.
 
 ## Prototipo 01.000.001
 

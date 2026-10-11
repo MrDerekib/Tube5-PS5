@@ -51,7 +51,10 @@ DIAG38 intentó `/data/tube5/settings.conf` y el propietario reportó NO GUARDAD
 DIAG39 emplea `/download0`, reservado por downloadDataSize, sin intentar crear
 o inspeccionar ese punto de montaje. Mantiene validación de archivo y guardado
 atómico; muestra operación y errno en caso de fallo. La corrección aún debe
-comprobarse en PS5. No se solicita elevación ni otro payload para guardar ajustes.
+comprobarse exhaustivamente en PS5. El propietario confirma que DIAG39 guarda
+el ajuste y lo aplica tras cerrar y reabrir Tube5: persistencia validada por
+reporte en PS5 Fat FW 13.20. Los avisos siguen sin confirmación específica.
+No se solicita elevación ni otro payload para guardar ajustes.
 Options en el reproductor cambia ON/OFF;
 en la biblioteca Options sigue recargando. En Ajustes, cruceta cambia ON/OFF,
 y X conserva el selector HTTP/LOCAL. ON solo actúa si hay segmentos listos.

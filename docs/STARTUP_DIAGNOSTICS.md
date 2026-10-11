@@ -31,7 +31,12 @@ La suite host completa con sanitizadores pasa; tras añadir diagnósticos de
 lectura se repite el test de preferencias, incluido LOAD_FORMAT/EINVAL.
 Build/FSELF e integridad/guard ABI correctos. SHA-256 de eboot.bin:
 `c9a8c587ce0a9af2b554788bf4f49d7fba1db5474f0aa319c5aed19fc1eaee6d`.
-Respaldo privado `.local/boot-diag-39/`. Persistencia física aún no confirmada.
+Respaldo privado `.local/boot-diag-39/`.
+
+El propietario confirma «se guarda y se aplica el preset al cerrar» tras la
+prueba de DIAG39. Se registra persistencia ON/OFF y recuperación entre sesiones
+validadas por reporte en PS5 Fat FW 13.20. No se atribuye a esta confirmación
+una prueba específica de los avisos ni de todos los casos de error de disco.
 
 ## BOOT-DIAG-38-SPONSOR-PREFS: preferencias y aviso de salto
 

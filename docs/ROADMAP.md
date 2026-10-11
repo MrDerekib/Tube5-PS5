@@ -13,7 +13,8 @@
 - [x] Implementar piloto SponsorBlock sponsor/skip, caché y ON/OFF con atribución.
 - [x] Validar el piloto DIAG36 SponsorBlock en consola por reporte del propietario.
 - [x] Implementar persistencia ON/OFF y aviso discreto de salto en DIAG38.
-- [ ] Validar persistencia y avisos de DIAG38 en consola.
+- [x] Validar persistencia ON/OFF en consola con la corrección DIAG39.
+- [ ] Confirmar los avisos de salto en consola.
 - [ ] Sustituir los recursos visuales de la plantilla por identidad de Tube5.
 - [ ] Elegir y comprobar un Title ID propio antes de publicar.
 - [ ] Completar la auditoría de licencias del reproductor, adjuntar sus textos y
