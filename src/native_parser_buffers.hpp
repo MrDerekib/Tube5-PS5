@@ -7,5 +7,8 @@ bool parser_aligned_caller(void *caller) noexcept;
 bool parser_zero_caller(void *caller) noexcept;
 void *allocate_parser_buffer(std::size_t bytes, bool zero) noexcept;
 bool reallocate_owned_parser_buffer(void *address, std::size_t bytes, void *&result) noexcept;
+// Only the pinned MOV trun index callsite can bootstrap a libc buffer into PBUF.
+bool reallocate_mov_index(void *address, unsigned *size, std::size_t needed, void *caller,
+                          void *&result) noexcept;
 void native_parser_buffer_status(char *text, std::size_t capacity) noexcept;
 } // namespace tube5

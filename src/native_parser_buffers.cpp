@@ -14,6 +14,7 @@ extern "C"
     void ff_h2645_packet_split(); // Address only; never called through this declaration.
     void __real_free(void *);
     void *__real_realloc(void *, std::size_t);
+    void *__real_av_fast_realloc(void *, unsigned *, std::size_t);
 }
 namespace
 {
@@ -68,7 +69,8 @@ bool parser_aligned_caller(void *caller) noexcept
 bool parser_zero_caller(void *caller) noexcept
 {
     return reinterpret_cast<std::uintptr_t>(caller) -
-               reinterpret_cast<std::uintptr_t>(&ff_h2645_packet_split) == 0x126;
+               reinterpret_cast<std::uintptr_t>(&ff_h2645_packet_split) ==
+           0x126;
 }
 void *allocate_parser_buffer(std::size_t bytes, bool zero) noexcept
 {
@@ -132,6 +134,33 @@ bool reallocate_owned_parser_buffer(void *address, std::size_t bytes, void *&res
             return true;
         }
     return false;
+}
+bool reallocate_mov_index(void *address, unsigned *size, std::size_t needed, void *caller,
+                          void *&result) noexcept
+{
+    // mov_read_trun is a local symbol. Anchor its pinned return address to the
+    // original public FFmpeg function; the build validates both callsites.
+    const auto anchor = reinterpret_cast<std::uintptr_t>(&__real_av_fast_realloc);
+    if (anchor - reinterpret_cast<std::uintptr_t>(caller) != 0xfcf03e || needed <= *size ||
+        needed < minimum || needed > maximum || *size > maximum)
+        return false;
+    for (const auto &slot : slots)
+        if (address && slot.address.load(std::memory_order_acquire) == address)
+            return false; // Original function + owned realloc already handle it.
+    void *staged = allocate_parser_buffer(std::max<std::size_t>(*size, minimum), false);
+    if (!staged)
+        return false;
+    if (address && *size)
+        std::memcpy(staged, address, *size);
+    // Let FFmpeg enforce its own max_alloc_size/growth and update *size.
+    // Its inline realloc recognizes the staged native pointer. Keep the libc
+    // original untouched until success, including when FFmpeg refuses growth.
+    result = __real_av_fast_realloc(staged, size, needed);
+    if (result)
+        __real_free(address);
+    else
+        (void)release_owned(staged);
+    return true;
 }
 } // namespace tube5
 extern "C" void __wrap_free(void *address)

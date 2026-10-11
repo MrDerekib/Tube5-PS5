@@ -99,10 +99,16 @@ class MediaPlayer final
             .diagnostic(row % 3, detail, sizeof(detail));
         std::snprintf(text, capacity, "%s: %s", row < 3 ? "VIDEO" : "AUDIO", detail);
     }
+    const char *failure_log_status() const noexcept
+    {
+        return failure_log_status_;
+    }
 
   private:
     static int open_source_worker(void *userdata) noexcept;
     bool complete_open(SDL_Renderer *renderer) noexcept;
+    void save_failure_report(const char *stage, double position, unsigned frames) noexcept;
+    char failure_log_status_[80]{};
     SDL_Thread *opening_thread_ = nullptr;
     std::atomic<bool> opening_done_{false};
     bool opening_cancelled_ = false;

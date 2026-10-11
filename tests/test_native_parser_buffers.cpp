@@ -9,8 +9,12 @@
 extern "C"
 {
     void __wrap_free(void *);
-    void av_fast_malloc(void *, unsigned *, std::size_t) {}
-    void ff_h2645_packet_split() {}
+    void av_fast_malloc(void *, unsigned *, std::size_t)
+    {
+    }
+    void ff_h2645_packet_split()
+    {
+    }
 }
 namespace
 {
@@ -25,6 +29,8 @@ unsigned original_frees = 0;
 int allocation_error = 0;
 int unmap_error = 0, release_error = 0;
 bool realloc_error = false;
+bool fast_limit_error = false;
+unsigned fast_calls = 0;
 void live(unsigned expected)
 {
     char status[128]{}, prefix[32]{};
@@ -32,8 +38,11 @@ void live(unsigned expected)
     std::snprintf(prefix, sizeof(prefix), "PBUF %u/8 ", expected);
     assert(std::strncmp(status, prefix, std::strlen(prefix)) == 0);
 }
+} // namespace
+extern "C" std::size_t sceKernelGetDirectMemorySize()
+{
+    return 32 * 1024 * 1024;
 }
-extern "C" std::size_t sceKernelGetDirectMemorySize() { return 32 * 1024 * 1024; }
 extern "C" int sceKernelAllocateDirectMemory(std::int64_t, std::int64_t, std::size_t bytes,
                                              std::size_t alignment, int type,
                                              std::int64_t *physical)
@@ -98,6 +107,21 @@ extern "C" void *__real_realloc(void *address, std::size_t bytes)
 {
     assert(!address);
     return realloc_error ? nullptr : std::realloc(address, bytes);
+}
+extern "C" void *__real_av_fast_realloc(void *address, unsigned *size, std::size_t needed)
+{
+    ++fast_calls;
+    if (needed <= *size)
+        return address;
+    const auto grown = needed + needed / 16 + 32;
+    void *result = nullptr;
+    if (!fast_limit_error)
+    {
+        if (!tube5::reallocate_owned_parser_buffer(address, grown, result))
+            result = std::realloc(address, grown);
+    }
+    *size = result ? static_cast<unsigned>(grown) : 0;
+    return result;
 }
 int main()
 {
@@ -181,6 +205,42 @@ int main()
     assert(!allocate_parser_buffer(128 * 1024, true));
     live(0);
     allocation_error = 0;
+    // Bootstrap only the pinned MOV index caller. Preserve libc contents,
+    // let the original growth run, and never free the original on failure.
+    const auto mov_caller = reinterpret_cast<void *>(
+        reinterpret_cast<std::uintptr_t>(&__real_av_fast_realloc) - 0xfcf03e);
+    auto *original = static_cast<unsigned char *>(std::malloc(185978));
+    assert(original);
+    std::memset(original, 0x71, 185978);
+    unsigned original_size = 185978;
+    void *index = nullptr;
+    assert(!reallocate_mov_index(original, &original_size, 187632, nullptr, index));
+    fast_limit_error = true;
+    assert(reallocate_mov_index(original, &original_size, 187632, mov_caller, index));
+    assert(!index && original_size == 0 && original[185977] == 0x71);
+    live(0);
+    fast_limit_error = false;
+    original_size = 185978;
+    assert(reallocate_mov_index(original, &original_size, 187632, mov_caller, index) && index);
+    assert(original_size == 199391 && fast_calls == 2);
+    for (unsigned i = 0; i < 185978; ++i)
+        assert(static_cast<unsigned char *>(index)[i] == 0x71);
+    live(1);
+    assert(!reallocate_mov_index(index, &original_size, 250000, mov_caller, grown));
+    grown = __real_av_fast_realloc(index, &original_size, 250000);
+    assert(grown && static_cast<unsigned char *>(grown)[185977] == 0x71);
+    __wrap_free(grown);
+    live(0);
+    unsigned empty_size = 0;
+    assert(reallocate_mov_index(nullptr, &empty_size, 150000, mov_caller, index) && index);
+    __wrap_free(index);
+    allocation_error = -12;
+    empty_size = 0;
+    assert(!reallocate_mov_index(nullptr, &empty_size, 150000, mov_caller, index));
+    allocation_error = 0;
+    assert(!reallocate_mov_index(nullptr, &empty_size, 1000, mov_caller, index));
+    assert(!reallocate_mov_index(nullptr, &empty_size, 4 * 1024 * 1024 + 1, mov_caller, index));
+    live(0);
     for (unsigned i = 0; i < 100; ++i)
     {
         auto *address = allocate_parser_buffer(299924 + i, true);

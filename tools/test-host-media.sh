@@ -141,6 +141,9 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -DTUBE5_PARSER_BUFFER_WRAP -Isrc tests/test_native_parser_buffers.cpp \
     src/native_parser_buffers.cpp src/native_framebuffer.cpp -o build/native-parser-buffers-test
 build/native-parser-buffers-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
+    -Isrc tests/test_failure_log.cpp src/failure_log.cpp -o build/failure-log-test
+build/failure-log-test
 python3 -m unittest discover -s tests -p test_parser_wrap.py -v
 python3 -m unittest discover -s tests -p test_refstruct_wrap.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
@@ -162,7 +165,7 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
 build/audio-reader-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -DTUBE5_AUDIO_WRAP -DTUBE5_HOST -DTUBE5_DIAGNOSTICS -DTUBE5_PIPELINE_WRAP -DTUBE5_CONVERSION_WRAP -DTUBE5_NETWORK_WRAP -Isrc -I"$source_root/include" "${cflags[@]}" "${curl_cflags[@]}" tests/media_smoke.cpp src/audio_reader.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
-    src/youtube_probe.cpp "${probe_sources[@]}" "${player_sources[@]}" src/youtube_formats.cpp src/youtube_stream.cpp src/verified_https.cpp src/sponsor_api.cpp src/lan_catalog.cpp build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "${curl_libs[@]}" "$native_network_wraps" "$player_clock_wraps" \
+    src/failure_log.cpp src/youtube_probe.cpp "${probe_sources[@]}" "${player_sources[@]}" src/youtube_formats.cpp src/youtube_stream.cpp src/verified_https.cpp src/sponsor_api.cpp src/lan_catalog.cpp build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "${curl_libs[@]}" "$native_network_wraps" "$player_clock_wraps" \
     -Wl,--wrap=Kit_GetAudioDecoderData,--wrap=av_read_frame,--wrap=avcodec_send_packet,--wrap=avcodec_receive_frame,--wrap=avformat_seek_file,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat,--wrap=avformat_open_input,--wrap=avformat_find_stream_info,--wrap=_ZN5tube522network_playback_errorEv,--wrap=_ZN5tube520memory_out_of_memoryEv -o build/media-smoke
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/media-smoke
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/media-smoke assets/test-clip.mp4 --sponsor-test
@@ -170,5 +173,5 @@ python3 -m unittest discover -s tests -p test_http_test_server.py -v
 python3 -m unittest discover -s tests -p test_youtube_prepare.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_AUDIO_WRAP -DTUBE5_HOST -DTUBE5_OFFSCREEN -DTUBE5_CONVERSION_WRAP -DTUBE5_NETWORK_WRAP -DTUBE5_SEEK_WRAP -ffunction-sections -fdata-sections \
     -Isrc -I"$source_root/include" "${cflags[@]}" "${curl_cflags[@]}" src/main.cpp src/lan_catalog.cpp src/youtube_search.cpp src/youtube_probe.cpp src/youtube_formats.cpp src/youtube_stream.cpp src/verified_https.cpp src/sponsor_api.cpp src/audio_reader.cpp src/demo_renderer.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/native_sdl.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
-    "${probe_sources[@]}" "${player_sources[@]}" build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "${curl_libs[@]}" "$native_network_wraps" "$player_clock_wraps" -Wl,--gc-sections,--wrap=Kit_GetAudioDecoderData,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat,--wrap=avformat_open_input,--wrap=avformat_find_stream_info,--wrap=av_read_frame,--wrap=avcodec_receive_frame,--wrap=avformat_seek_file -o build/tube5-host
+    src/failure_log.cpp "${probe_sources[@]}" "${player_sources[@]}" build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "${curl_libs[@]}" "$native_network_wraps" "$player_clock_wraps" -Wl,--gc-sections,--wrap=Kit_GetAudioDecoderData,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat,--wrap=avformat_open_input,--wrap=avformat_find_stream_info,--wrap=av_read_frame,--wrap=avcodec_receive_frame,--wrap=avformat_seek_file -o build/tube5-host
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy TUBE5_PREVIEW=build/ui-preview.bmp build/tube5-host

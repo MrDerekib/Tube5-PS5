@@ -1,5 +1,61 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-52-MOVINDEX: índice fragmentado nativo y log del último fallo
+
+IMG_4263, DIAG51, 1080p continuo aproximadamente cinco minutos: MEMFAIL 1
+REALLOC 199391B, FIRSTFAIL REL 0X118B91B; FFALLOC FASTREALLOC NEED 187632
+OLD 185978 REL 0X1BC872. El ELF de DIAG51 resuelve el último retorno a
+mov_read_trun+0x3b2, primer av_fast_realloc de la función: crecimiento de
+sti->index_entries (AVIndexEntry de 24 bytes en ese binario). El segundo
+callsite corresponde a ctts, no al fallo capturado. READ 21193/21194 ERR 0,
+ALLOC FAIL STAGE PLAYING AUDIO 1 VIDEO 1; pools nativos libres y FAIL 0.
+El error es ENOMEM gestionado, no 403 ni evidencia por sí sola de una fuga.
+
+DIAG52 migra solo ese primer callsite cuando necesita crecer entre 128 KiB y
+4 MiB, dentro del pool PBUF existente (ocho slots, máximo 32 MiB). No toca
+ctts, índices de otros demuxers ni realloc generales. Identifica el retorno
+por distancia al av_fast_realloc original; el build verifica las dos distancias
+MOV del FFmpeg fijado y las rutas de realloc/free antes de firmar.
+
+Para una tabla libc, copia la capacidad anterior a una reserva nativa temporal
+y llama al av_fast_realloc original sobre ella. Conserva así los límites y
+crecimiento de FFmpeg. Solo libera la tabla libc si el original devuelve éxito;
+si falla, libera la temporal y conserva la tabla original. Las tablas ya nativas
+usan la ruta realloc propia existente. Sin slot/mapeo disponible o fuera de los
+límites, conserva la ruta anterior; no promete eliminar cualquier ENOMEM ni el
+403. Sigue siendo experimental y requiere validación PS5.
+
+En errores gestionados de apertura/player/lectura, tras unir workers y liberar
+fuentes, escribe una instantánea de hasta 4096 bytes en
+`/download0/tube5-debug.log`. Sustituye únicamente el último informe mediante
+archivo temporal, fsync y rename; no genera un log ilimitado. Guarda build,
+posición/frames antes del cierre, etapa, seis filas HTTPS, memoria, origen,
+pipeline y pools. Usa buffers de pila y escritura de descriptor, no fopen ni
+reservas desde el allocator. No guarda URL, firma, cpn, token ni error externo
+de FFmpeg que pudiera contenerlos. En el panel: LOG GUARDADO o ERR de escritura.
+No captura cierres abruptos del proceso que no pasen por el manejador de error.
+
+La ruta /download0 es virtual dentro de Tube5 (datos persistentes del título);
+el equivalente visible por FTP debe localizarse en la consola. FTP permitirá
+recoger informes y desplegar builds con el player cerrado, pero no manejar el
+mando. Pendiente conocer endpoint/puerto y validar escritura/lectura en hardware.
+En host el informe va a .local/tube5-debug.log, siempre excluido de Git.
+
+Validación: suite host ASan/UBSan/LSan; migración con conservación de todos los
+bytes, fallo del original preservando la tabla libc, crecimiento nativo posterior,
+NULL inicial, rechazo de otro caller, límites/fallo de reserva y cien ciclos.
+Guard positivo y negativo de offsets MOV. Log: reemplazo atómico, límites,
+errores y rechazo de symlink temporal, saneado de etiqueta. Build/FSELF y ABI
+parser/refstruct válidos. ELF exacto respaldado en .local/boot-diag-52.
+SHA-256 de eboot.bin:
+`1f1c2c95833e094ca9adcff3af5ec0a3b14dfe6dc5ca44dc86c97e468d35bee7`.
+
+Prueba PS5 pendiente: cerrar Tube5, instalar BOOT-DIAG-52-MOVINDEX, mismo vídeo
+1080p SB OFF, reproducción continua hasta diez minutos o final. Después seeks,
+salida y reapertura. Si vuelve al menú con error, no reintentar antes de recoger
+el informe. Si el log no se pudo guardar, conservar captura del panel como
+alternativa. No hace falta otra transcripción manual si el acceso FTP funciona.
+
 ## BOOT-DIAG-51-FASTREALLOC: llamador del crecimiento que falla
 
 IMG_4262, DIAG50: reproducción continua 1080p falla aproximadamente al minuto

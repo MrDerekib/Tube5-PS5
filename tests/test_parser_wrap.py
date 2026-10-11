@@ -29,6 +29,20 @@ LISTING = """0000000000001000 <av_fast_malloc>:
 0000000000003300 <av_realloc>:
  3300: jmp 9000 <__wrap_realloc>
 
+0000000001000000 <av_fast_realloc>:
+ 1000065: callq 9000 <__wrap_realloc>
+ 100006b: retq
+
+0000000000030000 <mov_read_trun>:
+ 30fbc: callq 9500 <__wrap_av_fast_realloc>
+ 30fc2: testq %rax, %rax
+ 30ff7: callq 9500 <__wrap_av_fast_realloc>
+ 30ffd: testq %rax, %rax
+
+0000000000009500 <__wrap_av_fast_realloc>:
+ 9510: callq 1000000 <av_fast_realloc>
+ 9516: retq
+
 """
 
 
@@ -37,7 +51,8 @@ class ParserWrapTests(unittest.TestCase):
         validate(LISTING)
 
     def test_changed_callsites_fail_closed(self):
-        for old, new in (("10fc:", "10fd:"), ("1142:", "1143:"), ("2126:", "2127:")):
+        for old, new in (("10fc:", "10fd:"), ("1142:", "1143:"), ("2126:", "2127:"),
+                         ("30fc2:", "30fc3:"), ("30ffd:", "30ffe:")):
             with self.subTest(site=old), self.assertRaises(ValueError):
                 validate(LISTING.replace(old, new))
 

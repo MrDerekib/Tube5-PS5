@@ -8,6 +8,11 @@
 #include "memory_diagnostics.hpp"
 #include "network_source.hpp"
 #include "shared_playback_clock.hpp"
+#include "failure_log.hpp"
+#include "native_parser_buffers.hpp"
+#include "native_refstruct_buffers.hpp"
+#include "native_surface_buffers.hpp"
+#include "native_media_buffers.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -23,8 +28,80 @@ bool MediaPlayer::fail(const char *stage, const char *detail) noexcept
     if (memory_out_of_memory())
         memory_blocked_ = true;
     std::snprintf(error_, sizeof(error_), "%s: %s", stage, detail ? detail : "unknown error");
+    const double failure_position = position();
+    const unsigned failure_frames = frames_uploaded_;
     close();
+    save_failure_report(stage, failure_position, failure_frames);
     return false;
+}
+void MediaPlayer::save_failure_report(const char *stage, double position, unsigned frames) noexcept
+{
+#ifdef TUBE5_DIAGNOSTICS
+    char report[4096]{}, line[192]{};
+    std::size_t used = 0;
+    const auto append = [&](const char *text)
+    {
+        const int length = std::snprintf(report + used, sizeof(report) - used, "%s\n", text);
+        if (length > 0)
+            used += std::min<std::size_t>(length, sizeof(report) - used - 1);
+    };
+    append("TUBE5 FAILURE SNAPSHOT V1 - NUMERIC DIAGNOSTICS ONLY");
+    std::snprintf(line, sizeof(line), "BUILD %s", failure_log_build_label());
+    append(line);
+    std::snprintf(line, sizeof(line), "POSITION MS %.0f FRAMES %u", position * 1000.0, frames);
+    append(line);
+    std::snprintf(line, sizeof(line), "STAGE %s VIDEO %dx%d", stage, width_, height_);
+    append(line);
+    for (unsigned row = 0; row < 6; ++row)
+    {
+        youtube_diagnostic(row, line, sizeof(line));
+        append(line);
+    }
+    memory_diagnostic_status(line, sizeof(line));
+    append(line);
+    memory_failure_stage_status(line, sizeof(line));
+    append(line);
+    flexible_memory_status(line, sizeof(line));
+    append(line);
+    for (unsigned row = 0; row < 2; ++row)
+    {
+        memory_allocation_origin_status(row, line, sizeof(line));
+        append(line);
+    }
+    for (unsigned row = 0; row < 3; ++row)
+    {
+        pipeline_diagnostic_status(row, line, sizeof(line));
+        append(line);
+    }
+#ifdef TUBE5_PARSER_BUFFER_WRAP
+    native_parser_buffer_status(line, sizeof(line));
+    append(line);
+#endif
+#ifdef TUBE5_REFSTRUCT_BUFFER_WRAP
+    native_refstruct_buffer_status(line, sizeof(line));
+    append(line);
+#endif
+#ifdef TUBE5_SURFACE_BUFFER_WRAP
+    native_surface_buffer_status(line, sizeof(line));
+    append(line);
+#endif
+#ifdef TUBE5_MEDIA_BUFFER_WRAP
+    native_media_buffer_status(line, sizeof(line));
+    append(line);
+#endif
+#ifdef TUBE5_HOST
+    const char *path = ".local/tube5-debug.log";
+#else
+    const char *path = "/download0/tube5-debug.log";
+#endif
+    const int result = write_failure_log(path, report, used);
+    std::snprintf(failure_log_status_, sizeof(failure_log_status_),
+                  result ? "LOG NO GUARDADO ERR %d" : "LOG GUARDADO TUBE5-DEBUG.LOG", result);
+#else
+    (void)stage;
+    (void)position;
+    (void)frames;
+#endif
 }
 
 bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
@@ -33,6 +110,7 @@ bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
         return false;
     close();
     error_[0] = '\0';
+    failure_log_status_[0] = 0;
     begin_network_session();
     youtube_ = path && std::strncmp(path, "https://", 8) == 0;
     network_ = youtube_ || (path && std::strncmp(path, "http://", 7) == 0);
@@ -77,6 +155,7 @@ bool MediaPlayer::begin_open(const char *path, const char *audio_path) noexcept
         return false;
     close();
     error_[0] = '\0';
+    failure_log_status_[0] = 0;
     if (!path || std::strlen(path) >= sizeof(opening_path_))
         return fail("SOURCE", "invalid or oversized URL");
     std::snprintf(opening_path_, sizeof(opening_path_), "%s", path);
@@ -122,6 +201,7 @@ MediaPlayer::OpenResult MediaPlayer::poll_open(SDL_Renderer *renderer) noexcept
     if (!source_ || (opening_audio_path_[0] && !audio_source_))
     {
         close();
+        save_failure_report("SOURCE_OPEN", 0.0, 0);
         return OpenResult::failed;
     }
     return complete_open(renderer) ? OpenResult::ready : OpenResult::failed;

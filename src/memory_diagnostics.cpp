@@ -211,7 +211,11 @@ extern "C" void *__real_av_fast_realloc(void *, unsigned *, std::size_t);
 extern "C" void *__wrap_av_fast_realloc(void *address, unsigned *size, std::size_t needed)
 {
     const unsigned previous = *size;
-    void *result = __real_av_fast_realloc(address, size, needed);
+    void *result = nullptr;
+#ifdef TUBE5_PARSER_BUFFER_WRAP
+    if (!tube5::reallocate_mov_index(address, size, needed, __builtin_return_address(0), result))
+#endif
+        result = __real_av_fast_realloc(address, size, needed);
     if (!result && needed)
         record_origin(true, 6, needed, previous, __builtin_return_address(0));
     return result;

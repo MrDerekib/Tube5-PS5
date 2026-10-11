@@ -35,6 +35,14 @@ def validate(listing):
     offsets = [address - anchor for address in returns(listing, "ff_h2645_packet_split", "__wrap_av_mallocz")]
     if offsets != [0x126]:
         raise ValueError("H.264 RBSP zero allocation changed")
+    anchor, _ = body(listing, "av_fast_realloc")
+    offsets = [anchor - address for address in returns(listing, "mov_read_trun", "__wrap_av_fast_realloc")]
+    if offsets != [0xfcf03e, 0xfcf003]:
+        raise ValueError("MOV index growth callsites changed")
+    if "<__wrap_realloc>" not in body(listing, "av_fast_realloc")[1]:
+        raise ValueError("MOV native growth bypassed owned realloc")
+    if "<av_fast_realloc>" not in body(listing, "__wrap_av_fast_realloc")[1]:
+        raise ValueError("MOV growth no longer delegates to FFmpeg")
     for name in ("av_free", "av_freep"):
         if "<__wrap_free>" not in body(listing, name)[1]:
             raise ValueError(f"{name} bypasses owned-pointer cleanup")
@@ -47,7 +55,7 @@ def validate(listing):
 if __name__ == "__main__":
     try:
         validate(subprocess.check_output([
-            "llvm-objdump", "--disassemble-symbols=av_fast_malloc,fast_malloc,ff_h2645_packet_split,av_free,av_freep,av_buffer_default_free,av_realloc",
+            "llvm-objdump", "--disassemble-symbols=av_fast_malloc,fast_malloc,ff_h2645_packet_split,av_free,av_freep,av_buffer_default_free,av_realloc,av_fast_realloc,mov_read_trun,__wrap_av_fast_realloc",
             sys.argv[1]], text=True))
         print("Pinned parser allocation and release routes validated.")
     except (ValueError, IndexError, subprocess.SubprocessError) as error:

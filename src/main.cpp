@@ -16,6 +16,7 @@
 #include "seek_selection.hpp"
 #include "lan_catalog.hpp"
 #include "preferences.hpp"
+#include "failure_log.hpp"
 #include "sponsor_notice.hpp"
 #include "youtube_search.hpp"
 #include "youtube_probe.hpp"
@@ -511,6 +512,7 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             // Keep the allocation and demux failure readable after teardown.
             // Retrying a fatal read ENOMEM no longer resets these counters.
             char failure[192]{};
+            canvas.text(800, 185, media.failure_log_status(), 2, Color::yellow);
             // close() clears youtube_direct(); the numeric snapshots survive.
             if (std::strstr(error, "YT HTTPS"))
             {
@@ -606,6 +608,7 @@ int main()
     for (char &character : build_label)
         if (character >= 'a' && character <= 'z')
             character = static_cast<char>(character - 'a' + 'A');
+    tube5::failure_log_build_label(build_label.data());
 #ifdef TUBE5_HOST
     ps5::demo::read_asset_text(".local/network-test-url.txt", std::span{network_url}, "");
     ps5::demo::read_asset_text(".local/bridge/console-token", std::span{console_token}, "");
