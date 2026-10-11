@@ -226,6 +226,8 @@ void notify(std::string_view message) noexcept
 
 [[nodiscard]] constexpr std::span<const std::uint8_t, 7> glyph_rows(char character) noexcept
 {
+    if (character >= 'a' && character <= 'z')
+        character = static_cast<char>(character - 'a' + 'A');
     for (const auto &glyph : glyphs)
     {
         if (glyph.character == character)

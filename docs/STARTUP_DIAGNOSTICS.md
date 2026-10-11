@@ -1,11 +1,23 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-35-LIBRARY: textos del catálogo
+
+DIAG34 funciona en consola según el propietario. El título mixto pierde sus
+minúsculas porque la fuente solo contiene glifos mayúsculos. DIAG35 mapea
+ASCII a-z a sus glifos A-Z; una prueba de píxeles compara el título mixto
+completo con su equivalente mayúsculo. El servidor declara 360p para el clip
+sintético (verificado con ffprobe) y la descripción ya no muestra «ID LOCAL».
+Una altura desconocida se describe como tal, no como 0p. No cambia el player.
+Build nativa con integridad y guard ABI correctos; validación visual pendiente.
+SHA-256: `ed7ad45721c3b32156aa1b8e4c034af4697350c39ac80f5089160f8ea2a26221`.
+
 ## BOOT-DIAG-34-LIBRARY: catálogo LAN acotado
 
 Añade una lista de vídeos servidos por el PC sin cambiar los allocators ni el
 reproductor de DIAG33. Carga de catálogo en hilo, ocho entradas/4096 bytes,
 cancelación y plazo de ocho segundos. Mantiene HTTP con IPv4 numérica y las
-rutas de vídeo dentro del mismo servidor. La validación física está pendiente.
+rutas de vídeo dentro del mismo servidor. El propietario confirma que funciona;
+los dos problemas de texto se corrigen en DIAG35.
 
 La build nativa compila, pasa el guard de ABI RefStruct y la comprobación de
 integridad del paquete. El parser evita `string_view::substr`, cuya ruta de

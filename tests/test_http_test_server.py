@@ -36,6 +36,7 @@ class CatalogTests(unittest.TestCase):
     def test_catalog_client_and_allowed_media(self):
         clip = Path("assets/test-clip.mp4")
         entries = http.library_entries(clip, clip)
+        self.assertEqual(entries[1]["height"], 360)
         handler = http.handler_for(clip, library=entries)
         self.run_client(handler)
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)

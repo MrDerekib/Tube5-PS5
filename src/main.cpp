@@ -122,9 +122,14 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             {
                 const auto &entry = data.entries[library_selected];
                 char detail[96]{};
-                std::snprintf(detail, sizeof(detail), "%u:%02u  ALTURA %uP  ID %s",
-                              entry.seconds / 60, entry.seconds % 60, entry.height,
-                              entry.youtube_id[0] ? entry.youtube_id.data() : "LOCAL");
+                char quality[32]{};
+                if (entry.height)
+                    std::snprintf(quality, sizeof(quality), "%uP", entry.height);
+                else
+                    std::snprintf(quality, sizeof(quality), "RESOLUCION DESCONOCIDA");
+                std::snprintf(detail, sizeof(detail), "%u:%02u  %s  %s",
+                              entry.seconds / 60, entry.seconds % 60, quality,
+                              entry.youtube_id[0] ? "ORIGEN YOUTUBE" : "CLIP DE PRUEBA");
                 canvas.text(120, 820, detail, 2, muted);
             }
         }

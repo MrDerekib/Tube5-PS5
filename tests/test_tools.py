@@ -232,7 +232,7 @@ class ToolTests(unittest.TestCase):
         build = (ROOT / "tools/build.sh").read_text(encoding="utf-8")
         self.assertIn('> "$app/build-label.txt"', build)
         self.assertIn("{1,40}$", build)
-        self.assertLess(build.index("BUILD_LABEL must be"), build.index("ninja_run\n\napp="))
+        self.assertLess(build.index("BUILD_LABEL must be"), build.index("\nninja_run\n"))
         self.assertIn('"/app0/build-label.txt"', (ROOT / "src/main.cpp").read_text())
 
     def test_automation_builds_the_zip_only(self):

@@ -9,15 +9,17 @@ SponsorBlock.
 > Estado actual: vídeo local y HTTP LAN, con diez minutos continuos de 1080p
 > y controles validados en PS5 Fat FW 13.20. El PC prepara y sirve el contenido
 > de YouTube; no hay streaming directo, bloqueo de anuncios ni SponsorBlock.
-> La biblioteca LAN de DIAG34 está pendiente de prueba en consola. 4K no validado.
+> La biblioteca LAN de DIAG34 funciona en consola. 4K no validado.
 
-## Prueba actual: BOOT-DIAG-34-LIBRARY
+## Prueba actual: BOOT-DIAG-35-LIBRARY
 
 La tarjeta **Biblioteca LAN** carga una lista acotada desde el PC. Cruceta:
 seleccionar; X: reproducir; Círculo: volver a la lista; Options: recargarla.
 Durante el vídeo, X pausa, izquierda/derecha saltan cinco segundos y Triángulo
 abre el selector de posición (X confirma; Círculo cancela).
 Se reutilizan los dos clips existentes, sin nuevas descargas.
+DIAG35 corrige las minúsculas invisibles en la fuente y muestra 360p para el
+clip sintético, sin etiquetarlo como un supuesto ID de vídeo.
 Consultar [el piloto LAN](docs/YOUTUBE_TEST.md) para iniciar el servidor.
 Las secciones siguientes conservan el historial del prototipo.
 

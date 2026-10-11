@@ -26,7 +26,7 @@ def library_entries(clip, local):
     if height not in (360, 720, 1080):
         height = 0
     return [dict(id="network-test", title=title, youtube=identifier, seconds=seconds, height=height, path=clip),
-            dict(id="local-test", title="CLIP SINTETICO - 20 SEG", youtube="-", seconds=20, height=0, path=local)]
+            dict(id="local-test", title="CLIP SINTETICO - 20 SEG", youtube="-", seconds=20, height=360, path=local)]
 
 
 def byte_range(header, size):

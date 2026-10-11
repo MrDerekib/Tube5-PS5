@@ -19,7 +19,7 @@ DIAG26; LOCAL sigue disponible en Ajustes.
 
 ## Biblioteca LAN: DIAG34
 
-Build `BOOT-DIAG-34-LIBRARY`, pendiente de validación física. Conserva el
+Build `BOOT-DIAG-34-LIBRARY`, funcional en consola según el propietario. Conserva el
 reproductor validado y añade una lista del PC, no búsqueda directa en YouTube.
 El catálogo admite hasta ocho entradas y 4096 bytes; solo crea rutas de medios
 en el mismo servidor HTTP con IPv4 numérica. La carga se hace en un hilo,
@@ -38,6 +38,15 @@ Con Tube5 cerrada, copiar `dist/PPSA99999/` y comprobar la etiqueta DIAG34.
 Entrar en Biblioteca LAN, seleccionar ambos clips y probar apertura, pausa,
 selector de posición y regreso a la lista con Círculo. Options recarga la lista.
 Comprobar después que se puede volver al menú y abrir de nuevo la biblioteca.
+
+El propietario confirma que la biblioteca funciona, pero el título mixto
+mostraba solo las mayúsculas: la fuente no tenía glifos para minúsculas. DIAG35
+las dibuja con los glifos mayúsculos, sin modificar el ID ni los metadatos.
+`ffprobe` verifica 360p en el clip sintético y el servidor corrige su altura.
+La descripción usa «CLIP DE PRUEBA» y omite el falso «ID LOCAL»; una altura
+ausente se muestra como resolución desconocida, nunca como 0p.
+Copiar la build `BOOT-DIAG-35-LIBRARY` y comprobar ambos textos. La corrección
+visual de DIAG35 queda pendiente de confirmación en consola.
 
 ## Pruebas de resolución: DIAG26/DIAG27/DIAG28
 
