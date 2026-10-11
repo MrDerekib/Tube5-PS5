@@ -37,7 +37,8 @@ cumplimiento del objetivo final.
 - [x] Añadir por URL una variante en caché y validar refresco/reproducción en PS5.
 - [x] Validar adquisición y publicación desde una URL nueva sin caché (360p).
 - [x] Implementar búsqueda con mando y preparación mediante el puente temporal (DIAG40).
-- [ ] Validar búsqueda, selección y preparación de DIAG40 en consola.
+- [x] Confirmar búsqueda, selección y creación de una entrada desde PS5 (DIAG40).
+- [ ] Validar reproducción del nuevo resultado tras corregir el fallo RefStruct (DIAG41).
 - [ ] Evaluar 4K nativo: decodificación acelerada, buffers y salida VideoOut;
   realizar después una prueba corta. No hay compatibilidad 4K confirmada.
 - [ ] Elegir e integrar el proveedor de catálogo y reproducción de YouTube.

@@ -24,7 +24,9 @@ Triángulo desde resultados vuelve al teclado. Círculo desde resultados vuelve
 al teclado; desde teclado/espera vuelve a la biblioteca. Cancelar la espera
 en consola **no cancela** una preparación ya aceptada por el PC.
 Probar además búsqueda sin resultados, borrar texto y salir mientras busca.
-La validación física de DIAG40 en PS5 está pendiente.
+El propietario confirma búsqueda/preparación en PS5 con DIAG40; un resultado
+nuevo falla con ENOMEM al reproducir. DIAG41 prepara la corrección de memoria;
+la reproducción de esa entrada sigue pendiente de validar.
 
 ## Servidor de desarrollo
 

@@ -1,5 +1,41 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-41-REFSTRUCT-SMALL: reservas RefStruct pequeñas
+
+El propietario confirma búsqueda y preparación desde el mando en DIAG40,
+pero el vídeo nuevo `9Tqj0-QopBo` falla al reproducir. IMG_4290.HEIC muestra
+`MEMORY: ENOMEM`, `MEMFAIL 12 ALIGN 38368B ERR 12`, `READ 28/29 ERR -12`,
+`FMEM BEFORE OPEN 962 MIB`, `RBUF ALLOC 0 FAIL 0`, `DBUF ALLOC 8 FAIL 0`,
+`PLAYING AUDIO 0 VIDEO 0`, `FIRSTFAIL ALIGN 59328B A64 REL 0X118CD01` y
+`FFALLOC MALLOC 59328B A0 REL 0X97DDF9`. El mensaje se muestra en biblioteca;
+la foto no demuestra un crash del proceso. La lectura ampliada confirma 59.328 B,
+no 593.288 B (primera interpretación visual corregida).
+
+El ELF exacto de DIAG40 resuelve FIRSTFAIL a av_malloc+0x30 y FFALLOC a
+ff_refstruct_pool_get+0x98, retorno relativo 0x99. El callsite ya está cubierto
+por nuestro adaptador, pero el tamaño queda por debajo de su mínimo 128 KiB
+y usa el heap original. RBUF en cero es consistente con esa exclusión. Esto
+identifica la reserva rechazada, no la causa completa del agotamiento del heap.
+
+DIAG41 baja únicamente el mínimo RefStruct a 32 KiB. Conserva el caller
+exacto comprobado por el guard ABI, 32 slots, máximo 8 MiB por slot, fallback y
+liberación/cuarentena. No amplía el presupuesto, cambia libc globalmente ni
+recodifica el vídeo. Tests nuevos cubren reservas de 59.328, 38.368 y 32.768 B
+en memoria directa simulada y su liberación sin pasar por el allocator original.
+
+El archivo de 37:02 es H.264 Main 640x360/YUV420/30 fps, AAC-LC estéreo/44,1 kHz,
+82.026.075 B. Su smoke HTTP en PC pasa apertura, reproducción breve, pausa,
+seeks, EOF por seek, reapertura y limpieza; no valida 37 minutos continuos ni
+el allocator de PS5. Se conserva ese mismo archivo/entrada para la siguiente
+prueba, sin descargar variantes. El idioma de los títulos queda pendiente.
+
+Build/FSELF y guard ABI correctos. SHA-256 de eboot.bin:
+`9b402909daafea67cfd4b7e4e2ea6b11984eec2e84f69a0975a536b5861c8eac`.
+Prueba física pendiente: cerrar completamente Tube5, copiar carpeta DIAG41,
+abrir directamente la entrada existente y observar RBUF/MEMFAIL. Si falla,
+capturar de nuevo los primeros fallos, sin reintentar en la misma sesión.
+
+
 ## BOOT-DIAG-40-SEARCH: búsqueda con mando sobre el puente temporal
 
 Añade teclado propio, hasta ocho resultados y preparación desde la consola.

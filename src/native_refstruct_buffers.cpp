@@ -17,7 +17,10 @@ namespace
 // different callsite/free path. No TLS, stack walking or global libc allocator.
 constexpr std::uintptr_t refstruct_return_offset = 0x99;
 constexpr unsigned slot_count = 32;
-constexpr std::size_t minimum = 128 * 1024, maximum = 8 * 1024 * 1024;
+// Some valid 360p H.264 streams need ~59 KiB RefStruct buffers. Keeping
+// these on the constrained libc heap can fail before the first output frame.
+// Still restricted to the pinned pool callsite, with the same slots/cap.
+constexpr std::size_t minimum = 32 * 1024, maximum = 8 * 1024 * 1024;
 struct Slot
 {
     std::atomic<bool> claimed{false};

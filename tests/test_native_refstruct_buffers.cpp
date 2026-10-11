@@ -116,6 +116,16 @@ int main()
     __wrap_av_free(buffer);
     expect_live(0);
     assert(original_frees == 0);
+    for (const std::size_t bytes : {std::size_t{59328}, std::size_t{38368}, std::size_t{32768}})
+    {
+        buffer = tube5::allocate_refstruct_buffer(bytes, caller());
+        assert(buffer && originals == 0);
+        expect_live(1);
+        std::memset(buffer, 0x5a, bytes);
+        __wrap_av_free(buffer);
+        expect_live(0);
+        assert(original_frees == 0);
+    }
     buffer = tube5::allocate_refstruct_buffer(5234088, caller(0x98));
     assert(buffer && originals == 1);
     __wrap_av_free(buffer);

@@ -21,12 +21,14 @@ final. La app final no requerirá una companion app en el PC.
 > Biblioteca LAN y corrección de títulos de DIAG35 validadas en consola.
 > 4K no validado.
 
-## Prueba actual: BOOT-DIAG-40-SEARCH
+## Prueba actual: BOOT-DIAG-41-REFSTRUCT-SMALL
 
 DIAG40 añade teclado propio y búsqueda con el mando desde Biblioteca LAN
 (Triángulo). Permite seleccionar un resultado, prepararlo mediante el puente
-temporal y volver a la biblioteca con el vídeo seleccionado. Pruebas host y
-búsqueda real comprobadas; validación en PS5 pendiente. Ver [controles y prueba](docs/YOUTUBE_SEARCH.md).
+temporal y volver a la biblioteca con el vídeo seleccionado. El propietario
+confirma búsqueda/preparación en PS5; un vídeo nuevo falla con ENOMEM al abrirlo.
+DIAG41 cubre reservas RefStruct de 32–128 KiB antes excluidas del pool nativo;
+corrección pendiente de validar en consola. Ver [controles y prueba](docs/YOUTUBE_SEARCH.md).
 Esta build local contiene una clave de emparejamiento: no compartir su carpeta
 ni ZIP públicamente. El repositorio público no contiene esa clave.
 
