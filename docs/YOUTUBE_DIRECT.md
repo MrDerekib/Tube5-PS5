@@ -25,7 +25,9 @@ apertura/probing acotados a 8 s y cada petición a 5 s, sin reconexión automát
 Host real: imagen, diez segundos, pausa, seeks, EOF por seek y reapertura pasan;
 cuatro rangos, cero fallos, 1644 KiB transferidos. Tests negativos offline y
 sanitizadores pasan; no prueban sockets/memoria/sonido de la PS5. Build nativa
-e integridad/guard ABI válidos. Reproducción física DIAG44 pendiente.
+e integridad/guard ABI válidos. El propietario valida DIAG44 en PS5 Fat FW 13.20
+(2026-10-11): MP4 360p directo, audio, pausa, seeks, salida y reapertura correctos.
+Reproducción prolongada completa y expiración/reconexión todavía pendientes.
 
 Esta primera ruta usa un solo vídeo público fijo y MP4 AVC/AAC combinado <=360p.
 SponsorBlock todavía no se consulta desde consola (aviso explícito en player);

@@ -36,9 +36,11 @@ el piloto LAN anterior no cambia. Ni publicidad ausente, 4K, formatos separados,
 autenticación ni hardware decoding quedan validados por este cambio.
 Build/FSELF y guard ABI correctos. SHA-256 de eboot.bin:
 `fd223fc5ba98ef5cef56f039abda596c329ce985be5ad1eb9f44798516297056`.
-Prueba física pendiente: nanoDNS activo, copiar carpeta con Tube5 cerrada,
-Ajustes → Triángulo → X → esperar MP4 SI → X. Probar primero 20–30 s, audio,
-pausa, +/-5 s y salir/reabrir. No es necesario ver el vídeo completo todavía.
+Validación física por reporte del propietario (2026-10-11): reproduce YouTube
+directamente en MP4 360p y confirma audio, pausa, avance/retroceso, salida y
+reapertura correctos. No confirma reproducción completa prolongada ni
+expiración/reconexión. Ruta: nanoDNS activo, Ajustes → Triángulo → X → esperar
+MP4 SI → X.
 
 ## BOOT-DIAG-43-YOUTUBE-FORMATS: formatos y primeros bytes del CDN
 

@@ -18,7 +18,7 @@ Validaciones de autonomía necesarias antes del producto final, no prerrequisito
 que bloqueen ahora el desarrollo sobre el puente:
 
 - [x] Probar DNS/HTTPS desde la app nativa manteniendo las protecciones de la consola (DIAG42 con nanoDNS).
-- [ ] Evaluar acceso a metadatos y resolución de medios YouTube desde PS5.
+- [x] Validar acceso inicial a metadatos y resolución de MP4 360p desde PS5.
 - [ ] Reproducir un vídeo YouTube sin conversión ni servicio del PC; verificar
   formatos, audio/vídeo, seek y límites de memoria sobre la fuente real.
 - [ ] Consultar SponsorBlock desde consola sin la caché obligatoria del PC.
@@ -47,7 +47,9 @@ Conservarlo como banco de pruebas, sin hacerlo una dependencia del producto.
    del enlace, reconexión y memoria, sin descargar/transcodificar en el PC.
    DIAG44 integra la fuente MP4 360p con curl/AVIO, TLS verificado y caché
    acotada. Host: imagen, pausa, seeks, EOF por seek y reapertura correctos;
-   reproducción física pendiente, sin validar todavía expiración/reconexión.
+   PS5: propietario confirma MP4 360p, audio, pausa, seeks, salida y reapertura
+   correctos (2026-10-11). Sin validar todavía expiración/reconexión ni una
+   sesión prolongada completa sobre esta fuente directa.
 4. Reproducción sin anuncios: identificar cómo aparecen en la ruta elegida y
    verificar su exclusión. No equiparar acceso a oEmbed o al HTML con bloqueo
    de publicidad implementado. SponsorBlock debe consultarse también desde PS5.
@@ -81,8 +83,8 @@ El hardware no resuelve DNS, extracción del enlace, publicidad ni autenticació
   Cubrir en pruebas DNS restrictivo, nanoDNS activo/inactivo y conectividad
   general; no usar la comprobación de PSN como requisito de Tube5.
 
-Los puntos 2–3 tienen prototipos parciales; la reproducción directa sigue
-pendiente de validación en PS5. Los puntos 4–6 y la aceleración no están
+Los puntos 2–3 tienen prototipos parciales: MP4 360p y controles validados en PS5,
+pero estabilidad prolongada y expiración/reconexión pendientes. Los puntos 4–6 y la aceleración no están
 implementados ni validados en autonomía. El orden
 puede ajustarse a impedimentos demostrados, manteniendo la autonomía prioritaria.
 

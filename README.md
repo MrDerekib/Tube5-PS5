@@ -16,8 +16,8 @@ final. La app final no requerirá una companion app en el PC.
 
 > Estado actual: vídeo local y HTTP LAN, con diez minutos continuos de 1080p
 > y controles validados en PS5 Fat FW 13.20. El PC prepara y sirve el contenido
-> de YouTube en el banco LAN. DIAG44 añade streaming directo candidato,
-> probado en host pero todavía no validado en PS5. Publicidad no validada.
+> de YouTube en el banco LAN. DIAG44 reproduce YouTube directamente en MP4
+> 360p, validado por el propietario en PS5. Publicidad no validada.
 > Piloto SponsorBlock de DIAG36 validado por reporte del propietario en PS5.
 > Biblioteca LAN y corrección de títulos de DIAG35 validadas en consola.
 > 4K no validado.
@@ -36,7 +36,8 @@ DIAG44 conecta esa fuente al player: consultar con X y, cuando MP4 SI, pulsar
 X otra vez para reproducir. Triángulo renueva el enlace. Transporte curl con
 TLS verificado, peticiones Range y caché fija de 512 KiB; no prepara, descarga
 completo ni transcodifica en el PC. El smoke real host pasa imagen, pausa,
-seeks, EOF por seek y reapertura; prueba física de reproducción pendiente.
+seeks, EOF por seek y reapertura. El propietario confirma en PS5 MP4 360p,
+audio, pausa, avance/retroceso, salida y reapertura correctos (2026-10-11).
 Solo el vídeo fijo y el MP4 combinado <=360p: aún no hay búsqueda autónoma,
 SponsorBlock directo, cuenta, renovación automática ni hardware decoding.
 La ausencia de anuncios no se da por validada por esta prueba.
