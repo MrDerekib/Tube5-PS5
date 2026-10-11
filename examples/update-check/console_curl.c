@@ -106,6 +106,8 @@ void console_curl_setup(CURL *easy)
 
 extern int __real_fcntl(int descriptor, int command, ...);
 
+#ifndef CONSOLE_CURL_EXTERNAL_FCNTL
+
 static int console_curl_socket_flags(int socket, int command, int value)
 {
     switch (command)
@@ -146,6 +148,7 @@ int __wrap_fcntl(int descriptor, int command, ...)
         return console_curl_socket_flags(descriptor, command, (int)argument);
     return result;
 }
+#endif /* CONSOLE_CURL_EXTERNAL_FCNTL: reuse an application's safer adapter. */
 
 /* ---- Name lookup --------------------------------------------------------------------------- */
 
@@ -327,12 +330,14 @@ void closelog(void)
 {
 }
 
+#ifndef CONSOLE_CURL_EXTERNAL_COMPAT
 int dladdr(const void *address, void *info)
 {
     (void)address;
     (void)info;
     return 0;
 }
+#endif
 
 unsigned if_nametoindex(const char *name)
 {
@@ -401,12 +406,14 @@ int isatty(int descriptor)
     return 0;
 }
 
+#ifndef CONSOLE_CURL_EXTERNAL_COMPAT
 int mkstemp(char *template_name)
 {
     (void)template_name;
     errno = ENOSYS;
     return -1;
 }
+#endif
 
 /* zstd's optional tracing hooks; 0 means "not traced". */
 unsigned long long ZSTD_trace_compress_begin(const void *context)

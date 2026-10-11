@@ -28,6 +28,38 @@ No se promete que cambiar los DNS baste. Evaluar y documentar los impedimentos
 de autonomía durante el desarrollo para no confundir los prototipos con el
 cumplimiento del objetivo final.
 
+## Ruta prioritaria: YouTube desde PS5, no ampliar el puente
+
+El propietario señala que se prolongó demasiado el desarrollo del puente.
+No priorizar traducción de títulos ni pulido específico del servidor temporal.
+Conservarlo como banco de pruebas, sin hacerlo una dependencia del producto.
+
+1. DNS y HTTPS verificados desde la PS5; solicitar metadatos reales sin PC.
+   DIAG42 implementa una prueba oEmbed acotada, pendiente de validación física.
+2. Resolver una fuente YouTube reproducible desde consola. Inventariar los
+   formatos realmente ofrecidos: resolución, fps, códec, contenedor, bitrate,
+   audio y entrega conjunta/separada. No asumir que 1080p/4K ofrecen H.264
+   muxado ni que una URL firmada sea permanente.
+3. Acceder al stream real y validar apertura, sincronización, seek, expiración
+   del enlace, reconexión y memoria, sin descargar/transcodificar en el PC.
+4. Reproducción sin anuncios: identificar cómo aparecen en la ruta elegida y
+   verificar su exclusión. No equiparar acceso a oEmbed o al HTML con bloqueo
+   de publicidad implementado. SponsorBlock debe consultarse también desde PS5.
+5. Velocidad de reproducción con sincronización y audio adecuados; reanudación
+   local por ID desde el último punto, sin confundir EOF con una pausa.
+6. Inicio de sesión seguro, biblioteca personal e integración de cuenta.
+   Método compatible por investigar; no almacenar credenciales o tokens en
+   builds/GitHub ni prometer autenticación antes de comprobar la ruta soportada.
+
+Investigar decodificación por hardware en paralelo al estudio de formatos.
+El player actual decodifica por software. Identificar APIs accesibles en títulos
+homebrew, códecs/perfiles soportados, propiedad de buffers y presentación;
+hacer una prueba mínima antes de comprometer 4K o cambiar el pipeline validado.
+El hardware no resuelve DNS, extracción del enlace, publicidad ni autenticación.
+
+Los puntos 2–6 y la aceleración no están implementados ni validados. El orden
+puede ajustarse a impedimentos demostrados, manteniendo la autonomía prioritaria.
+
 ## Hitos restantes e historial
 
 - [x] Validar navegación DualSense y vídeo local con audio, pausa y seek en PS5 13.20.
@@ -38,7 +70,8 @@ cumplimiento del objetivo final.
 - [x] Validar adquisición y publicación desde una URL nueva sin caché (360p).
 - [x] Implementar búsqueda con mando y preparación mediante el puente temporal (DIAG40).
 - [x] Confirmar búsqueda, selección y creación de una entrada desde PS5 (DIAG40).
-- [ ] Validar reproducción del nuevo resultado tras corregir el fallo RefStruct (DIAG41).
+- [x] Validar reproducción del nuevo resultado tras corregir el fallo RefStruct (DIAG41),
+  incluidos otro vídeo, pausa, seek, salida y reapertura por reporte del propietario.
 - [ ] Evaluar 4K nativo: decodificación acelerada, buffers y salida VideoOut;
   realizar después una prueba corta. No hay compatibilidad 4K confirmada.
 - [ ] Elegir e integrar el proveedor de catálogo y reproducción de YouTube.

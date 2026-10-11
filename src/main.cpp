@@ -17,6 +17,7 @@
 #include "preferences.hpp"
 #include "sponsor_notice.hpp"
 #include "youtube_search.hpp"
+#include "youtube_probe.hpp"
 #include "video_sync_diagnostics.hpp"
 #include "video_conversion.hpp"
 #include <array>
@@ -89,7 +90,7 @@ std::array<char, 128> frame_timing{};
 void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &media, bool connected,
            const char *error, const tube5::SeekSelection &selection,
            const tube5::LanCatalog &catalog, unsigned library_selected,
-           const tube5::SponsorSkip &sponsor_skip)
+           const tube5::SponsorSkip &sponsor_skip, const tube5::YouTubeProbe &probe)
 {
     canvas.clear(ink);
     canvas.rectangle(80, 65, 16, 98, accent);
@@ -231,6 +232,36 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
                 canvas.text(120, 655, "AL VOLVER, EL TRABAJO DEL PC CONTINUA", 2, muted);
         }
     }
+    else if (nav.screen == tube5::Screen::online)
+    {
+        canvas.text(120, 310, "YOUTUBE DIRECTO - SIN PUENTE PC", 4, Color::white);
+        const auto stage = probe.stage();
+        const char *status = stage == tube5::ProbeStage::dns ? "DNS: RESOLVIENDO WWW.YOUTUBE.COM"
+                             : stage == tube5::ProbeStage::https ? "HTTPS: CERTIFICADO Y METADATOS"
+                             : stage == tube5::ProbeStage::ready
+                                 ? "OK: METADATOS RECIBIDOS DESDE YOUTUBE"
+                             : stage == tube5::ProbeStage::failed ? "FALLO: CAPTURA ESTA PANTALLA"
+                             : stage == tube5::ProbeStage::cancelled ? "CANCELADO"
+                                                                     : "X INICIAR PRUEBA";
+        canvas.text(120, 430, status, 3,
+                    stage == tube5::ProbeStage::failed ? Color::yellow : Color::white);
+        if (!probe.loading() && stage != tube5::ProbeStage::idle)
+        {
+            const auto &result = probe.result();
+            char detail[192]{};
+            std::snprintf(detail, sizeof(detail), "IP %s  DNS RET 0X%08X", result.ip.data(),
+                          static_cast<unsigned>(result.dns_error));
+            canvas.text(120, 505, detail, 3, muted);
+            std::snprintf(detail, sizeof(detail), "HTTP %ld  CURL %d  CERT %ld  BYTES %u",
+                          result.http, result.curl_error, result.verify, result.bytes);
+            canvas.text(120, 565, detail, 3, muted);
+            canvas.text(120, 625, "CA DEL SISTEMA - VERIFICACION TLS ACTIVA", 3, muted);
+            canvas.text(120, 670, result.ca.data(), 1, muted);
+            canvas.text(120, 735, result.title.data(), 2, Color::white);
+            canvas.text(120, 805, result.error.data(), 2, Color::yellow);
+        }
+        canvas.text(120, 890, "PRUEBA DE METADATOS - AUN NO REPRODUCE YOUTUBE DIRECTO", 2, muted);
+    }
     else if (nav.screen == tube5::Screen::settings)
     {
         canvas.text(120, 320, "AJUSTES", 7, Color::white);
@@ -253,6 +284,7 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(120, 765,
                     network_url[0] ? network_url.data() : "HTTP: CONFIGURA NETWORK-TEST-URL.TXT", 2,
                     muted);
+        canvas.text(120, 815, "TRIANGULO: PROBAR YOUTUBE DIRECTO SIN PC", 3, Color::white);
     }
     else if (nav.screen == tube5::Screen::about)
     {
@@ -367,7 +399,7 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(playing_screen ? 350 : 120, playing_screen ? 930 : 865, line.data(),
                     playing_screen ? 2 : 3, Color::yellow);
 #ifdef TUBE5_DIAGNOSTICS
-        if (!playing_screen && !media.opening())
+        if (!playing_screen && !media.opening() && nav.screen != tube5::Screen::online)
         {
             // Keep the allocation and demux failure readable after teardown.
             // Retrying a fatal read ENOMEM no longer resets these counters.
@@ -404,7 +436,9 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         nav.screen == tube5::Screen::player
             ? (selection.active() ? "IZQ/DER 5 SEG  L1/R1 30 SEG  X CONFIRMAR  CIRCULO CANCELAR"
                                   : "X PAUSA  IZQ/DER 5 SEG  TRIANGULO BUSCAR  CIRCULO VOLVER")
-            : (nav.screen == tube5::Screen::search ? "CRUCETA MOVER   X ELEGIR   CIRCULO VOLVER"
+            : (nav.screen == tube5::Screen::online
+                   ? "X INICIAR O REPETIR   CIRCULO CANCELAR Y VOLVER"
+               : nav.screen == tube5::Screen::search ? "CRUCETA MOVER   X ELEGIR   CIRCULO VOLVER"
                : nav.screen == tube5::Screen::library
                    ? "X REPRODUCIR  TRIANGULO BUSCAR  OPTIONS RECARGAR  CIRCULO VOLVER"
                    : "CRUCETA MOVER   X ABRIR   CIRCULO VOLVER   OPTIONS AJUSTES"),
@@ -570,6 +604,7 @@ int main()
     tube5::LanCatalog catalog;
     tube5::SponsorSkip sponsor_skip;
     tube5::YouTubeSearch youtube_search;
+    tube5::YouTubeProbe youtube_probe;
     tube5::YouTubeSearch::Request search_request = tube5::YouTubeSearch::Request::search;
     Uint64 search_started = 0, search_poll_at = 0;
     std::array<char, 49> requested_entry{};
@@ -623,6 +658,23 @@ int main()
     };
     const auto command = [&](tube5::Command action)
     {
+        if (nav.screen == tube5::Screen::online)
+        {
+            if (action == tube5::Command::back)
+            {
+                youtube_probe.cancel();
+                nav.screen = tube5::Screen::settings;
+            }
+            else if (action == tube5::Command::select && !youtube_probe.loading())
+                (void)youtube_probe.begin();
+            return;
+        }
+        if (nav.screen == tube5::Screen::settings && action == tube5::Command::search)
+        {
+            nav.screen = tube5::Screen::online;
+            error[0] = 0;
+            return;
+        }
         if (nav.screen == tube5::Screen::search)
         {
             if (action == tube5::Command::back)
@@ -841,6 +893,8 @@ int main()
             nav.screen = tube5::Screen::about;
         else if (std::string_view{screen} == "player")
             nav.screen = tube5::Screen::player;
+        else if (std::string_view{screen} == "online")
+            nav.screen = tube5::Screen::online;
         else if (std::string_view{screen} == "search" ||
                  std::string_view{screen} == "search-results")
         {
@@ -864,6 +918,11 @@ int main()
     {
         sponsor_notice.begin(0, 4);
         sponsor_notice.complete(SDL_GetTicks());
+    }
+    if (std::getenv("TUBE5_PREVIEW_ONLINE_RUN"))
+    {
+        nav.screen = tube5::Screen::online;
+        (void)youtube_probe.begin();
     }
     bool running = true;
 #endif
@@ -983,6 +1042,7 @@ int main()
             if (opening_player)
                 break;
         }
+        youtube_probe.poll();
         if (youtube_search.loading())
         {
             youtube_search.poll();
@@ -1128,7 +1188,7 @@ int main()
             fatal("UI SURFACE LOCK");
         const Uint32 paint_start = SDL_GetTicks();
         paint(canvas, nav, media, controller != nullptr, error, selection, catalog,
-              library_selected, sponsor_skip);
+              library_selected, sponsor_skip, youtube_probe);
         if (output)
             SDL_UnlockSurface(output);
         else
@@ -1158,7 +1218,8 @@ int main()
             tube5_boot_checkpoint("Tube5 D13: primer frame presentado");
             first_frame = false;
         }
-        if (const char *preview = std::getenv("TUBE5_PREVIEW"); preview && !catalog.loading())
+        if (const char *preview = std::getenv("TUBE5_PREVIEW");
+            preview && !catalog.loading() && !youtube_probe.loading())
         {
             SDL_Surface *capture =
                 SDL_CreateRGBSurfaceWithFormat(0, 1920, 1080, 32, SDL_PIXELFORMAT_RGBA32);
@@ -1215,6 +1276,12 @@ int main()
 #endif
     media.close();
     sponsor_notice.cancel();
+    youtube_probe.cancel();
+    while (youtube_probe.loading())
+    {
+        youtube_probe.poll();
+        SDL_Delay(5);
+    }
     youtube_search.cancel();
     while (youtube_search.loading())
     {

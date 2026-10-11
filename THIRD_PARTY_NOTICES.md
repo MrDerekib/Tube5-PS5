@@ -49,6 +49,15 @@ licenses apply in addition to Tube5's license. Before a public binary release,
 complete the license-text and corresponding-source bundle for these dependencies;
 see `docs/ROADMAP.md`. This development prototype is not release-ready.
 
+DIAG42 additionally statically links PacBrew libcurl 8.18.0 for the direct
+YouTube HTTPS metadata probe, including OpenSSL 3.5.2, libpsl and zstd through
+pkg-config dependencies. libcurl uses the curl license, OpenSSL 3 uses
+Apache-2.0, libpsl uses MIT and zstd offers BSD-3-Clause/GPL-2.0 dual licensing.
+Their license texts and corresponding source requirements must be included
+in the release audit. The native HTTPS adapter reuses the template's
+`examples/update-check/console_curl.c` (BlackBearReloaded, GPL-3.0-or-later),
+preserving Tube5's existing fcntl/dladdr implementations and SDK mkstemp.
+
 Build recipes and source archive references are published in
 [pacbrew-repo](https://github.com/ps5-payload-dev/pacbrew-repo).
 The SDL_kitchensink source is pinned at

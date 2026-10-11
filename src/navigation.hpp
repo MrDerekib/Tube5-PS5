@@ -10,7 +10,8 @@ enum class Screen
     about,
     player,
     library,
-    search
+    search,
+    online
 };
 enum class Command
 {

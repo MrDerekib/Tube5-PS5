@@ -15,6 +15,12 @@ cmake -S "$source_root" -B build/host-kitchensink -G Ninja \
 cmake --build build/host-kitchensink -j 8
 read -r -a cflags <<< "$(pkg-config --cflags sdl2 libavformat libavcodec libswscale libswresample libavutil libass)"
 read -r -a libs <<< "$(pkg-config --libs sdl2 libavformat libavcodec libswscale libswresample libavutil libass)"
+read -r -a curl_cflags <<< "$(pkg-config --cflags libcurl)"
+read -r -a curl_libs <<< "$(pkg-config --libs libcurl)"
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_HOST \
+    -Isrc "${cflags[@]}" "${curl_cflags[@]}" tests/test_youtube_probe.cpp src/youtube_probe.cpp \
+    "${libs[@]}" "${curl_libs[@]}" -o build/youtube-probe-test
+build/youtube-probe-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc tests/test_playback_progress.cpp -o build/playback-progress-test
 build/playback-progress-test
@@ -117,6 +123,6 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/media-smoke assets/test-clip.m
 python3 -m unittest discover -s tests -p test_http_test_server.py -v
 python3 -m unittest discover -s tests -p test_youtube_prepare.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_AUDIO_WRAP -DTUBE5_HOST -DTUBE5_OFFSCREEN -DTUBE5_CONVERSION_WRAP -DTUBE5_NETWORK_WRAP -DTUBE5_SEEK_WRAP -ffunction-sections -fdata-sections \
-    -Isrc -I"$source_root/include" "${cflags[@]}" src/main.cpp src/lan_catalog.cpp src/youtube_search.cpp src/audio_reader.cpp src/demo_renderer.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/native_sdl.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
-    build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "$native_network_wraps" -Wl,--gc-sections,--wrap=Kit_GetAudioDecoderData,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat,--wrap=avformat_open_input,--wrap=avformat_find_stream_info,--wrap=av_read_frame,--wrap=avcodec_receive_frame,--wrap=avformat_seek_file -o build/tube5-host
+    -Isrc -I"$source_root/include" "${cflags[@]}" "${curl_cflags[@]}" src/main.cpp src/lan_catalog.cpp src/youtube_search.cpp src/youtube_probe.cpp src/audio_reader.cpp src/demo_renderer.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/native_sdl.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
+    build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "${curl_libs[@]}" "$native_network_wraps" -Wl,--gc-sections,--wrap=Kit_GetAudioDecoderData,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat,--wrap=avformat_open_input,--wrap=avformat_find_stream_info,--wrap=av_read_frame,--wrap=avcodec_receive_frame,--wrap=avformat_seek_file -o build/tube5-host
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy TUBE5_PREVIEW=build/ui-preview.bmp build/tube5-host

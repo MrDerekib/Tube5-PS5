@@ -21,14 +21,20 @@ final. La app final no requerirá una companion app en el PC.
 > Biblioteca LAN y corrección de títulos de DIAG35 validadas en consola.
 > 4K no validado.
 
-## Prueba actual: BOOT-DIAG-41-REFSTRUCT-SMALL
+## Prueba actual: BOOT-DIAG-42-YOUTUBE-DIRECT
+
+DIAG42 añade una petición HTTPS directa de metadatos a YouTube desde Ajustes
+(Triángulo → X). No usa el PC como proxy y no cambia los DNS ni desactiva TLS.
+El cliente host recibe metadatos válidos; comprobación en PS5 pendiente.
+Todavía no extrae ni reproduce streams directos. Ver [la prueba directa](docs/YOUTUBE_DIRECT.md).
 
 DIAG40 añade teclado propio y búsqueda con el mando desde Biblioteca LAN
 (Triángulo). Permite seleccionar un resultado, prepararlo mediante el puente
 temporal y volver a la biblioteca con el vídeo seleccionado. El propietario
 confirma búsqueda/preparación en PS5; un vídeo nuevo falla con ENOMEM al abrirlo.
 DIAG41 cubre reservas RefStruct de 32–128 KiB antes excluidas del pool nativo;
-corrección pendiente de validar en consola. Ver [controles y prueba](docs/YOUTUBE_SEARCH.md).
+el propietario confirma reproducción del resultado y otro vídeo, pausa, seeks,
+salida y reapertura. Ver [controles y prueba](docs/YOUTUBE_SEARCH.md).
 Esta build local contiene una clave de emparejamiento: no compartir su carpeta
 ni ZIP públicamente. El repositorio público no contiene esa clave.
 

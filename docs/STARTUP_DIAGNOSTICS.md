@@ -1,5 +1,26 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-42-YOUTUBE-DIRECT: DNS/HTTPS sin puente
+
+Ajustes → Triángulo → X solicita oEmbed real de Veritasium desde PS5.
+DNS de consola explícito y libcurl/OpenSSL con CA del sistema y verificación
+de nombre/cadena activas. No proxy, cookies, credenciales ni redirecciones.
+Respuesta acotada a 16 KiB y worker SDL con cancelación; no modifica player,
+pools, DNS del sistema ni requiere elevación. El adaptador comunitario curl
+se reutiliza sin sus implementaciones duplicadas de fcntl/dladdr/mkstemp.
+
+El cliente host recibe DNS correcto, HTTP 200, CURL 0, CERT 0, 815 bytes y el
+título del vídeo; cancelación y parser acotado comprobados. No equivale a la
+misma petición en PS5. Build/FSELF y guard RefStruct correctos. No hay import
+NEEDED de PosixForWebKit. Prueba física pendiente, con captura del resultado.
+Ver [instrucciones y límites](YOUTUBE_DIRECT.md).
+
+La batería host completa pasa; la captura de la pantalla de resultado host
+se revisa sin solapamientos. Eboot y ELF exactos respaldados en
+`.local/boot-diag-42/`. SHA-256 de eboot.bin:
+`fa8475f2d28b731880001349af03ce4a3ee5a395281531224744a4df1d23140e`.
+
+
 ## BOOT-DIAG-41-REFSTRUCT-SMALL: reservas RefStruct pequeñas
 
 El propietario confirma búsqueda y preparación desde el mando en DIAG40,
@@ -34,6 +55,11 @@ Build/FSELF y guard ABI correctos. SHA-256 de eboot.bin:
 Prueba física pendiente: cerrar completamente Tube5, copiar carpeta DIAG41,
 abrir directamente la entrada existente y observar RBUF/MEMFAIL. Si falla,
 capturar de nuevo los primeros fallos, sin reintentar en la misma sesión.
+
+Resultado posterior: el propietario confirma que el vídeo ya reproduce,
+añade otro Veritasium y reporta «todo ok» a las pruebas de reproducción,
+pausa, avance/retroceso, salida y reapertura. DIAG41 queda validada en esa
+PS5 Fat FW 13.20 por reporte; no es prueba de todos los tamaños/códecs ni 4K.
 
 
 ## BOOT-DIAG-40-SEARCH: búsqueda con mando sobre el puente temporal

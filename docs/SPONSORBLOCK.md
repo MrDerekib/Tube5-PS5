@@ -24,6 +24,17 @@ con estado y rangos en milisegundos, manteniendo ocho entradas y 4096 bytes.
 Si aparece PENDIENTE en la biblioteca, esperar unos segundos y pulsar Options.
 La reproducción nunca espera una consulta externa de SponsorBlock.
 
+En las entradas nuevas, la biblioteca puede conservar el estado PENDIENTE de
+su primera carga aunque la consulta ya haya terminado. Options recarga los
+segmentos antes de reproducir; todavía no hay refresco automático de esa
+instantánea. La futura integración autónoma deberá aplicar la respuesta al
+completar la consulta, sin ampliar ahora el puente temporal.
+
+Comprobación local de las últimas entradas: `9Tqj0-QopBo` no tiene segmentos
+en la respuesta recibida; `XKSjCOKDtpk` tiene sponsor/skip entre 1254,384 y
+1379,659 segundos (20:54–22:59). Estos datos son una instantánea de la caché,
+no garantizan que todos los vídeos o futuras respuestas tengan marcas.
+
 ## Seguridad temporal
 
 Solo los MP4 completos del preparador 360p tienen alineación habilitada.

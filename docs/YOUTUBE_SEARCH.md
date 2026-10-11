@@ -25,8 +25,9 @@ al teclado; desde teclado/espera vuelve a la biblioteca. Cancelar la espera
 en consola **no cancela** una preparación ya aceptada por el PC.
 Probar además búsqueda sin resultados, borrar texto y salir mientras busca.
 El propietario confirma búsqueda/preparación en PS5 con DIAG40; un resultado
-nuevo falla con ENOMEM al reproducir. DIAG41 prepara la corrección de memoria;
-la reproducción de esa entrada sigue pendiente de validar.
+nuevo falla con ENOMEM al reproducir. Tras la corrección de memoria DIAG41,
+el propietario confirma reproducción, pausa, seeks, salida y reapertura tanto
+de esa entrada como de otro vídeo nuevo de Veritasium.
 
 ## Servidor de desarrollo
 
