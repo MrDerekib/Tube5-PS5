@@ -758,6 +758,19 @@ int main()
                 nav.screen = library_playback ? tube5::Screen::library : tube5::Screen::home;
             else if (result == tube5::MediaPlayer::OpenResult::ready)
             {
+                // Evaluate the known start, never the uninitialized player clock.
+                if (const auto target =
+                        sponsor_skip.target(0.0, media.duration(), sponsor_enabled, false, false))
+                {
+                    if (*target >= media.duration())
+                    {
+                        media.close();
+                        nav.screen =
+                            library_playback ? tube5::Screen::library : tube5::Screen::home;
+                    }
+                    else
+                        media.seek_sponsor(*target);
+                }
                 SDL_FlushEvent(SDL_CONTROLLERBUTTONDOWN);
                 SDL_FlushEvent(SDL_KEYDOWN);
                 select_ready_at = SDL_GetTicks() + 350;
@@ -777,7 +790,15 @@ int main()
             if (const auto target = sponsor_skip.target(
                     media.position(), media.duration(), sponsor_enabled, media.paused(),
                     media.seeking() || selection.active() || media.frames_uploaded() == 0))
-                media.seek_to(*target);
+            {
+                if (*target >= media.duration())
+                {
+                    media.close();
+                    nav.screen = library_playback ? tube5::Screen::library : tube5::Screen::home;
+                }
+                else
+                    media.seek_sponsor(*target);
+            }
         if (nav.screen != tube5::Screen::player)
             selection.cancel();
         if (catalog.loading())

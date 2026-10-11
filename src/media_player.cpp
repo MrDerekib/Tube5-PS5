@@ -183,7 +183,7 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
     memory_set_stage("PLAYING");
     if (thread_diagnostic()[0])
         return fail("THREAD", thread_diagnostic());
-    SDL_PauseAudioDevice(audio_, 0);
+    // The first draw starts audio, after the UI has scheduled any opening skip.
     last_frame_at_ = SDL_GetTicks();
     return true;
 }
@@ -212,6 +212,10 @@ void MediaPlayer::audio_callback(void *userdata, Uint8 *stream, int length) noex
             self->audio_bytes_ += static_cast<std::size_t>(result);
             memory_mark_playback_output(false);
         }
+        // Keep consuming PCM to initialize the primary clock, without letting
+        // the sponsored opening (or its seek preroll) reach the speakers.
+        if (self->initial_seek_muted_.load())
+            SDL_memset(stream, 0, static_cast<std::size_t>(length));
     }
 }
 
@@ -242,6 +246,7 @@ void MediaPlayer::close() noexcept
     source_ = nullptr;
     paused_ = false;
     frames_uploaded_ = 0;
+    frames_presented_ = 0;
     raw_attempts_ = raw_successes_ = 0;
     raw_result_ = 0;
     audio_callbacks_ = 0;
@@ -253,6 +258,9 @@ void MediaPlayer::close() noexcept
     frame_area_ = {};
     paused_position_ = 0.0;
     pending_seek_ = -1.0;
+    initial_seek_target_ = -1.0;
+    initial_seek_muted_ = false;
+    audio_started_ = false;
     seek_dispatched_at_ = 0;
     network_ = false;
 }
@@ -290,6 +298,9 @@ void MediaPlayer::seek_to(double destination) noexcept
 {
     if (!player_ || !std::isfinite(destination) || !std::isfinite(duration()))
         return;
+    // An explicit user seek replaces an in-flight sponsor destination too.
+    initial_seek_target_ = -1.0;
+    initial_seek_muted_ = false;
     ++seek_requests_;
     const bool was_paused = paused();
     const double target = std::clamp(destination, 0.0, std::max(0.0, duration() - 0.1));
@@ -300,10 +311,24 @@ void MediaPlayer::seek_to(double destination) noexcept
         paused_position_ = target;
 }
 
+void MediaPlayer::seek_sponsor(double destination) noexcept
+{
+    if (!player_ || !std::isfinite(destination))
+        return;
+    seek_to(destination);
+    initial_seek_target_ = pending_seek_;
+    initial_seek_muted_ = initial_seek_target_ >= 0.0;
+}
+
 void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noexcept
 {
     if (!player_ || !texture_)
         return;
+    if (!audio_started_ && !paused_)
+    {
+        SDL_PauseAudioDevice(audio_, 0);
+        audio_started_ = true;
+    }
     // a2 silently drops a seek if the demuxer already has one pending. Coalesce
     // quick button presses, and defer paused seeks until buffers can drain.
     const Uint32 now = SDL_GetTicks();
@@ -313,7 +338,11 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
         SDL_PauseAudioDevice(audio_, 1);
         reset_audio_reader();
         if (Kit_PlayerSeek(player_, pending_seek_) != 0)
+        {
             std::snprintf(error_, sizeof(error_), "SEEK: %s", Kit_GetError());
+            initial_seek_target_ = -1.0;
+            initial_seek_muted_ = false;
+        }
         else
             ++seek_dispatches_;
         pending_seek_ = -1.0;
@@ -345,6 +374,12 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
             {
                 frame_area_ = area;
                 ++frames_uploaded_;
+                if (initial_seek_target_ >= 0.0 && pending_seek_ < 0.0 &&
+                    Kit_GetPlayerPosition(player_) >= initial_seek_target_)
+                {
+                    initial_seek_target_ = -1.0;
+                    initial_seek_muted_ = false;
+                }
                 memory_mark_playback_output(true);
                 last_frame_at_ = now;
                 // Do not sleep for a diagnostic notification here. The boot
@@ -365,8 +400,13 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
         target.w = destination.h * width_ / height_;
         target.x += (destination.w - target.w) / 2;
     }
-    if (frames_uploaded_ && SDL_RenderCopy(renderer, texture_, &frame_area_, &target) != 0)
-        std::snprintf(error_, sizeof(error_), "VIDEO DRAW: %s", SDL_GetError());
+    if (frames_uploaded_ && initial_seek_target_ < 0.0)
+    {
+        if (SDL_RenderCopy(renderer, texture_, &frame_area_, &target) != 0)
+            std::snprintf(error_, sizeof(error_), "VIDEO DRAW: %s", SDL_GetError());
+        else
+            ++frames_presented_;
+    }
 }
 
 bool MediaPlayer::check_network_failure() noexcept
@@ -424,7 +464,10 @@ double MediaPlayer::position() const noexcept
 {
     // Kitchensink a2 keeps its clock advancing while paused. Present our frozen
     // timestamp until it resynchronizes to decoded PTS after resume.
-    return player_ ? (paused_ ? paused_position_ : Kit_GetPlayerPosition(player_)) : 0.0;
+    return player_ ? (paused_            ? paused_position_
+                      : frames_uploaded_ ? Kit_GetPlayerPosition(player_)
+                                         : 0.0)
+                   : 0.0;
 }
 double MediaPlayer::duration() const noexcept
 {

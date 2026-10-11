@@ -13,7 +13,7 @@ SponsorBlock.
 > Biblioteca LAN y corrección de títulos de DIAG35 validadas en consola.
 > 4K no validado.
 
-## Prueba actual: BOOT-DIAG-36-SPONSOR
+## Prueba actual: BOOT-DIAG-37-SPONSOR-CLEAN
 
 La tarjeta **Biblioteca LAN** carga una lista acotada desde el PC. Cruceta:
 seleccionar; X: reproducir; Círculo: volver a la lista; Options: recargarla.
@@ -31,6 +31,10 @@ con Options durante reproducción. Consultar [el piloto SponsorBlock](docs/SPONS
 para la prueba corta de Veritasium. El propietario confirma que funciona bien
 en consola; esta confirmación no equivale a una prueba exhaustiva de todos los controles.
 Las secciones siguientes conservan el historial del prototipo.
+
+DIAG37 pule los saltos: programa el patrocinio inicial antes del primer draw,
+oculta imagen y silencia audio durante el seek, y termina directamente cuando
+el segmento alcanza el final. Corrección pendiente de validación física.
 
 ## Prototipo 01.000.001
 

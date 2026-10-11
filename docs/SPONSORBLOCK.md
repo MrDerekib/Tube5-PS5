@@ -1,4 +1,4 @@
-# SponsorBlock: piloto DIAG36
+# SponsorBlock: piloto DIAG36 y pulido DIAG37
 
 `BOOT-DIAG-36-SPONSOR` consulta intervalos en el PC y ejecuta seeks en PS5.
 Solo categoría **sponsor**, acción **skip**. No recorta ni modifica el MP4.
@@ -47,8 +47,12 @@ y X conserva el selector HTTP/LOCAL. ON solo actúa si hay segmentos listos.
 El HUD muestra segmentos y solicitudes de salto, no votos ni detecciones IA.
 Un seek ya enviado puede terminar aunque se desactive la opción inmediatamente.
 
-Los saltos esperan al primer fotograma, respetan pausa, seek pendiente y
-selector de posición. Una marca se solicita una vez por encuentro: no se
+DIAG37 programa la marca que empieza en cero antes del primer draw, sin leer
+el reloj aún no inicializado. El resto respeta pausa, seek pendiente y
+selector de posición. Durante el salto se oculta imagen y silencia audio hasta
+alcanzar el destino; se siguen consumiendo datos para sincronizar el reloj.
+Una marca que alcanza el final cierra el vídeo directamente, sin reproducir
+su cola. Una marca se solicita una vez por encuentro: no se
 repite en bucle si el demuxer tarda o falla. Al retroceder manualmente hasta
 una marca, se puede volver a saltar; desactivar SB permite ver esa sección.
 
@@ -86,6 +90,11 @@ Las capturas host de biblioteca y Ajustes se revisaron sin solapamiento de texto
 Build nativa/FSELF, integridad y guard de ABI RefStruct correctos.
 SHA-256 de eboot.bin:
 `59690d33db18b4d2f77023918a3deedeea82aa2f2eb8f9f2acd652bad33ec175`.
+
+Paquete de pulido DIAG37 (pendiente de prueba en consola):
+`6f55e9d0ed8a1325d24857522c1d7a3ee2d3b139816fc1bc47398c9ccb007f9a`.
+Repetir el inicio y el salto desde 13:25: no deben verse los fotogramas de
+patrocinio antes de empezar en 0:04 ni una cola tras volver a la biblioteca.
 Respaldo privado `.local/boot-diag-36/`; carpeta de despliegue `dist/PPSA99999/`.
 
 ## Atribución

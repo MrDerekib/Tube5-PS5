@@ -167,8 +167,13 @@ int main(int argc, char **argv)
         }
         tube5::SponsorSkip skip;
         skip.reset(data);
+        const auto opening_target = skip.target(0.0, player.duration(), true, false, false);
+        require(opening_target && *opening_target == 4.0, "known opening segment");
+        player.seek_sponsor(*opening_target);
         const Uint64 start = SDL_GetTicks64();
         bool moved_to_outro = false;
+        bool first_presented = false;
+        bool sponsor_ended = false;
         while (!player.finished())
         {
             require(SDL_GetTicks64() - start < 12000, "bounded automatic skip test");
@@ -179,9 +184,19 @@ int main(int argc, char **argv)
             {
                 std::printf("Sponsor request %.3f -> %.3f (%u)\n", player.position(), *target,
                             skip.skipped());
-                player.seek_to(*target);
+                if (*target >= player.duration())
+                {
+                    sponsor_ended = true;
+                    break;
+                }
+                player.seek_sponsor(*target);
             }
             player.draw(renderer, SDL_Rect{0, 0, 640, 360});
+            if (!first_presented && player.frames_presented())
+            {
+                require(player.position() >= 4.0, "no opening sponsor frame presented");
+                first_presented = true;
+            }
             if (!moved_to_outro && player.frames_uploaded() > 0 && player.position() > 4.5 &&
                 player.position() < player.duration() - 5 && !player.seeking())
             {
@@ -200,6 +215,7 @@ int main(int argc, char **argv)
         }
         require(skip.skipped() == 2, "end segment skipped exactly once");
         require(moved_to_outro, "manual seek preserved");
+        require(first_presented && sponsor_ended, "clean opening and immediate sponsor ending");
         player.close();
         require(player.open(renderer, clip), "reopen after sponsor EOF");
         player.close();

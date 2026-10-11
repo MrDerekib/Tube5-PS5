@@ -44,13 +44,19 @@ class MediaPlayer final
     void seek(double delta) noexcept;
     // Replace a pending relative seek with this absolute destination.
     void seek_to(double destination) noexcept;
+    // Sponsor skip: consume for clock sync, but hide/mute until the destination.
+    void seek_sponsor(double destination) noexcept;
     void draw(SDL_Renderer *renderer, const SDL_Rect &destination) noexcept;
     double position() const noexcept;
     double duration() const noexcept;
     bool paused() const noexcept;
     bool seeking() const noexcept
     {
-        return pending_seek_ >= 0.0;
+        return pending_seek_ >= 0.0 || initial_seek_target_ >= 0.0;
+    }
+    unsigned frames_presented() const noexcept
+    {
+        return frames_presented_;
     }
     bool finished() const noexcept;
     void diagnostic_status(char *text, std::size_t capacity) const noexcept;
@@ -85,6 +91,7 @@ class MediaPlayer final
     int height_ = 0;
     SDL_Rect frame_area_{};
     unsigned frames_uploaded_ = 0;
+    unsigned frames_presented_ = 0;
     unsigned raw_attempts_ = 0;
     unsigned raw_successes_ = 0;
     int raw_result_ = 0;
@@ -97,6 +104,9 @@ class MediaPlayer final
     bool paused_ = false;
     double paused_position_ = 0.0;
     double pending_seek_ = -1.0;
+    double initial_seek_target_ = -1.0;
+    std::atomic<bool> initial_seek_muted_{false};
+    bool audio_started_ = false;
     Uint32 seek_requested_at_ = 0;
     Uint32 seek_dispatched_at_ = 0;
     char error_[256]{};

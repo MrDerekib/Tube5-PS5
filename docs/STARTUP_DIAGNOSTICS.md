@@ -1,5 +1,28 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-37-SPONSOR-CLEAN: evitar destellos de patrocinio
+
+Tras validar DIAG36, el propietario observa fotogramas breves antes del salto
+inicial y tras el salto final. El primero esperaba a un frame para evitar leer
+un reloj sin inicializar; el segundo hacía seek a duración menos 0,1 s.
+
+DIAG37 evalúa explícitamente posición cero al completar la apertura asíncrona,
+antes del primer draw, sin consultar ese reloj. El audio comienza en el primer
+draw, tras programar el salto inicial. Durante un seek SponsorBlock, los datos
+se consumen para sincronizar el reloj, pero no se presentan imagen ni audio
+hasta alcanzar el destino. Los seeks manuales sustituyen esa espera. Cuando
+el segmento llega a la duración del player, se cierra y vuelve a la biblioteca
+directamente, sin buscar ni reproducir los últimos fotogramas. Los saltos
+manuales mantienen su coalescencia y no se cambian los pools ni el decoder.
+
+El smoke sintético comprueba que la primera imagen presentada esté en >=4 s,
+pausa, seek manual y cierre directo del patrocinio final. También pasa con
+catálogo y MP4 reales de Veritasium (posición 4,512 s tras el inicio y solicitud
+809,716→887 s cerrada sin seek final). Suite host con ASan/UBSan/LSan correcta,
+incluidos timeout, cancelación y fallos HTTP. Prueba física pendiente.
+SHA-256 de eboot.bin:
+`6f55e9d0ed8a1325d24857522c1d7a3ee2d3b139816fc1bc47398c9ccb007f9a`.
+
 ## BOOT-DIAG-36-SPONSOR: saltos de patrocinio
 
 El PC consulta la API de SponsorBlock y añade estado/intervalos a un catálogo
