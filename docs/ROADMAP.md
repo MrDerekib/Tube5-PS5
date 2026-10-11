@@ -83,8 +83,10 @@ DIAG55 validada en FW13.20: un frame H.264 sintético decodificado por hardware,
 flush/cleanup correctos y 2170 muestras de luma idénticas a la referencia.
 Sin presentación ni cambio del player. Pendiente repetir ciclos en un mismo
 proceso: diferencia inicial de 1 MiB flexible todavía sin causa confirmada.
-DIAG56 añade ocho ciclos antes del menú y snapshots de memoria por ciclo;
-prueba en consola pendiente. Parada inmediata ante error, sin cambiar player.
+DIAG56: ocho ciclos en FW13.20 completados. No hay crecimiento de memoria
+flexible después del primer ciclo (caída inicial de 1 MiB de causa desconocida).
+Siguiente paso: presentar el frame decodificado en el framebuffer, después
+probar un clip corto antes de integrar streams y sincronización al player.
 Después: integración
 1080p con audio/reloj/seeks, presentación GPU, VP9 SDR 1440p y 2160p. Conservar
 software como alternativa. No asumir AV1 por hardware ni HDR antes de pruebas.

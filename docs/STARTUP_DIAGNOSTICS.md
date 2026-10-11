@@ -17,7 +17,11 @@ Objetivo: distinguir el coste inicial de 1 MiB de DIAG55 de una pérdida que
 crezca en cada ciclo. Un plateau no demuestra por sí solo la ausencia de toda
 fuga ni valida el render. Tests ASan/UBSan: ocho ciclos completos, parada en
 fallo y ausencia de llamadas hardware si no se puede guardar el progreso.
-Prueba PS5 pendiente; instalar solo con Tube5 cerrada.
+Prueba PS5 FW13.20 completada: ocho ciclos devuelven cero, con salida válida
+y las mismas muestras de luma. La memoria flexible pierde 1048576 bytes en
+el primer ciclo y permanece constante en los siete restantes. No se observa
+crecimiento acumulativo en esta prueba; el origen de la reserva única sigue
+sin determinar. Resumen real conservado en .local/boot-diag-56/.
 ELF exacto conservado en .local/boot-diag-56; SHA-256 eboot.bin:
 `b2b33364854c2f9dde8fcea71ac4650c3e4bab35fe86da5f1b8d157e1d754761`.
 
