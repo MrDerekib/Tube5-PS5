@@ -1,5 +1,25 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-34-LIBRARY: catálogo LAN acotado
+
+Añade una lista de vídeos servidos por el PC sin cambiar los allocators ni el
+reproductor de DIAG33. Carga de catálogo en hilo, ocho entradas/4096 bytes,
+cancelación y plazo de ocho segundos. Mantiene HTTP con IPv4 numérica y las
+rutas de vídeo dentro del mismo servidor. La validación física está pendiente.
+
+La build nativa compila, pasa el guard de ABI RefStruct y la comprobación de
+integridad del paquete. El parser evita `string_view::substr`, cuya ruta de
+excepción requería un símbolo de libc++ ausente del runtime nativo.
+Las pruebas host con sanitizadores pasan, incluyendo lectura del catálogo,
+respuestas inválidas/sobredimensionadas, cancelación y timeout. También pasa
+la consulta del cliente contra el servidor real `192.168.8.176:8080`.
+SHA-256 de `eboot.bin`:
+`2ac0c6abbc842b1838ca2783eeb4aebdf6b9339fe65894e3ce572c8228daa8c3`.
+Respaldo privado en `.local/boot-diag-34/`.
+La biblioteca necesita el servidor con `--library`; ver
+[instrucciones de prueba](YOUTUBE_TEST.md#biblioteca-lan-diag34).
+Los apartados siguientes conservan el historial de diagnóstico.
+
 La build 01.000.001 compiló y pasó los tests en PC, pero el propietario informa
 de un fallo en PS5 Fat FW 13.20: pantalla de carga de la plantilla, aviso de
 bloqueo antes de pausar kstuff y CE-108255-1. Los juegos del SSD externo siguen
@@ -493,6 +513,10 @@ Build/FSELF y guard RefStruct válidos. Prueba física del selector pendiente.
 SHA-256 eboot:
 `57a804f28a1f6e65bb5ca9041d97c5804ffd5f522dbdee5609d2c791342e7d95`.
 ELF, eboot y etiqueta preservados en `.local/boot-diag-33/`.
+
+El propietario confirma «todo ok» tras probar DIAG33. Queda validada por reporte
+textual la prueba propuesta de selección, confirmación/cancelación, pausa y
+salida/reapertura en consola. No hay vídeo o captura nueva de esta prueba.
 
 ## BOOT-DIAG-32-HTTP: barra de progreso
 

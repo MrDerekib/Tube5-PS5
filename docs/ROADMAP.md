@@ -2,7 +2,10 @@
 
 - [x] Validar navegación DualSense y vídeo local con audio, pausa y seek en PS5 13.20.
 - [x] Abrir el piloto HTTP de YouTube a 360p y comprobar pausa, seek, salida y reapertura.
-- [ ] Validar estabilidad prolongada y clips HTTP de 720p/1080p; DIAG26 preparada.
+- [x] Validar clips HTTP de 720p/1080p, diez minutos continuos en 1080p y controles.
+- [ ] Biblioteca LAN de medios preparados en el PC, antes del proveedor definitivo.
+- [ ] Evaluar 4K nativo: decodificación acelerada, buffers y salida VideoOut;
+  realizar después una prueba corta. No hay compatibilidad 4K confirmada.
 - [ ] Elegir e integrar el proveedor de catálogo y reproducción de YouTube.
 - [ ] Integrar SponsorBlock con preferencias por categoría y atribución.
 - [ ] Sustituir los recursos visuales de la plantilla por identidad de Tube5.

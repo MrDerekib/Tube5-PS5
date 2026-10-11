@@ -8,7 +8,8 @@ enum class Screen
     home,
     settings,
     about,
-    player
+    player,
+    library
 };
 enum class Command
 {

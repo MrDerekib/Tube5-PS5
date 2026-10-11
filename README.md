@@ -6,8 +6,20 @@ Aplicación multimedia homebrew nativa para PlayStation 5, diseñada para una
 experiencia de salón y preparada para integrar saltos de segmentos mediante
 SponsorBlock.
 
-> Estado: prototipo con navegación y vídeo local con audio. Todavía no reproduce
-> YouTube ni bloquea anuncios; SponsorBlock está pendiente.
+> Estado actual: vídeo local y HTTP LAN, con diez minutos continuos de 1080p
+> y controles validados en PS5 Fat FW 13.20. El PC prepara y sirve el contenido
+> de YouTube; no hay streaming directo, bloqueo de anuncios ni SponsorBlock.
+> La biblioteca LAN de DIAG34 está pendiente de prueba en consola. 4K no validado.
+
+## Prueba actual: BOOT-DIAG-34-LIBRARY
+
+La tarjeta **Biblioteca LAN** carga una lista acotada desde el PC. Cruceta:
+seleccionar; X: reproducir; Círculo: volver a la lista; Options: recargarla.
+Durante el vídeo, X pausa, izquierda/derecha saltan cinco segundos y Triángulo
+abre el selector de posición (X confirma; Círculo cancela).
+Se reutilizan los dos clips existentes, sin nuevas descargas.
+Consultar [el piloto LAN](docs/YOUTUBE_TEST.md) para iniciar el servidor.
+Las secciones siguientes conservan el historial del prototipo.
 
 ## Prototipo 01.000.001
 

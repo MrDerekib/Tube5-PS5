@@ -15,6 +15,73 @@ http = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(http)
 
 
+class CatalogTests(unittest.TestCase):
+    def run_client(self, handler, mode=None):
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        server.daemon_threads = True
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            command = ["build/lan-catalog-test", f"http://127.0.0.1:{server.server_port}/test-clip.mp4"]
+            if mode:
+                command.append(mode)
+            result = subprocess.run(command, capture_output=True, text=True, timeout=12)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+    @unittest.skipUnless(Path("build/lan-catalog-test").is_file(), "Build catalogue tests first")
+    def test_catalog_client_and_allowed_media(self):
+        clip = Path("assets/test-clip.mp4")
+        entries = http.library_entries(clip, clip)
+        handler = http.handler_for(clip, library=entries)
+        self.run_client(handler)
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=3)
+        try:
+            for path in ("/media/network-test.mp4", "/media/local-test.mp4"):
+                connection.request("GET", path, headers={"Range": "bytes=0-9"})
+                response = connection.getresponse()
+                self.assertEqual(response.status, 206)
+                self.assertEqual(response.read(), clip.read_bytes()[:10])
+            connection.request("GET", "/assets/test-clip.mp4")
+            response = connection.getresponse()
+            self.assertEqual(response.status, 404)
+            response.read()
+        finally:
+            connection.close()
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+    @unittest.skipUnless(Path("build/lan-catalog-test").is_file(), "Build catalogue tests first")
+    def test_catalog_rejects_invalid_and_oversized_responses(self):
+        for body in (b"TUBE5\t2\n", b"x" * 4097):
+            class Invalid(BaseHTTPRequestHandler):
+                def do_GET(self):
+                    self.send_response(200)
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+            self.run_client(Invalid, "--failure")
+
+    @unittest.skipUnless(Path("build/lan-catalog-test").is_file(), "Build catalogue tests first")
+    def test_catalog_timeout_and_cancel(self):
+        release = threading.Event()
+        class Stalled(BaseHTTPRequestHandler):
+            def do_GET(self):
+                release.wait(12)
+        try:
+            self.run_client(Stalled, "--cancel")
+            self.run_client(Stalled, "--failure")
+        finally:
+            release.set()
+
+
 class RangeTests(unittest.TestCase):
     @unittest.skipUnless(Path("build/media-smoke").is_file(), "Build host media smoke first")
     def test_player_blocks_retries_after_read_oom(self):

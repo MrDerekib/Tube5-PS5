@@ -13,9 +13,31 @@ avance/retroceso y reapertura en DIAG30. Percibe una ligera demora adicional
 al saltar, sin medida de latencia. Confirma pausa y tres ciclos correctos.
 DIAG31 supera después cinco minutos completos con imagen/audio correctos,
 controles y tres ciclos, con los tres pools directos regresando a cero. La prueba
-de diez minutos mantiene DIAG31 y queda pendiente de confirmación en consola.
+de diez minutos mantiene DIAG31 y también termina correctamente en consola.
 No se modifican payloads ni firmware. HTTP es la fuente predeterminada en
 DIAG26; LOCAL sigue disponible en Ajustes.
+
+## Biblioteca LAN: DIAG34
+
+Build `BOOT-DIAG-34-LIBRARY`, pendiente de validación física. Conserva el
+reproductor validado y añade una lista del PC, no búsqueda directa en YouTube.
+El catálogo admite hasta ocho entradas y 4096 bytes; solo crea rutas de medios
+en el mismo servidor HTTP con IPv4 numérica. La carga se hace en un hilo,
+con cancelación y plazo de ocho segundos.
+
+```bash
+python3 tools/http-test-server.py --bind 192.168.8.176 --port 8080 --library --clip .local/youtube/qf31PkeESoU/resolution-1080p-600s.mp4
+```
+
+Se exponen `/catalog.tsv`, `/media/network-test.mp4`, `/media/local-test.mp4`
+y la ruta previa `/test-clip.mp4`. No se sirven directorios ni archivos privados.
+El catálogo reutiliza el clip YouTube de diez minutos y el sintético de veinte
+segundos. No requiere preparar otro vídeo ni repetir diez minutos completos.
+
+Con Tube5 cerrada, copiar `dist/PPSA99999/` y comprobar la etiqueta DIAG34.
+Entrar en Biblioteca LAN, seleccionar ambos clips y probar apertura, pausa,
+selector de posición y regreso a la lista con Círculo. Options recarga la lista.
+Comprobar después que se puede volver al menú y abrir de nuevo la biblioteca.
 
 ## Pruebas de resolución: DIAG26/DIAG27/DIAG28
 
@@ -116,6 +138,9 @@ en pausa (sigue pausado y la imagen se actualiza al reanudar); salir/reabrir y
 comprobar que no queda un selector antiguo. Los pools deben volver a cero al
 cerrar. La validación física de DIAG33 queda pendiente. No hace falta volver
 a ver el clip completo.
+
+El propietario confirma «todo ok» con DIAG33: prueba de selector superada por
+reporte textual. No se cambia de clip ni se prepara una variante adicional.
 
 Preparar un minuto de cada resolución desde sus pistas HD reales, sin ampliar
 el vídeo de 360p:

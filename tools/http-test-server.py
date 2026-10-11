@@ -1,11 +1,32 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""LAN-only test server: one MP4, no directory listing, single HTTP byte ranges."""
+"""LAN-only media server: explicit clips, optional bounded catalog, HTTP byte ranges."""
 import argparse
+import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import re
 import threading
+import unicodedata
+
+
+def library_entries(clip, local):
+    metadata = {}
+    sidecar = clip.with_suffix(".json")
+    if sidecar.is_file() and sidecar.stat().st_size <= 16384:
+        metadata = json.loads(sidecar.read_text(encoding="utf-8"))
+    title = unicodedata.normalize("NFKD", str(metadata.get("title", "VIDEO HTTP"))).encode("ascii", "ignore").decode()
+    title = "".join(c if 32 <= ord(c) <= 126 else " " for c in title)[:80] or "VIDEO HTTP"
+    identifier = metadata.get("id", "-")
+    if not isinstance(identifier, str) or not re.fullmatch(r"[A-Za-z0-9_-]{11}", identifier):
+        identifier = "-"
+    duration = metadata.get("duration", 0)
+    seconds = int(duration) if isinstance(duration, (int, float)) and 0 <= duration <= 3600 else 0
+    height = metadata.get("height", 0)
+    if height not in (360, 720, 1080):
+        height = 0
+    return [dict(id="network-test", title=title, youtube=identifier, seconds=seconds, height=height, path=clip),
+            dict(id="local-test", title="CLIP SINTETICO - 20 SEG", youtube="-", seconds=20, height=0, path=local)]
 
 
 def byte_range(header, size):
@@ -27,7 +48,13 @@ def byte_range(header, size):
     return start, min(end, size - 1)
 
 
-def handler_for(clip, stall_headers=False):
+def handler_for(clip, stall_headers=False, library=None):
+    catalog = ("TUBE5\t1\n" + "".join(
+        f"{e['id']}\t{e['title']}\t{e['youtube']}\t{e['seconds']}\t{e['height']}\n"
+        for e in library)).encode("ascii") if library else None
+    routes = {"/test-clip.mp4": clip}
+    if library:
+        routes.update({f"/media/{e['id']}.mp4": e["path"] for e in library})
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -42,8 +69,18 @@ def handler_for(clip, stall_headers=False):
             self.send_clip(True)
 
         def send_clip(self, body):
-            if self.path != "/test-clip.mp4":
-                self.send_error(404, "Only /test-clip.mp4 is served")
+            if self.path == "/catalog.tsv" and catalog is not None:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/tab-separated-values; charset=us-ascii")
+                self.send_header("Content-Length", str(len(catalog)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                if body:
+                    self.wfile.write(catalog)
+                return
+            clip_path = routes.get(self.path)
+            if clip_path is None:
+                self.send_error(404, "Only explicitly configured media are served")
                 return
             if stall_headers:
                 print(f"Tube5 STALL: {self.client_address[0]} {self.command} {self.path}; "
@@ -54,7 +91,7 @@ def handler_for(clip, stall_headers=False):
                 self.close_connection = True
                 return
             try:
-                source = clip.open("rb")
+                source = clip_path.open("rb")
             except OSError:
                 self.send_error(503, "Test clip unavailable")
                 return
@@ -104,16 +141,21 @@ def main():
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--stall-headers", action="store_true",
                         help="Timeout/cancel test: accept requests but send no response for 30 s")
+    parser.add_argument("--library", action="store_true", help="Expose bounded catalog and two explicit media entries")
     parser.add_argument("--clip", type=Path,
                         default=Path(__file__).resolve().parents[1] / "assets/test-clip.mp4")
     args = parser.parse_args()
     clip = args.clip.resolve(strict=True)
     if not clip.is_file() or clip.stat().st_size == 0:
         parser.error("clip must be a nonempty file")
-    server = ThreadingHTTPServer((args.bind, args.port), handler_for(clip, args.stall_headers))
+    local = Path(__file__).resolve().parents[1] / "assets/test-clip.mp4"
+    library = library_entries(clip, local) if args.library else None
+    server = ThreadingHTTPServer((args.bind, args.port), handler_for(clip, args.stall_headers, library))
     server.daemon_threads = True
     print(f"Tube5 HTTP: http://{args.bind}:{server.server_port}/test-clip.mp4", flush=True)
-    print("Only the test clip is exposed. Ctrl+C stops the server.", flush=True)
+    print("Only explicitly configured clips are exposed. Ctrl+C stops the server.", flush=True)
+    if library:
+        print("Tube5 library: /catalog.tsv (2 entries)", flush=True)
     if args.stall_headers:
         print("FAULT TEST: connections accepted, HTTP headers withheld for 30 s. "
               "Video playback intentionally unavailable.", flush=True)
