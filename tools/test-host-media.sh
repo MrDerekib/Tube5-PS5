@@ -18,13 +18,25 @@ read -r -a libs <<< "$(pkg-config --libs sdl2 libavformat libavcodec libswscale 
 read -r -a curl_cflags <<< "$(pkg-config --cflags libcurl json-c)"
 read -r -a curl_libs <<< "$(pkg-config --libs libcurl json-c)"
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_HOST \
-    -Isrc "${cflags[@]}" "${curl_cflags[@]}" tests/test_youtube_probe.cpp src/youtube_probe.cpp src/youtube_formats.cpp \
+    -Isrc "${cflags[@]}" "${curl_cflags[@]}" tests/test_youtube_probe.cpp src/youtube_probe.cpp src/youtube_formats.cpp src/verified_https.cpp \
     "${libs[@]}" "${curl_libs[@]}" -o build/youtube-probe-test
 build/youtube-probe-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc "${curl_cflags[@]}" tests/test_youtube_formats.cpp src/youtube_formats.cpp \
     "${curl_libs[@]}" -o build/youtube-formats-test
 build/youtube-formats-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_HOST \
+    -Isrc -I"$source_root/include" "${cflags[@]}" "${curl_cflags[@]}" tests/test_youtube_stream.cpp \
+    src/youtube_stream.cpp src/youtube_formats.cpp src/verified_https.cpp src/network_source.cpp \
+    src/boot_diagnostics.cpp src/memory_diagnostics.cpp "${libs[@]}" "${curl_libs[@]}" -o build/youtube-stream-test
+build/youtube-stream-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_HOST -DTUBE5_NETWORK_WRAP \
+    -Isrc -I"$source_root/include" "${cflags[@]}" "${curl_cflags[@]}" tests/test_youtube_transport.cpp \
+    src/youtube_stream.cpp src/youtube_formats.cpp src/verified_https.cpp src/network_source.cpp \
+    src/boot_diagnostics.cpp src/memory_diagnostics.cpp "${libs[@]}" "${curl_libs[@]}" \
+    -Wl,--wrap=curl_easy_setopt,--wrap=curl_easy_getinfo,--wrap=curl_easy_perform,--wrap=avformat_open_input,--wrap=avformat_find_stream_info \
+    -o build/youtube-transport-test
+build/youtube-transport-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc tests/test_playback_progress.cpp -o build/playback-progress-test
 build/playback-progress-test
@@ -119,14 +131,14 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Wl,--wrap=Kit_GetTimerElapsed -o build/audio-reader-test
 build/audio-reader-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
-    -DTUBE5_AUDIO_WRAP -DTUBE5_HOST -DTUBE5_DIAGNOSTICS -DTUBE5_PIPELINE_WRAP -DTUBE5_CONVERSION_WRAP -DTUBE5_NETWORK_WRAP -Isrc -I"$source_root/include" "${cflags[@]}" tests/media_smoke.cpp src/audio_reader.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
-    src/lan_catalog.cpp build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "$native_network_wraps" \
+    -DTUBE5_AUDIO_WRAP -DTUBE5_HOST -DTUBE5_DIAGNOSTICS -DTUBE5_PIPELINE_WRAP -DTUBE5_CONVERSION_WRAP -DTUBE5_NETWORK_WRAP -Isrc -I"$source_root/include" "${cflags[@]}" "${curl_cflags[@]}" tests/media_smoke.cpp src/audio_reader.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
+    src/youtube_probe.cpp src/youtube_formats.cpp src/youtube_stream.cpp src/verified_https.cpp src/lan_catalog.cpp build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "${curl_libs[@]}" "$native_network_wraps" \
     -Wl,--wrap=Kit_GetAudioDecoderData,--wrap=av_read_frame,--wrap=avcodec_send_packet,--wrap=avcodec_receive_frame,--wrap=avformat_seek_file,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat,--wrap=avformat_open_input,--wrap=avformat_find_stream_info,--wrap=_ZN5tube522network_playback_errorEv,--wrap=_ZN5tube520memory_out_of_memoryEv -o build/media-smoke
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/media-smoke
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/media-smoke assets/test-clip.mp4 --sponsor-test
 python3 -m unittest discover -s tests -p test_http_test_server.py -v
 python3 -m unittest discover -s tests -p test_youtube_prepare.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_AUDIO_WRAP -DTUBE5_HOST -DTUBE5_OFFSCREEN -DTUBE5_CONVERSION_WRAP -DTUBE5_NETWORK_WRAP -DTUBE5_SEEK_WRAP -ffunction-sections -fdata-sections \
-    -Isrc -I"$source_root/include" "${cflags[@]}" "${curl_cflags[@]}" src/main.cpp src/lan_catalog.cpp src/youtube_search.cpp src/youtube_probe.cpp src/youtube_formats.cpp src/audio_reader.cpp src/demo_renderer.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/native_sdl.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
+    -Isrc -I"$source_root/include" "${cflags[@]}" "${curl_cflags[@]}" src/main.cpp src/lan_catalog.cpp src/youtube_search.cpp src/youtube_probe.cpp src/youtube_formats.cpp src/youtube_stream.cpp src/verified_https.cpp src/audio_reader.cpp src/demo_renderer.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/native_sdl.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
     build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "${curl_libs[@]}" "$native_network_wraps" -Wl,--gc-sections,--wrap=Kit_GetAudioDecoderData,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat,--wrap=avformat_open_input,--wrap=avformat_find_stream_info,--wrap=av_read_frame,--wrap=avcodec_receive_frame,--wrap=avformat_seek_file -o build/tube5-host
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy TUBE5_PREVIEW=build/ui-preview.bmp build/tube5-host

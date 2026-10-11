@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "youtube_probe.hpp"
+#include "verified_https.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -7,34 +8,12 @@
 #include <new>
 #include <limits>
 #include <curl/curl.h>
-#include <pthread.h>
-#ifdef TUBE5_HOST
-#include <arpa/inet.h>
-#include <netdb.h>
-#ifdef TUBE5_NETWORK_WRAP
-extern "C" int __real_getaddrinfo(const char *, const char *, const struct addrinfo *,
-                                  struct addrinfo **);
-extern "C" void __real_freeaddrinfo(struct addrinfo *);
-#endif
-#else
-extern "C"
-{
-    int tube5_resolve_ipv4(const char *, char *, std::size_t, int *);
-    const char *console_curl_ca_file(void);
-}
-#endif
 namespace
 {
 constexpr const char *host = "www.youtube.com";
 constexpr const char *url =
     "https://www.youtube.com/"
     "oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DbHIhgxav9LY&format=json";
-pthread_once_t curl_once = PTHREAD_ONCE_INIT;
-CURLcode curl_initialized = CURLE_FAILED_INIT;
-void initialize_curl()
-{
-    curl_initialized = curl_global_init(CURL_GLOBAL_DEFAULT);
-}
 struct Body
 {
     explicit Body(std::size_t limit = 16384)
@@ -79,44 +58,6 @@ std::size_t header(char *data, std::size_t size, std::size_t count, void *opaque
         static_cast<Body *>(opaque)->range = line.starts_with("bytes 0-4095/");
     }
     return length;
-}
-bool blocked_ip(const char *text)
-{
-    unsigned a = 0, b = 0, c = 0, d = 0;
-    if (std::sscanf(text, "%u.%u.%u.%u", &a, &b, &c, &d) != 4 || a > 255 || b > 255 || c > 255 ||
-        d > 255)
-        return true;
-    return a == 0 || a == 10 || a == 127 || a >= 224 || (a == 169 && b == 254) ||
-           (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168) ||
-           (a == 100 && b >= 64 && b <= 127);
-}
-int resolve(const char *name, char *ip, std::size_t capacity, int &error)
-{
-#ifdef TUBE5_HOST
-    addrinfo hints{}, *entry = nullptr;
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-#ifdef TUBE5_NETWORK_WRAP
-    const int result = __real_getaddrinfo(name, "443", &hints, &entry);
-#else
-    const int result = getaddrinfo(name, "443", &hints, &entry);
-#endif
-    error = result;
-    bool ok = !result && entry &&
-              inet_ntop(AF_INET, &reinterpret_cast<sockaddr_in *>(entry->ai_addr)->sin_addr, ip,
-                        capacity);
-    if (entry)
-    {
-#ifdef TUBE5_NETWORK_WRAP
-        __real_freeaddrinfo(entry);
-#else
-        freeaddrinfo(entry);
-#endif
-    }
-    return ok ? 0 : -1;
-#else
-    return tube5_resolve_ipv4(name, ip, capacity, &error);
-#endif
 }
 constexpr const char *player_url = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
 // Protocol profile observed in upstream yt-dlp, not a bundled extractor.
@@ -216,21 +157,21 @@ int YouTubeProbe::worker(void *opaque) noexcept
 {
     auto &probe = *static_cast<YouTubeProbe *>(opaque);
     auto &out = probe.pending_;
-    const int dns = resolve(host, out.ip.data(), out.ip.size(), out.dns_error);
+    const int dns = resolve_https_ipv4(host, out.ip.data(), out.ip.size(), out.dns_error);
 #ifdef TUBE5_HOST
     std::snprintf(out.ca.data(), out.ca.size(), "CA DEL SISTEMA HOST - NO ES PRUEBA PS5");
 #else
-    std::snprintf(out.ca.data(), out.ca.size(), "%s", console_curl_ca_file());
+    std::snprintf(out.ca.data(), out.ca.size(), "%s", verified_https_ca());
 #endif
     if (dns)
         std::snprintf(out.error.data(), out.error.size(), "DNS: NO SE PUDO RESOLVER YOUTUBE");
-    else if (blocked_ip(out.ip.data()))
+    else if (blocked_https_ipv4(out.ip.data()))
         std::snprintf(out.error.data(), out.error.size(), "DNS: DIRECCION BLOQUEADA O NO PUBLICA");
     else if (!probe.cancelled_)
     {
         probe.stage_ = ProbeStage::https;
         // Worker creation/join serializes accesses; curl init remains process-wide.
-        (void)pthread_once(&curl_once, initialize_curl);
+        const auto curl_initialized = initialize_verified_https();
         const auto request = [&](const char *name, const char *address, const char *target,
                                  const char *post, bool range, Body &body, long &http,
                                  long &verify) -> CURLcode
@@ -332,9 +273,9 @@ int YouTubeProbe::worker(void *opaque) noexcept
                 probe.stage_ = ProbeStage::source;
                 std::array<char, 16> address{};
                 int source_dns_error = 0;
-                if (resolve(out.formats.source_host.data(), address.data(), address.size(),
-                            source_dns_error) ||
-                    blocked_ip(address.data()))
+                if (resolve_https_ipv4(out.formats.source_host.data(), address.data(),
+                                       address.size(), source_dns_error) ||
+                    blocked_https_ipv4(address.data()))
                     std::snprintf(out.error.data(), out.error.size(),
                                   "STREAM: DNS CDN FALLA O DIRECCION BLOQUEADA");
                 else if (!probe.cancelled_)

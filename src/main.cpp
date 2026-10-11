@@ -273,9 +273,10 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             canvas.text(120, 725, detail, 2, result.source_mp4 ? Color::white : Color::yellow);
             canvas.text(120, 775, result.title.data(), 2, Color::white);
             canvas.text(120, 825, result.error.data(), 2, Color::yellow);
-            canvas.text(120, 865, result.ca.data(), 1, muted);
+            if (!error[0])
+                canvas.text(120, 865, result.ca.data(), 1, muted);
         }
-        canvas.text(120, 925, "TLS VERIFICADO - SOLO 4 KIB; AUN NO ES REPRODUCCION", 2, muted);
+        canvas.text(120, 925, "TLS VERIFICADO - X REPRODUCIR 360P CUANDO MP4 SI", 2, muted);
     }
     else if (nav.screen == tube5::Screen::settings)
     {
@@ -319,7 +320,9 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             const unsigned dots = (SDL_GetTicks() / 350) % 4;
             char loading[64]{};
             std::snprintf(loading, sizeof(loading), "%s%.*s",
-                          media.cancelling() ? "CANCELANDO" : "ABRIENDO VIDEO HTTP",
+                          media.cancelling()       ? "CANCELANDO"
+                          : media.youtube_direct() ? "ABRIENDO YOUTUBE HTTPS"
+                                                   : "ABRIENDO VIDEO HTTP",
                           static_cast<int>(dots), "...");
             canvas.text(450, 500, loading, 5, Color::white);
             canvas.text(450, 620, "CIRCULO CANCELAR", 3, muted);
@@ -344,6 +347,9 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             if (sponsor_notice.visible(SDL_GetTicks()))
                 std::snprintf(status, sizeof(status), "PATROCINIO OMITIDO - %u SEG",
                               sponsor_notice.seconds());
+            else if (media.youtube_direct())
+                std::snprintf(status, sizeof(status),
+                              "YOUTUBE DIRECTO - SPONSORBLOCK AUN NO CONSULTADO");
             else
                 std::snprintf(status, sizeof(status), "SB %s  %u SEG  %u SALTOS  %s",
                               sponsor_enabled ? "ON" : "OFF", sponsor_skip.data().count,
@@ -383,7 +389,10 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(700, 125, frame_timing.data(), 2, muted);
         tube5::video_sync_diagnostic_status(diagnostics, sizeof(diagnostics));
         canvas.text(350, 980, diagnostics, 2, muted);
-        tube5::video_conversion_status(diagnostics, sizeof(diagnostics));
+        if (media.youtube_direct())
+            media.youtube_status(diagnostics, sizeof(diagnostics));
+        else
+            tube5::video_conversion_status(diagnostics, sizeof(diagnostics));
         canvas.text(350, 1005, diagnostics, 2, muted);
         media.diagnostic_status(diagnostics, sizeof(diagnostics));
         canvas.text(350, 950, diagnostics, 2, muted);
@@ -452,7 +461,7 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             ? (selection.active() ? "IZQ/DER 5 SEG  L1/R1 30 SEG  X CONFIRMAR  CIRCULO CANCELAR"
                                   : "X PAUSA  IZQ/DER 5 SEG  TRIANGULO BUSCAR  CIRCULO VOLVER")
             : (nav.screen == tube5::Screen::online
-                   ? "X INICIAR O REPETIR   CIRCULO CANCELAR Y VOLVER"
+                   ? "X CONSULTAR / REPRODUCIR  TRIANGULO RENOVAR  CIRCULO VOLVER"
                : nav.screen == tube5::Screen::search ? "CRUCETA MOVER   X ELEGIR   CIRCULO VOLVER"
                : nav.screen == tube5::Screen::library
                    ? "X REPRODUCIR  TRIANGULO BUSCAR  OPTIONS RECARGAR  CIRCULO VOLVER"
@@ -625,6 +634,13 @@ int main()
     std::array<char, 49> requested_entry{};
     unsigned library_selected = 0;
     bool library_playback = false;
+    bool direct_playback = false;
+    const auto playback_return = [&]()
+    {
+        return direct_playback    ? tube5::Screen::online
+               : library_playback ? tube5::Screen::library
+                                  : tube5::Screen::home;
+    };
     std::array<char, 256> active_media_url{};
     char error[256]{};
     const bool kit_ready = Kit_Init(KIT_INIT_NETWORK) == 0;
@@ -647,16 +663,17 @@ int main()
 #else
         constexpr const char *clip = "/app0/assets/test-clip.mp4";
 #endif
-        const bool configured =
-            !network_test || (source && std::string_view{source}.starts_with("http://"));
+        const bool configured = direct_playback || !network_test ||
+                                (source && std::string_view{source}.starts_with("http://"));
         if (!kit_ready || !configured ||
-            !(network_test ? media.begin_open(source) : media.open(renderer, clip)))
+            !((network_test || direct_playback) ? media.begin_open(source)
+                                                : media.open(renderer, clip)))
         {
             std::snprintf(error, sizeof(error), "%s",
                           !kit_ready    ? "PLAYER INIT FAILED"
                           : !configured ? "HTTP: CONFIGURA NETWORK-TEST-URL.TXT"
                                         : media.error());
-            nav.screen = library_playback ? tube5::Screen::library : tube5::Screen::home;
+            nav.screen = playback_return();
         }
         SDL_PumpEvents();
         SDL_FlushEvent(SDL_CONTROLLERBUTTONDOWN);
@@ -680,8 +697,30 @@ int main()
                 youtube_probe.cancel();
                 nav.screen = tube5::Screen::settings;
             }
-            else if (action == tube5::Command::select && !youtube_probe.loading())
-                (void)youtube_probe.begin(tube5::ProbeMode::formats);
+            else if (!youtube_probe.loading())
+            {
+                if (action == tube5::Command::search)
+                {
+                    error[0] = 0;
+                    (void)youtube_probe.begin(tube5::ProbeMode::formats);
+                }
+                else if (action == tube5::Command::select)
+                {
+                    if (youtube_probe.stage() == tube5::ProbeStage::ready &&
+                        youtube_probe.result().source_mp4)
+                    {
+                        direct_playback = true;
+                        library_playback = false;
+                        nav.screen = tube5::Screen::player;
+                        start_player(youtube_probe.result().formats.source.data());
+                    }
+                    else
+                    {
+                        error[0] = 0;
+                        (void)youtube_probe.begin(tube5::ProbeMode::formats);
+                    }
+                }
+            }
             return;
         }
         if (nav.screen == tube5::Screen::settings && action == tube5::Command::search)
@@ -805,6 +844,7 @@ int main()
                                        active_media_url.size()))
             {
                 library_playback = true;
+                direct_playback = false;
                 nav.screen = tube5::Screen::player;
                 start_player(active_media_url.data());
             }
@@ -881,13 +921,14 @@ int main()
                 selection.cancel();
                 sponsor_notice.cancel();
                 media.close();
-                nav.screen = library_playback ? tube5::Screen::library : tube5::Screen::home;
+                nav.screen = playback_return();
             }
             return;
         }
         if (nav.apply(action))
         {
             library_playback = false;
+            direct_playback = false;
             start_player(network_url.data());
         }
     };
@@ -1125,10 +1166,10 @@ int main()
             if (result == tube5::MediaPlayer::OpenResult::failed)
             {
                 std::snprintf(error, sizeof(error), "%s", media.error());
-                nav.screen = library_playback ? tube5::Screen::library : tube5::Screen::home;
+                nav.screen = playback_return();
             }
             else if (result == tube5::MediaPlayer::OpenResult::cancelled)
-                nav.screen = library_playback ? tube5::Screen::library : tube5::Screen::home;
+                nav.screen = playback_return();
             else if (result == tube5::MediaPlayer::OpenResult::ready)
             {
                 // Evaluate the known start, never the uninitialized player clock.
@@ -1140,8 +1181,7 @@ int main()
                     {
                         sponsor_notice.complete(SDL_GetTicks());
                         media.close();
-                        nav.screen =
-                            library_playback ? tube5::Screen::library : tube5::Screen::home;
+                        nav.screen = playback_return();
                     }
                     else
                         media.seek_sponsor(*target);
@@ -1154,12 +1194,12 @@ int main()
         if (nav.screen == tube5::Screen::player && media.check_network_failure())
         {
             std::snprintf(error, sizeof(error), "%s", media.error());
-            nav.screen = library_playback ? tube5::Screen::library : tube5::Screen::home;
+            nav.screen = playback_return();
         }
         if (nav.screen == tube5::Screen::player && media.finished())
         {
             media.close();
-            nav.screen = library_playback ? tube5::Screen::library : tube5::Screen::home;
+            nav.screen = playback_return();
         }
         if (nav.screen == tube5::Screen::player && !media.opening())
             if (const auto target = sponsor_skip.target(
@@ -1171,7 +1211,7 @@ int main()
                 {
                     sponsor_notice.complete(SDL_GetTicks());
                     media.close();
-                    nav.screen = library_playback ? tube5::Screen::library : tube5::Screen::home;
+                    nav.screen = playback_return();
                 }
                 else
                     media.seek_sponsor(*target);

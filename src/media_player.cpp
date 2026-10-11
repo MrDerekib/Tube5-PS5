@@ -33,13 +33,15 @@ bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
     close();
     error_[0] = '\0';
     begin_network_session();
-    network_ = path && std::strncmp(path, "http://", 7) == 0;
+    youtube_ = path && std::strncmp(path, "https://", 8) == 0;
+    network_ = youtube_ || (path && std::strncmp(path, "http://", 7) == 0);
     reset_memory_diagnostic();
-    source_ = Kit_CreateSourceFromUrl(path);
+    source_ = youtube_ ? youtube_stream_.open(path) : Kit_CreateSourceFromUrl(path);
     tube5::finish_network_open();
     if (!source_)
-        return fail("SOURCE",
-                    tube5::network_open_error()[0] ? tube5::network_open_error() : Kit_GetError());
+        return fail("SOURCE", youtube_                         ? youtube_stream_.error()
+                              : tube5::network_open_error()[0] ? tube5::network_open_error()
+                                                               : Kit_GetError());
     return complete_open(renderer);
 }
 
@@ -47,11 +49,12 @@ int MediaPlayer::open_source_worker(void *userdata) noexcept
 {
     auto *self = static_cast<MediaPlayer *>(userdata);
     memory_set_stage("SOURCE_OPEN");
-    self->source_ = Kit_CreateSourceFromUrl(self->opening_path_);
+    self->source_ = self->youtube_ ? self->youtube_stream_.open(self->opening_path_)
+                                   : Kit_CreateSourceFromUrl(self->opening_path_);
     finish_network_open();
     if (!self->source_)
     {
-        const char *detail = network_open_error();
+        const char *detail = self->youtube_ ? self->youtube_stream_.error() : network_open_error();
         if (!detail[0])
             detail = Kit_GetError();
         std::snprintf(self->error_, sizeof(self->error_), "SOURCE: %s",
@@ -71,7 +74,8 @@ bool MediaPlayer::begin_open(const char *path) noexcept
     if (!path || std::strlen(path) >= sizeof(opening_path_))
         return fail("SOURCE", "invalid or oversized URL");
     std::snprintf(opening_path_, sizeof(opening_path_), "%s", path);
-    network_ = std::strncmp(path, "http://", 7) == 0;
+    youtube_ = std::strncmp(path, "https://", 8) == 0;
+    network_ = youtube_ || std::strncmp(path, "http://", 7) == 0;
     begin_network_session();
     reset_memory_diagnostic();
     opening_cancelled_ = false;
@@ -241,8 +245,9 @@ void MediaPlayer::close() noexcept
     if (texture_)
         SDL_DestroyTexture(texture_);
     texture_ = nullptr;
-    if (source_)
+    if (source_ && !youtube_)
         Kit_CloseSource(source_);
+    youtube_stream_.close();
     source_ = nullptr;
     paused_ = false;
     frames_uploaded_ = 0;
@@ -263,6 +268,7 @@ void MediaPlayer::close() noexcept
     audio_started_ = false;
     seek_dispatched_at_ = 0;
     network_ = false;
+    youtube_ = false;
 }
 
 void MediaPlayer::toggle_pause() noexcept
@@ -430,7 +436,8 @@ bool MediaPlayer::check_network_failure() noexcept
         }
         char detail[AV_ERROR_MAX_STRING_SIZE]{};
         av_strerror(read_error, detail, sizeof(detail));
-        fail("HTTP READ", detail);
+        fail(youtube_ ? "YT READ" : "HTTP READ",
+             youtube_ && youtube_stream_.error()[0] ? youtube_stream_.error() : detail);
         return true;
     }
     if (finished() && position() + 2.0 < duration())

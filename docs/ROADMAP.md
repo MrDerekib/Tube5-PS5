@@ -17,7 +17,7 @@ una app que requiera una companion app en el PC.
 Validaciones de autonomía necesarias antes del producto final, no prerrequisitos
 que bloqueen ahora el desarrollo sobre el puente:
 
-- [ ] Probar DNS/HTTPS desde la app nativa manteniendo las protecciones de la consola.
+- [x] Probar DNS/HTTPS desde la app nativa manteniendo las protecciones de la consola (DIAG42 con nanoDNS).
 - [ ] Evaluar acceso a metadatos y resolución de medios YouTube desde PS5.
 - [ ] Reproducir un vídeo YouTube sin conversión ni servicio del PC; verificar
   formatos, audio/vídeo, seek y límites de memoria sobre la fuente real.
@@ -41,9 +41,13 @@ Conservarlo como banco de pruebas, sin hacerlo una dependencia del producto.
    audio y entrega conjunta/separada. No asumir que 1080p/4K ofrecen H.264
    muxado ni que una URL firmada sea permanente.
    DIAG43 inventaría formatos y comprueba 4 KiB de un MP4 AVC/AAC 360p en
-   googlevideo.com. Host validado; consola pendiente. No es reproducción aún.
+   googlevideo.com. Host y consola validados (IMG_4293): HTTP 206, 4096 B,
+   TLS válido y MP4 reconocido. No es reproducción aún.
 3. Acceder al stream real y validar apertura, sincronización, seek, expiración
    del enlace, reconexión y memoria, sin descargar/transcodificar en el PC.
+   DIAG44 integra la fuente MP4 360p con curl/AVIO, TLS verificado y caché
+   acotada. Host: imagen, pausa, seeks, EOF por seek y reapertura correctos;
+   reproducción física pendiente, sin validar todavía expiración/reconexión.
 4. Reproducción sin anuncios: identificar cómo aparecen en la ruta elegida y
    verificar su exclusión. No equiparar acceso a oEmbed o al HTML con bloqueo
    de publicidad implementado. SponsorBlock debe consultarse también desde PS5.
@@ -59,7 +63,26 @@ homebrew, códecs/perfiles soportados, propiedad de buffers y presentación;
 hacer una prueba mínima antes de comprometer 4K o cambiar el pipeline validado.
 El hardware no resuelve DNS, extracción del enlace, publicidad ni autenticación.
 
-El punto 2 tiene un prototipo parcial; los puntos 3–6 y la aceleración no están
+### Diagnóstico de DNS para el usuario
+
+- [ ] Investigar lectura de DNS primario/secundario del sistema con las APIs
+  disponibles en el sandbox homebrew; mostrar los valores en diagnóstico si
+  son accesibles. Si no lo son, indicar «DNS del sistema no disponible», sin
+  inventar valores ni solicitar elevación solo para leerlos.
+- [ ] Distinguir resolución fallida, timeout del resolver, respuesta 0.0.0.0/
+  dirección bloqueada, conexión TCP, certificado TLS y respuesta HTTP de YouTube.
+  No atribuir un fallo genérico de conexión a los DNS sin evidencia.
+- [ ] Ante una respuesta DNS inutilizable para YouTube o su CDN, mostrar un
+  aviso claro: «El DNS configurado no permite resolver este servidor», junto
+  al dominio/etapa y resultado. Una IP concreta no demuestra por sí sola la
+  política del servicio, y un DNS local puede no tener su payload activo.
+- [ ] Ofrecer orientación sobre nanoDNS/configuración compatible sin cambiar
+  automáticamente DNS globales, debilitar TLS o eliminar los bloqueos de Sony.
+  Cubrir en pruebas DNS restrictivo, nanoDNS activo/inactivo y conectividad
+  general; no usar la comprobación de PSN como requisito de Tube5.
+
+Los puntos 2–3 tienen prototipos parciales; la reproducción directa sigue
+pendiente de validación en PS5. Los puntos 4–6 y la aceleración no están
 implementados ni validados en autonomía. El orden
 puede ajustarse a impedimentos demostrados, manteniendo la autonomía prioritaria.
 

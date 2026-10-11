@@ -16,12 +16,13 @@ final. La app final no requerirá una companion app en el PC.
 
 > Estado actual: vídeo local y HTTP LAN, con diez minutos continuos de 1080p
 > y controles validados en PS5 Fat FW 13.20. El PC prepara y sirve el contenido
-> de YouTube; no hay streaming directo ni bloqueo de anuncios de YouTube.
+> de YouTube en el banco LAN. DIAG44 añade streaming directo candidato,
+> probado en host pero todavía no validado en PS5. Publicidad no validada.
 > Piloto SponsorBlock de DIAG36 validado por reporte del propietario en PS5.
 > Biblioteca LAN y corrección de títulos de DIAG35 validadas en consola.
 > 4K no validado.
 
-## Prueba actual: BOOT-DIAG-43-YOUTUBE-FORMATS
+## Prueba actual: BOOT-DIAG-44-YOUTUBE-STREAM
 
 DIAG42 queda validada en PS5 Fat FW 13.20: oEmbed devuelve HTTP 200, CURL 0,
 CERT 0, 815 B y el título correcto usando nanoDNS. El DNS 45.56.67.85 devuelve
@@ -29,9 +30,16 @@ CERT 0, 815 B y el título correcto usando nanoDNS. El DNS 45.56.67.85 devuelve
 DIAG43 consulta formatos mediante InnerTube desde Ajustes (Triángulo → X),
 selecciona MP4 AVC/AAC combinado de hasta 360p y verifica una lectura HTTPS
 de solo 4 KiB en el CDN de YouTube. El cliente host obtiene 36 formatos y
-HTTP 206/MP4 válido; validación de DIAG43 en consola pendiente.
+HTTP 206/MP4 válido; IMG_4293 confirma esos primeros bytes desde la PS5.
 No ejecuta yt-dlp en PS5, usa un PC como proxy ni desactiva TLS.
-Todavía no conecta esa fuente al reproductor ni demuestra bloqueo de anuncios.
+DIAG44 conecta esa fuente al player: consultar con X y, cuando MP4 SI, pulsar
+X otra vez para reproducir. Triángulo renueva el enlace. Transporte curl con
+TLS verificado, peticiones Range y caché fija de 512 KiB; no prepara, descarga
+completo ni transcodifica en el PC. El smoke real host pasa imagen, pausa,
+seeks, EOF por seek y reapertura; prueba física de reproducción pendiente.
+Solo el vídeo fijo y el MP4 combinado <=360p: aún no hay búsqueda autónoma,
+SponsorBlock directo, cuenta, renovación automática ni hardware decoding.
+La ausencia de anuncios no se da por validada por esta prueba.
 Ver [la prueba directa](docs/YOUTUBE_DIRECT.md).
 
 DIAG40 añade teclado propio y búsqueda con el mando desde Biblioteca LAN

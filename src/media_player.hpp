@@ -4,6 +4,7 @@
 #include <kitchensink2/kitchensink.h>
 #include <atomic>
 #include <cstddef>
+#include "youtube_stream.hpp"
 
 namespace tube5
 {
@@ -64,6 +65,14 @@ class MediaPlayer final
     {
         return frames_uploaded_;
     }
+    bool youtube_direct() const noexcept
+    {
+        return youtube_;
+    }
+    void youtube_status(char *text, std::size_t capacity) const noexcept
+    {
+        youtube_stream_.status(text, capacity);
+    }
     const char *error() const noexcept
     {
         return error_;
@@ -76,11 +85,13 @@ class MediaPlayer final
     std::atomic<bool> opening_done_{false};
     bool opening_cancelled_ = false;
     bool network_ = false;
+    bool youtube_ = false;
+    YouTubeStream youtube_stream_;
     // A native ENOMEM followed by repeated opens has crashed on hardware.
     // Preserve the first failure and require a fresh app session, not retries.
     bool memory_blocked_ = false;
     Uint32 last_frame_at_ = 0;
-    char opening_path_[256]{};
+    char opening_path_[8192]{};
     static void audio_callback(void *userdata, Uint8 *stream, int length) noexcept;
     bool fail(const char *stage, const char *detail) noexcept;
     Kit_Source *source_ = nullptr;

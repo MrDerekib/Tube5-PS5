@@ -1,4 +1,47 @@
-# YouTube directo: DIAG43 formatos y lectura mínima del CDN
+# YouTube directo: DIAG44 reproducción candidata
+
+## Prueba actual (DIAG44)
+
+1. Con Tube5 cerrada, copiar `dist/PPSA99999/` completa. Mantener nanoDNS activo.
+2. Comprobar `BOOT-DIAG-44-YOUTUBE-STREAM`.
+3. Ajustes → Triángulo → X consulta formatos y verifica primeros bytes.
+4. Cuando MP4 SI, pulsar X otra vez: abre el vídeo de Veritasium directamente.
+5. Probar 20–30 s de imagen/audio, pausa/reanudar, +/-5 s y Círculo para salir.
+6. X vuelve a reproducir. Triángulo en la pantalla directa renueva el enlace.
+
+No hace falta ver el vídeo completo. Ante fallo, fotografiar pantalla y etapa;
+si aparece ENOMEM, cerrar completamente Tube5 y no insistir en esa sesión.
+El contador YT HTTPS muestra REQ/FAIL/RX y caché; las URLs firmadas no aparecen.
+No hay servidor PC en esta ruta, ni descarga previa/transcodificación. El
+selector HTTP/local solo afecta al banco de pruebas anterior.
+
+curl sirve rangos a AVIO/FFmpeg con 512 KiB de caché + 32 KiB AVIO, TLS con
+cadena y nombre verificados y sin redirects/proxy. Se exige HTTP 206,
+Content-Range exacto, bytes completos y tamaño estable en cada rango. El player
+y sus pools son los validados. Cierre/cancelación interrumpe red y une los
+threads antes de liberar buffers. DNS se resuelve antes de abrir el formato;
+apertura/probing acotados a 8 s y cada petición a 5 s, sin reconexión automática.
+
+Host real: imagen, diez segundos, pausa, seeks, EOF por seek y reapertura pasan;
+cuatro rangos, cero fallos, 1644 KiB transferidos. Tests negativos offline y
+sanitizadores pasan; no prueban sockets/memoria/sonido de la PS5. Build nativa
+e integridad/guard ABI válidos. Reproducción física DIAG44 pendiente.
+
+Esta primera ruta usa un solo vídeo público fijo y MP4 AVC/AAC combinado <=360p.
+SponsorBlock todavía no se consulta desde consola (aviso explícito en player);
+el piloto previo de biblioteca LAN lo conserva. No afirmar ausencia de anuncios
+por haber recibido el MP4. Búsqueda autónoma, más vídeos/calidades, tokens,
+expiración/reconexión, login y aceleración siguen pendientes.
+
+Se evita el HTTPS nativo de FFmpeg 7.0.1 porque su implementación OpenSSL no
+verifica hostname; véase [upstream](https://github.com/FFmpeg/FFmpeg/blob/n7.0.1/libavformat/tls_openssl.c).
+No es aceptable resolver esto desactivando TLS o cambiar los DNS globales
+automáticamente. El diagnóstico de DNS solicitado se incluye en ROADMAP,
+pero aún no se leen los DNS primario/secundario de la consola.
+
+La build local conserva su clave LAN privada: no publicar carpeta/ZIP.
+
+## Historial (DIAG43)
 
 ## Prueba actual (DIAG43)
 
@@ -38,7 +81,8 @@ dos fases DNS, con la limitación de cancelación de resolver indicada abajo.
 Host: 36 formatos, una URL explícita, máxima altura 2160p; AVC 7/VP9 9/AV1 8,
 AAC 7/Opus 6. Fuente itag 18 360p: HTTP 206/CURL 0/CERT 0, 4096 B y MP4 válido.
 Parser/cancelación y suite host con sanitizadores comprobados; UI revisada.
-Build/FSELF y guard ABI pasan. Prueba DIAG43 en consola pendiente.
+Build/FSELF y guard ABI pasan. IMG_4293 confirma el resultado en consola:
+HTTP 200/CURL 0/CERT 0, 36 formatos y fuente 360p HTTP 206, 4096 B, MP4 SI.
 No se modifica el player validado ni se afirma reproducción/autonomía completa,
 bloqueo publicitario, SponsorBlock directo o hardware decoding por este resultado.
 

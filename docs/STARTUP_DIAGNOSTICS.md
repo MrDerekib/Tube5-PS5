@@ -1,5 +1,45 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-44-YOUTUBE-STREAM: primera reproducción autónoma candidata
+
+Tras el éxito de DIAG43 (IMG_4293), X en la pantalla de formatos abre la URL
+verificada en el player. Triángulo renueva la consulta; Círculo cancela/vuelve.
+La ruta directa no depende del selector HTTP/local ni de la biblioteca LAN.
+Al salir, cancelar, EOF o error, vuelve a la pantalla directa. No transmite
+la clave LAN, prepara medios en PC ni ejecuta yt-dlp en consola.
+
+El decoder/renderer/audio/pools son los existentes. Transporte nuevo curl
+con AVIO custom propio: 512 KiB de caché fija + 32 KiB AVIO, Range, HTTP 206,
+Content-Range exacto, tamaño estable y cadena/nombre TLS siempre verificados.
+URL y DNS restringidos como DIAG43; solo formato MP4, no referencias a
+manifiestos. Buffer sustituido solo al salir de la ventana; seeks dentro
+de la caché no necesitan red. Fuera de ella se pide otro rango, no el archivo
+completo. Cada petición hasta 5 s; apertura usa el deadline/cancel de 8 s
+existente tras crear AVFormatContext. DNS conserva su limitación de cancelación.
+
+No se delega HTTPS a FFmpeg 7.0.1: su transporte OpenSSL no comprueba el nombre
+del certificado (ver el [código upstream](https://github.com/FFmpeg/FFmpeg/blob/n7.0.1/libavformat/tls_openssl.c)).
+La lectura curl validada se conserva hasta llegar al decoder, sin fallback
+inseguro. AVFormatContext/AVIO/buffer/curl tienen un único propietario;
+se liberan después de parar y unir los threads del player. El origen se
+presenta mediante la estructura pública Kit_Source del SDK fijado.
+
+Smoke host real: vídeo de 887 s, imagen no negra y >100 frames durante diez
+segundos, pausa, seek adelante/atrás, EOF **mediante seek**, salida y reapertura.
+Cuatro rangos correctos, FAIL 0, RX 1644 KiB, caché 512 KiB. No se vieron los
+887 s completos. Tests offline cubren rangos/overflow/IPs/URLs, errores TLS,
+HTTP 200 en vez de 206, rangos incorrectos/ausentes, cuerpo truncado/excesivo,
+cancelación y cierre repetido. Sin fugas/errores en sanitizadores.
+
+SponsorBlock todavía no se consulta en la ruta autónoma, indicado en el player;
+el piloto LAN anterior no cambia. Ni publicidad ausente, 4K, formatos separados,
+autenticación ni hardware decoding quedan validados por este cambio.
+Build/FSELF y guard ABI correctos. SHA-256 de eboot.bin:
+`fd223fc5ba98ef5cef56f039abda596c329ce985be5ad1eb9f44798516297056`.
+Prueba física pendiente: nanoDNS activo, copiar carpeta con Tube5 cerrada,
+Ajustes → Triángulo → X → esperar MP4 SI → X. Probar primero 20–30 s, audio,
+pausa, +/-5 s y salir/reabrir. No es necesario ver el vídeo completo todavía.
+
 ## BOOT-DIAG-43-YOUTUBE-FORMATS: formatos y primeros bytes del CDN
 
 Ajustes → Triángulo → X consulta InnerTube player para `bHIhgxav9LY`, sin
@@ -27,6 +67,11 @@ Build/FSELF e integridad/guard ABI correctos. SHA-256 de eboot.bin:
 `fea9f433052f837b0d96cc676de71c7ab32b974a886ce8a6af0b897093d967cd`.
 Validación física pendiente: repetir con nanoDNS activo, fotografiar resultado
 y comprobar cancelación/repetición. Ver [prueba directa](YOUTUBE_DIRECT.md).
+
+Resultado posterior: IMG_4293 confirma en PS5 IP 142.251.152.4, consulta
+HTTP 200/CURL 0/CERT 0, 360252 B, 36 formatos/una URL directa, y stream itag 18
+360p HTTP 206/CURL 0/CERT 0, 4096 B y MP4 SI. Acceso a primeros bytes validado;
+no es prueba de reproducción o controles de DIAG43.
 
 ## BOOT-DIAG-42-YOUTUBE-DIRECT: DNS/HTTPS sin puente
 

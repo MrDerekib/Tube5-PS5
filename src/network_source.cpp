@@ -53,6 +53,18 @@ void cancel_network_session() noexcept
 {
     cancelled = true;
 }
+void prepare_custom_network(void *opaque) noexcept
+{
+    auto *context = static_cast<AVFormatContext *>(opaque);
+    original_interrupt = context->interrupt_callback;
+    network_context = context;
+    context->interrupt_callback = {interrupt_open, nullptr};
+    deadline = SDL_GetTicks64() + 8000;
+}
+bool network_session_interrupted() noexcept
+{
+    return interrupt_open(nullptr) != 0;
+}
 void record_network_read(const void *context, int result, int io_error) noexcept
 {
     if (!context || !playing.load() || context != network_context.load() || cancelled.load())

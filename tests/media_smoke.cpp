@@ -4,6 +4,7 @@
 #include "sponsor_skip.hpp"
 #include "lan_catalog.hpp"
 #include "pipeline_diagnostics.hpp"
+#include "youtube_probe.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -38,11 +39,26 @@ static void require(bool value, const char *message)
 
 int main(int argc, char **argv)
 {
+    const bool youtube = argc > 1 && std::strcmp(argv[1], "--youtube-direct") == 0;
     const char *clip = argc > 1 ? argv[1] : "assets/test-clip.mp4";
-    const bool real_video = argc > 2 && std::strcmp(argv[2], "--real-video") == 0;
+    const bool real_video = youtube || (argc > 2 && std::strcmp(argv[2], "--real-video") == 0);
     SDL_SetMainReady();
     require(SDL_Init(SDL_INIT_EVENTS | SDL_INIT_AUDIO) == 0, "SDL init without video driver");
     require(Kit_Init(KIT_INIT_NETWORK) == 0, "Kit init with network");
+    tube5::YouTubeProbe probe;
+    if (youtube)
+    {
+        require(probe.begin(tube5::ProbeMode::formats), "launch direct resolver");
+        const auto started = SDL_GetTicks64();
+        while (probe.loading())
+        {
+            probe.poll();
+            SDL_Delay(10);
+            require(SDL_GetTicks64() - started < 32000, "bounded direct resolver");
+        }
+        require(probe.result().source_mp4, probe.result().error.data());
+        clip = probe.result().formats.source.data(); // Never print the signed URL.
+    }
     SDL_Surface *output = SDL_CreateRGBSurfaceWithFormat(0, 640, 360, 32, SDL_PIXELFORMAT_RGBA32);
     require(output != nullptr, "offscreen surface");
     SDL_Renderer *renderer = SDL_CreateSoftwareRenderer(output);
@@ -127,7 +143,7 @@ int main(int argc, char **argv)
         std::puts("HTTP cancel passed: repeated cancellation and local recovery.");
         return 0;
     }
-    if (std::strncmp(clip, "http://", 7) == 0)
+    if (std::strncmp(clip, "http://", 7) == 0 || youtube)
         require(async_open(clip, false) == tube5::MediaPlayer::OpenResult::ready, player.error());
     else
         require(player.open(renderer, clip), player.error());
@@ -404,6 +420,11 @@ int main(int argc, char **argv)
     }
     std::printf("EOF position %.3f / %.3f\n", player.position(), player.duration());
     require(player.finished(), "end of video");
+    if (youtube)
+    {
+        player.youtube_status(pipeline, sizeof(pipeline));
+        std::puts(pipeline);
+    }
     player.close();
     require(player.open(renderer, clip), "reopen after end");
     player.close();
