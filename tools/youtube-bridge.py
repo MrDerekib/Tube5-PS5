@@ -99,7 +99,8 @@ class Bridge:
         title = "".join(c if 32 <= ord(c) <= 126 else " " for c in title)[:80] or identifier
         entry_id = f"yt-{identifier}-{height}-{seconds}"
         entry = dict(id=entry_id, title=title, youtube=identifier, seconds=int(duration),
-                     height=video["height"] if video["height"] in (360, 720, 1080) else 0, path=path)
+                     height=video["height"] if video["height"] in (360, 720, 1080) else 0, path=path,
+                     timeline_full=height == 360, duration=duration)
         # Manifest contains only canonical URLs/profiles, not arbitrary file paths.
         profile = dict(url=f"https://www.youtube.com/watch?v={identifier}", height=height, seconds=seconds)
         with self.lock:

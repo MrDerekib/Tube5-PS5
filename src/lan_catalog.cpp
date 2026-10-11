@@ -57,7 +57,9 @@ namespace tube5
 bool parse_lan_catalog(std::string_view body, CatalogData &out) noexcept
 {
     out = {};
-    if (body.size() > 4096 || !body.starts_with("TUBE5\t1\n") || !body.ends_with('\n'))
+    const bool sponsor_version = body.starts_with("TUBE5\t2\n");
+    if (body.size() > 4096 || !(body.starts_with("TUBE5\t1\n") || sponsor_version) ||
+        !body.ends_with('\n'))
         return false;
     CatalogData candidate{};
     body.remove_prefix(8);
@@ -68,8 +70,9 @@ bool parse_lan_catalog(std::string_view body, CatalogData &out) noexcept
         const auto end = body.find('\n');
         auto line = slice(body, 0, end);
         body.remove_prefix(end + 1);
-        std::array<std::string_view, 5> fields{};
-        for (unsigned i = 0; i < 4; ++i)
+        std::array<std::string_view, 7> fields{};
+        const unsigned field_count = sponsor_version ? 7 : 5;
+        for (unsigned i = 0; i < field_count - 1; ++i)
         {
             const auto tab = line.find('\t');
             if (tab == std::string_view::npos)
@@ -77,7 +80,7 @@ bool parse_lan_catalog(std::string_view body, CatalogData &out) noexcept
             fields[i] = slice(line, 0, tab);
             line.remove_prefix(tab + 1);
         }
-        fields[4] = line;
+        fields[field_count - 1] = line;
         if (!identifier(fields[0], 48) || fields[1].empty() || fields[1].size() > 80 ||
             !std::all_of(fields[1].begin(), fields[1].end(),
                          [](unsigned char c) { return c >= 32 && c <= 126; }) ||
@@ -95,6 +98,55 @@ bool parse_lan_catalog(std::string_view body, CatalogData &out) noexcept
         copy(entry.title, fields[1]);
         if (fields[2] != "-")
             copy(entry.youtube_id, fields[2]);
+        if (sponsor_version)
+        {
+            if (fields[5] == "ready")
+                entry.sponsor.state = SponsorState::ready;
+            else if (fields[5] == "none")
+                entry.sponsor.state = SponsorState::none;
+            else if (fields[5] == "pending")
+                entry.sponsor.state = SponsorState::pending;
+            else if (fields[5] == "unavailable")
+                entry.sponsor.state = SponsorState::unavailable;
+            else if (fields[5] == "unaligned")
+                entry.sponsor.state = SponsorState::unaligned;
+            else
+                return false;
+            if (entry.sponsor.state != SponsorState::ready)
+            {
+                if (fields[6] != "-")
+                    return false;
+            }
+            else
+            {
+                auto ranges = fields[6];
+                while (!ranges.empty())
+                {
+                    if (entry.sponsor.count == entry.sponsor.ranges.size())
+                        return false;
+                    const auto comma = ranges.find(',');
+                    auto range = slice(ranges, 0, comma);
+                    const auto dash = range.find('-');
+                    if (dash == std::string_view::npos)
+                        return false;
+                    auto &parsed = entry.sponsor.ranges[entry.sponsor.count];
+                    if (!number(slice(range, 0, dash), 3600000, parsed.start_ms) ||
+                        !number(slice(range, dash + 1), 3600000, parsed.end_ms) ||
+                        parsed.end_ms <= parsed.start_ms ||
+                        (entry.sponsor.count &&
+                         parsed.start_ms < entry.sponsor.ranges[entry.sponsor.count - 1].end_ms))
+                        return false;
+                    ++entry.sponsor.count;
+                    if (comma == std::string_view::npos)
+                        break;
+                    ranges.remove_prefix(comma + 1);
+                    if (ranges.empty())
+                        return false;
+                }
+                if (!entry.sponsor.count || !entry.youtube_id[0])
+                    return false;
+            }
+        }
         ++candidate.count;
     }
     if (!candidate.count)
@@ -173,7 +225,7 @@ int LanCatalog::worker(void *self) noexcept
 {
     auto &catalog = *static_cast<LanCatalog *>(self);
     char url[128]{};
-    std::snprintf(url, sizeof(url), "%s/catalog.tsv", catalog.base_.data());
+    std::snprintf(url, sizeof(url), "%s/catalog-sb.tsv", catalog.base_.data());
     AVIOContext *io = nullptr;
     AVIOInterruptCB abort{interrupt, self};
     AVDictionary *options = nullptr;

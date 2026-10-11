@@ -21,6 +21,9 @@ build/playback-progress-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc tests/test_seek_selection.cpp -o build/seek-selection-test
 build/seek-selection-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
+    -Isrc tests/test_sponsor_skip.cpp -o build/sponsor-skip-test
+build/sponsor-skip-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_DIAGNOSTICS \
     -Isrc "${cflags[@]}" tests/test_texture_diagnostics.cpp src/texture_diagnostics.cpp \
     "${libs[@]}" -o build/texture-diagnostics-test
@@ -65,6 +68,7 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     build/native-network-host.o "${libs[@]}" "$native_network_wraps" -o build/lan-catalog-test
 build/lan-catalog-test
 python3 -m unittest discover -s tests -p test_youtube_bridge.py -v
+python3 -m unittest discover -s tests -p test_sponsorblock.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc tests/test_native_framebuffer.cpp src/native_framebuffer.cpp -o build/native-framebuffer-test
 build/native-framebuffer-test
@@ -98,9 +102,10 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
 build/audio-reader-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -DTUBE5_AUDIO_WRAP -DTUBE5_HOST -DTUBE5_DIAGNOSTICS -DTUBE5_PIPELINE_WRAP -DTUBE5_CONVERSION_WRAP -DTUBE5_NETWORK_WRAP -Isrc -I"$source_root/include" "${cflags[@]}" tests/media_smoke.cpp src/audio_reader.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
-    build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "$native_network_wraps" \
+    src/lan_catalog.cpp build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "$native_network_wraps" \
     -Wl,--wrap=Kit_GetAudioDecoderData,--wrap=av_read_frame,--wrap=avcodec_send_packet,--wrap=avcodec_receive_frame,--wrap=avformat_seek_file,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat,--wrap=avformat_open_input,--wrap=avformat_find_stream_info,--wrap=_ZN5tube522network_playback_errorEv,--wrap=_ZN5tube520memory_out_of_memoryEv -o build/media-smoke
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/media-smoke
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/media-smoke assets/test-clip.mp4 --sponsor-test
 python3 -m unittest discover -s tests -p test_http_test_server.py -v
 python3 -m unittest discover -s tests -p test_youtube_prepare.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_AUDIO_WRAP -DTUBE5_HOST -DTUBE5_OFFSCREEN -DTUBE5_CONVERSION_WRAP -DTUBE5_NETWORK_WRAP -DTUBE5_SEEK_WRAP -ffunction-sections -fdata-sections \

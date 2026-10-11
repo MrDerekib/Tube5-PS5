@@ -8,11 +8,12 @@ SponsorBlock.
 
 > Estado actual: vídeo local y HTTP LAN, con diez minutos continuos de 1080p
 > y controles validados en PS5 Fat FW 13.20. El PC prepara y sirve el contenido
-> de YouTube; no hay streaming directo, bloqueo de anuncios ni SponsorBlock.
+> de YouTube; no hay streaming directo ni bloqueo de anuncios de YouTube.
+> DIAG36 añade SponsorBlock, pendiente de prueba física en PS5.
 > Biblioteca LAN y corrección de títulos de DIAG35 validadas en consola.
 > 4K no validado.
 
-## Prueba actual: BOOT-DIAG-35-LIBRARY
+## Prueba actual: BOOT-DIAG-36-SPONSOR
 
 La tarjeta **Biblioteca LAN** carga una lista acotada desde el PC. Cruceta:
 seleccionar; X: reproducir; Círculo: volver a la lista; Options: recargarla.
@@ -25,6 +26,9 @@ Consultar [el piloto LAN](docs/YOUTUBE_TEST.md) para iniciar el servidor.
 El [servicio local de URLs](docs/BRIDGE_SERVICE.md) permite añadir vídeos desde
 el PC y refrescar la biblioteca sin cambiar la build de consola.
 El flujo completo con una URL nueva a 360p está confirmado en PS5.
+DIAG36 añade saltos de patrocinio en los vídeos completos y permite ON/OFF
+con Options durante reproducción. Consultar [el piloto SponsorBlock](docs/SPONSORBLOCK.md)
+para la prueba corta de Veritasium; todavía no se da por validado en consola.
 Las secciones siguientes conservan el historial del prototipo.
 
 ## Prototipo 01.000.001
@@ -163,5 +167,6 @@ licenciado GPL-3.0-or-later. Este repositorio también se publica bajo
 GPL-3.0-or-later; consulta [LICENSE](LICENSE) y
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-SponsorBlock ofrece una API pública y exige respetar su atribución y sus
-límites de uso. La futura integración incluirá los avisos correspondientes.
+La integración usa datos de [SponsorBlock](https://sponsor.ajay.app/) bajo
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), con fuente
+y licencia visibles en Ajustes/Acerca de. El código del proyecto sigue GPL.

@@ -1,5 +1,31 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-36-SPONSOR: saltos de patrocinio
+
+El PC consulta la API de SponsorBlock y añade estado/intervalos a un catálogo
+v2 independiente; el v1 queda disponible para DIAG35. La PS5 no realiza nuevas
+consultas HTTPS ni crea otro hilo por vídeo. Solo sponsor/skip, hasta ocho
+intervalos, estructura fija y mismos límites de catálogo. Los vídeos completos
+de 360p conservan el ID y tiempos; recortes HD y duración no coincidente quedan
+sin saltos. Options ON/OFF en player, cruceta en Ajustes; atribución visible.
+
+El modelo respeta pausa, seek pendiente y selector. No repite una solicitud
+dentro del mismo encuentro, incluso si el seek falla. El test inicial detectó
+que Kit_GetPlayerPosition puede devolver duración antes de inicializarse su
+reloj. Se bloquean saltos hasta el primer fotograma presentado; no se altera
+el decoder ni el allocator para resolverlo.
+
+Pasaron el modelo con sanitizadores, parser v1/v2, el test de reproducción con
+dos intervalos sintéticos, caché/persistencia/fallo y la consulta del parser
+contra las cinco entradas del servidor LAN real. El servicio publica los dos
+intervalos verificados de Veritasium. La prueba física de DIAG36 está pendiente;
+[instrucciones y limitaciones](SPONSORBLOCK.md).
+El smoke test posterior con catálogo/MP4 reales también pasa salto inicial,
+pausa, seek manual, salto final, EOF y reapertura en PC. Paquete firmado y
+guard ABI válidos; SHA de eboot.bin
+`59690d33db18b4d2f77023918a3deedeea82aa2f2eb8f9f2acd652bad33ec175`.
+Respaldo privado `.local/boot-diag-36/`.
+
 ## BOOT-DIAG-35-LIBRARY: textos del catálogo
 
 DIAG34 funciona en consola según el propietario. El título mixto pierde sus

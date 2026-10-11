@@ -21,6 +21,19 @@
 
 ## Native build dependencies
 
+### SponsorBlock API data (separate from code)
+
+Tube5 uses data from [SponsorBlock](https://sponsor.ajay.app/), by Ajay
+Ramachandran and community contributors, under
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+See the [API/database license](https://github.com/ajayyy/SponsorBlock/wiki/Database-and-API-License).
+The pilot filters sponsor/skip marks, merges intervals and converts seconds
+to milliseconds. These transformed data retain their data license, not the
+GPL license of Tube5's independently written integration code. Source/license
+are shown in-app and in LAN response headers; private cached records are not
+committed or bundled. No endorsement by SponsorBlock is implied.
+
+
 ### Tube5 playback prototype
 
 Tube5 01.000.001 statically links SDL2 2.30.12, SDL_kitchensink 2.0.0-a2,

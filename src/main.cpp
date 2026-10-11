@@ -38,13 +38,31 @@ constexpr auto muted = static_cast<Color>(0xffbbaea5);
 std::array<char, 48> build_label{};
 std::array<char, 256> network_url{};
 bool network_test = true;
+bool sponsor_enabled = true;
+const char *sponsor_state_text(tube5::SponsorState state) noexcept
+{
+    switch (state)
+    {
+    case tube5::SponsorState::ready:
+        return "SEGMENTOS LISTOS";
+    case tube5::SponsorState::pending:
+        return "PENDIENTE - OPTIONS RECARGAR";
+    case tube5::SponsorState::unavailable:
+        return "NO DISPONIBLE - SIN SALTOS";
+    case tube5::SponsorState::unaligned:
+        return "RECORTE O TIEMPOS NO VERIFICADOS";
+    default:
+        return "SIN SEGMENTOS";
+    }
+}
 #ifdef TUBE5_DIAGNOSTICS
 std::array<char, 128> frame_timing{};
 #endif
 
 void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &media, bool connected,
            const char *error, const tube5::SeekSelection &selection,
-           const tube5::LanCatalog &catalog, unsigned library_selected)
+           const tube5::LanCatalog &catalog, unsigned library_selected,
+           const tube5::SponsorSkip &sponsor_skip)
 {
     canvas.clear(ink);
     canvas.rectangle(80, 65, 16, 98, accent);
@@ -127,10 +145,12 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
                     std::snprintf(quality, sizeof(quality), "%uP", entry.height);
                 else
                     std::snprintf(quality, sizeof(quality), "RESOLUCION DESCONOCIDA");
-                std::snprintf(detail, sizeof(detail), "%u:%02u  %s  %s",
-                              entry.seconds / 60, entry.seconds % 60, quality,
+                std::snprintf(detail, sizeof(detail), "%u:%02u  %s  %s", entry.seconds / 60,
+                              entry.seconds % 60, quality,
                               entry.youtube_id[0] ? "ORIGEN YOUTUBE" : "CLIP DE PRUEBA");
                 canvas.text(120, 820, detail, 2, muted);
+                if (!error[0])
+                    canvas.text(120, 855, sponsor_state_text(entry.sponsor.state), 2, muted);
             }
         }
     }
@@ -140,7 +160,9 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(120, 460, "MANDO", 4, muted);
         canvas.text(650, 460, connected ? "CONECTADO" : "CONECTA TU DUALSENSE", 4, Color::white);
         canvas.text(120, 560, "SPONSORBLOCK", 4, muted);
-        canvas.text(650, 560, "PROXIMAMENTE", 4, Color::white);
+        canvas.text(650, 560, sponsor_enabled ? "ON - IZQ/DER CAMBIAR" : "OFF - IZQ/DER CAMBIAR", 3,
+                    Color::white);
+        canvas.text(120, 605, "DATOS: SPONSOR.AJAY.APP - CC BY-NC-SA 4.0", 2, muted);
         canvas.text(120, 660, "REPRODUCCION", 4, muted);
         canvas.text(650, 660, network_test ? "HTTP - X CAMBIAR" : "LOCAL - X CAMBIAR", 4,
                     Color::white);
@@ -156,6 +178,7 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(120, 635, "BASE: BLACKBEARRELOADED - SDL2 - FFMPEG", 3, muted);
         canvas.text(120, 700, "SDL KITCHENSINK - TUBE5: GPL-3.0-OR-LATER", 3, muted);
         canvas.text(120, 765, "SIN GARANTIA. FUENTES Y LICENCIA EN GITHUB.", 3, muted);
+        canvas.text(120, 820, "SPONSORBLOCK: SPONSOR.AJAY.APP - DATOS CC BY-NC-SA 4.0", 2, muted);
     }
     else
     {
@@ -184,6 +207,14 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         const unsigned progress =
             tube5::playback_progress_width(media.position(), media.duration(), 1220);
         canvas.rectangle(350, 885, progress, 8, media.paused() ? Color::yellow : accent);
+        if (!error[0] && !selection.active())
+        {
+            char status[128]{};
+            std::snprintf(status, sizeof(status), "SB %s  %u SEG  %u SALTOS  OPTIONS CAMBIAR",
+                          sponsor_enabled ? "ON" : "OFF", sponsor_skip.data().count,
+                          sponsor_skip.skipped());
+            canvas.text(350, 930, status, 2, muted);
+        }
         if (selection.active())
         {
             const unsigned target =
@@ -434,6 +465,7 @@ int main()
     tube5::MediaPlayer media;
     tube5::SeekSelection selection;
     tube5::LanCatalog catalog;
+    tube5::SponsorSkip sponsor_skip;
     unsigned library_selected = 0;
     bool library_playback = false;
     std::array<char, 256> active_media_url{};
@@ -447,6 +479,9 @@ int main()
     const auto start_player = [&](const char *source)
     {
         selection.cancel();
+        sponsor_skip.reset(library_playback && library_selected < catalog.data().count
+                               ? catalog.data().entries[library_selected].sponsor
+                               : tube5::SponsorData{});
         opening_player = true;
         error[0] = '\0';
 #ifdef TUBE5_HOST
@@ -519,6 +554,12 @@ int main()
             }
             return;
         }
+        if (nav.screen == tube5::Screen::settings &&
+            (action == tube5::Command::previous || action == tube5::Command::next))
+        {
+            sponsor_enabled = !sponsor_enabled;
+            return;
+        }
         if (nav.screen == tube5::Screen::settings && action == tube5::Command::select)
         {
             network_test = !network_test;
@@ -526,6 +567,11 @@ int main()
         }
         if (nav.screen == tube5::Screen::player)
         {
+            if (action == tube5::Command::settings)
+            {
+                sponsor_enabled = !sponsor_enabled;
+                return;
+            }
             if (media.opening())
             {
                 if (action == tube5::Command::back)
@@ -553,7 +599,10 @@ int main()
                          static_cast<Sint32>(SDL_GetTicks() - select_ready_at) >= 0)
                 {
                     if (const auto destination = selection.confirm(media.duration()))
+                    {
+                        sponsor_skip.manual_seek();
                         media.seek_to(*destination);
+                    }
                     // A queued second X must not immediately toggle pause.
                     select_ready_at = SDL_GetTicks() + 350;
                 }
@@ -565,7 +614,10 @@ int main()
                     media.toggle_pause();
             }
             else if (action == tube5::Command::previous || action == tube5::Command::next)
+            {
+                sponsor_skip.manual_seek();
                 media.seek(action == tube5::Command::previous ? -5.0 : 5.0);
+            }
             else if (action == tube5::Command::back)
             {
                 selection.cancel();
@@ -584,6 +636,18 @@ int main()
     (void)sceSystemServiceHideSplashScreen();
 #endif
 #ifdef TUBE5_HOST
+    if (const char *url = std::getenv("TUBE5_PREVIEW_LIBRARY_URL"))
+    {
+        nav.screen = tube5::Screen::library;
+        (void)catalog.begin(url);
+    }
+    if (const char *screen = std::getenv("TUBE5_PREVIEW_SCREEN"))
+    {
+        if (std::string_view{screen} == "settings")
+            nav.screen = tube5::Screen::settings;
+        else if (std::string_view{screen} == "about")
+            nav.screen = tube5::Screen::about;
+    }
     bool running = true;
 #endif
     auto render_frame = [&](Canvas *destination) noexcept
@@ -709,6 +773,11 @@ int main()
             media.close();
             nav.screen = library_playback ? tube5::Screen::library : tube5::Screen::home;
         }
+        if (nav.screen == tube5::Screen::player && !media.opening())
+            if (const auto target = sponsor_skip.target(
+                    media.position(), media.duration(), sponsor_enabled, media.paused(),
+                    media.seeking() || selection.active() || media.frames_uploaded() == 0))
+                media.seek_to(*target);
         if (nav.screen != tube5::Screen::player)
             selection.cancel();
         if (catalog.loading())
@@ -728,7 +797,7 @@ int main()
             fatal("UI SURFACE LOCK");
         const Uint32 paint_start = SDL_GetTicks();
         paint(canvas, nav, media, controller != nullptr, error, selection, catalog,
-              library_selected);
+              library_selected, sponsor_skip);
         if (output)
             SDL_UnlockSurface(output);
         else
@@ -753,7 +822,7 @@ int main()
             tube5_boot_checkpoint("Tube5 D13: primer frame presentado");
             first_frame = false;
         }
-        if (const char *preview = std::getenv("TUBE5_PREVIEW"))
+        if (const char *preview = std::getenv("TUBE5_PREVIEW"); preview && !catalog.loading())
         {
             SDL_Surface *capture =
                 SDL_CreateRGBSurfaceWithFormat(0, 1920, 1080, 32, SDL_PIXELFORMAT_RGBA32);

@@ -10,6 +10,8 @@
   realizar después una prueba corta. No hay compatibilidad 4K confirmada.
 - [ ] Elegir e integrar el proveedor de catálogo y reproducción de YouTube.
 - [ ] Integrar SponsorBlock con preferencias por categoría y atribución.
+- [x] Implementar piloto SponsorBlock sponsor/skip, caché y ON/OFF con atribución.
+- [ ] Validar DIAG36 y los saltos SponsorBlock en consola.
 - [ ] Sustituir los recursos visuales de la plantilla por identidad de Tube5.
 - [ ] Elegir y comprobar un Title ID propio antes de publicar.
 - [ ] Completar la auditoría de licencias del reproductor, adjuntar sus textos y

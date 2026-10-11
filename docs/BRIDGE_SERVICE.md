@@ -2,7 +2,8 @@
 
 El servicio prepara un MP4 en el PC y lo publica en la biblioteca LAN.
 No es streaming directo de YouTube, búsqueda en YouTube ni SponsorBlock.
-La consola conserva `BOOT-DIAG-35-LIBRARY`; no necesita otra build.
+La entrada de URLs funciona desde `BOOT-DIAG-35-LIBRARY`; los saltos
+SponsorBlock requieren la nueva [DIAG36](SPONSORBLOCK.md).
 
 ## Arranque
 

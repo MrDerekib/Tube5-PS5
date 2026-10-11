@@ -14,7 +14,7 @@ import signal
 
 def library_entries(clip, local):
     metadata = {}
-    sidecar = clip.with_suffix(".json")
+    sidecar = clip.parent / "metadata.json" if clip.name == "media.mp4" else clip.with_suffix(".json")
     if sidecar.is_file() and sidecar.stat().st_size <= 16384:
         metadata = json.loads(sidecar.read_text(encoding="utf-8"))
     title = unicodedata.normalize("NFKD", str(metadata.get("title", "VIDEO HTTP"))).encode("ascii", "ignore").decode()
@@ -27,7 +27,8 @@ def library_entries(clip, local):
     height = metadata.get("height", 0)
     if height not in (360, 720, 1080):
         height = 0
-    return [dict(id="network-test", title=title, youtube=identifier, seconds=seconds, height=height, path=clip),
+    return [dict(id="network-test", title=title, youtube=identifier, seconds=seconds, height=height, path=clip,
+                 timeline_full=clip.name == "media.mp4", duration=duration),
             dict(id="local-test", title="CLIP SINTETICO - 20 SEG", youtube="-", seconds=20, height=360, path=local)]
 
 
@@ -50,7 +51,7 @@ def byte_range(header, size):
     return start, min(end, size - 1)
 
 
-def handler_for(clip, stall_headers=False, library=None):
+def handler_for(clip, stall_headers=False, library=None, sponsor=None):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -69,14 +70,24 @@ def handler_for(clip, stall_headers=False, library=None):
             catalog = ("TUBE5\t1\n" + "".join(
                 f"{e['id']}\t{e['title']}\t{e['youtube']}\t{e['seconds']}\t{e['height']}\n"
                 for e in entries)).encode("ascii") if entries else None
+            if self.path == "/catalog-sb.tsv" and entries:
+                decorated = sponsor.decorate(entries) if sponsor else [dict(e, sb_state="unavailable" if e["youtube"] != "-" else "none", sb_ranges=[]) for e in entries]
+                catalog = ("TUBE5\t2\n" + "".join(
+                    f"{e['id']}\t{e['title']}\t{e['youtube']}\t{e['seconds']}\t{e['height']}\t{e['sb_state']}\t" +
+                    (",".join(f"{start}-{end}" for start, end in e["sb_ranges"]) or "-") + "\n"
+                    for e in decorated)).encode("ascii")
             routes = {"/test-clip.mp4": clip}
             if entries:
                 routes.update({f"/media/{e['id']}.mp4": e["path"] for e in entries})
-            if self.path == "/catalog.tsv" and catalog is not None:
+            if self.path in ("/catalog.tsv", "/catalog-sb.tsv") and catalog is not None:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/tab-separated-values; charset=us-ascii")
                 self.send_header("Content-Length", str(len(catalog)))
                 self.send_header("Cache-Control", "no-store")
+                if self.path == "/catalog-sb.tsv":
+                    self.send_header("X-SponsorBlock-Source", "https://sponsor.ajay.app/")
+                    self.send_header("X-SponsorBlock-License", "CC-BY-NC-SA-4.0; https://creativecommons.org/licenses/by-nc-sa/4.0/")
+                    self.send_header("X-SponsorBlock-Changes", "sponsor/skip filter; merged intervals; milliseconds")
                 self.end_headers()
                 if body:
                     self.wfile.write(catalog)
@@ -148,6 +159,7 @@ def main():
     parser.add_argument("--youtube-control", action="store_true",
                         help="Enable local authenticated URL submission (also enables library)")
     parser.add_argument("--control-port", type=int, default=8081)
+    parser.add_argument("--sponsorblock", action="store_true", help="Read-only sponsor category with private cache")
     parser.add_argument("--clip", type=Path,
                         default=Path(__file__).resolve().parents[1] / "assets/test-clip.mp4")
     args = parser.parse_args()
@@ -155,8 +167,8 @@ def main():
     if not clip.is_file() or clip.stat().st_size == 0:
         parser.error("clip must be a nonempty file")
     local = Path(__file__).resolve().parents[1] / "assets/test-clip.mp4"
-    library = library_entries(clip, local) if args.library or args.youtube_control else None
-    bridge = control = control_thread = None
+    library = library_entries(clip, local) if args.library or args.youtube_control or args.sponsorblock else None
+    bridge = control = control_thread = sponsor = None
     if args.youtube_control:
         spec = importlib.util.spec_from_file_location("tube5_bridge", Path(__file__).with_name("youtube-bridge.py"))
         module = importlib.util.module_from_spec(spec)
@@ -171,7 +183,13 @@ def main():
             raise
         library = bridge
     try:
-        server = ThreadingHTTPServer((args.bind, args.port), handler_for(clip, args.stall_headers, library))
+        if args.sponsorblock:
+            spec = importlib.util.spec_from_file_location("tube5_sponsor", Path(__file__).with_name("sponsorblock-cache.py"))
+            module_sb = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module_sb)
+            sponsor = module_sb.SponsorCache()
+            sponsor.decorate(library.snapshot() if bridge else library)
+        server = ThreadingHTTPServer((args.bind, args.port), handler_for(clip, args.stall_headers, library, sponsor))
         if bridge:
             control.RequestHandlerClass = module.control_handler(bridge)
             control.daemon_threads = True
@@ -182,6 +200,8 @@ def main():
             bridge.close()
         if control:
             control.server_close()
+        if sponsor:
+            sponsor.close()
         if 'server' in locals():
             server.server_close()
         raise
@@ -210,6 +230,8 @@ def main():
             control_thread.join()
         if bridge:
             bridge.close()
+        if sponsor:
+            sponsor.close()
 
 
 if __name__ == "__main__":

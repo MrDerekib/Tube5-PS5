@@ -4,6 +4,7 @@
 #include <atomic>
 #include <string_view>
 #include <SDL.h>
+#include "sponsor_skip.hpp"
 namespace tube5
 {
 struct CatalogEntry
@@ -12,6 +13,7 @@ struct CatalogEntry
     std::array<char, 81> title{};
     std::array<char, 12> youtube_id{};
     unsigned seconds = 0, height = 0;
+    SponsorData sponsor{};
 };
 struct CatalogData
 {

@@ -48,6 +48,10 @@ class MediaPlayer final
     double position() const noexcept;
     double duration() const noexcept;
     bool paused() const noexcept;
+    bool seeking() const noexcept
+    {
+        return pending_seek_ >= 0.0;
+    }
     bool finished() const noexcept;
     void diagnostic_status(char *text, std::size_t capacity) const noexcept;
     unsigned frames_uploaded() const noexcept

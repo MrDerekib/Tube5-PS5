@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #define SDL_MAIN_HANDLED
 #include "media_player.hpp"
+#include "sponsor_skip.hpp"
+#include "lan_catalog.hpp"
 #include "pipeline_diagnostics.hpp"
 #include <algorithm>
 #include <cmath>
@@ -129,6 +131,86 @@ int main(int argc, char **argv)
         require(async_open(clip, false) == tube5::MediaPlayer::OpenResult::ready, player.error());
     else
         require(player.open(renderer, clip), player.error());
+    if (argc > 2 && (std::strcmp(argv[2], "--sponsor-test") == 0 ||
+                     std::strcmp(argv[2], "--sponsor-real") == 0))
+    {
+        tube5::SponsorData data;
+        data.state = tube5::SponsorState::ready;
+        data.ranges[0] = {0, 4000};
+        const unsigned end_ms = static_cast<unsigned>(std::round(player.duration() * 1000));
+        data.ranges[1] = {end_ms - 5000, end_ms};
+        data.count = 2;
+        if (std::strcmp(argv[2], "--sponsor-real") == 0)
+        {
+            tube5::LanCatalog catalog;
+            require(catalog.begin(clip), "load real segment catalogue");
+            const Uint64 started = SDL_GetTicks64();
+            while (catalog.loading())
+            {
+                catalog.poll();
+                require(SDL_GetTicks64() - started < 10000, "bounded real catalogue fetch");
+                SDL_Delay(5);
+            }
+            require(!catalog.error()[0], catalog.error());
+            bool found = false;
+            for (unsigned i = 0; i < catalog.data().count; ++i)
+            {
+                char url[256]{};
+                if (catalog.media_url(i, url, sizeof(url)) && std::strcmp(url, clip) == 0)
+                {
+                    data = catalog.data().entries[i].sponsor;
+                    found = true;
+                }
+            }
+            require(found && data.state == tube5::SponsorState::ready && data.count == 2,
+                    "real video has two ready segments");
+        }
+        tube5::SponsorSkip skip;
+        skip.reset(data);
+        const Uint64 start = SDL_GetTicks64();
+        bool moved_to_outro = false;
+        while (!player.finished())
+        {
+            require(SDL_GetTicks64() - start < 12000, "bounded automatic skip test");
+            require(!player.check_network_failure(), "healthy SponsorBlock HTTP playback");
+            if (const auto target =
+                    skip.target(player.position(), player.duration(), true, player.paused(),
+                                player.seeking() || player.frames_uploaded() == 0))
+            {
+                std::printf("Sponsor request %.3f -> %.3f (%u)\n", player.position(), *target,
+                            skip.skipped());
+                player.seek_to(*target);
+            }
+            player.draw(renderer, SDL_Rect{0, 0, 640, 360});
+            if (!moved_to_outro && player.frames_uploaded() > 0 && player.position() > 4.5 &&
+                player.position() < player.duration() - 5 && !player.seeking())
+            {
+                std::printf("Sponsor first position %.3f count %u\n", player.position(),
+                            skip.skipped());
+                require(skip.skipped() == 1, "initial segment skipped exactly once");
+                player.toggle_pause();
+                require(!skip.target(player.position(), player.duration(), true, true, false),
+                        "pause suppresses automatic seeks");
+                player.toggle_pause();
+                skip.manual_seek();
+                player.seek_to(data.ranges[1].start_ms / 1000.0 + 0.5);
+                moved_to_outro = true;
+            }
+            SDL_Delay(16);
+        }
+        require(skip.skipped() == 2, "end segment skipped exactly once");
+        require(moved_to_outro, "manual seek preserved");
+        player.close();
+        require(player.open(renderer, clip), "reopen after sponsor EOF");
+        player.close();
+        Kit_Quit();
+        SDL_DestroyRenderer(renderer);
+        SDL_FreeSurface(output);
+        SDL_Quit();
+        std::puts(
+            "Sponsor smoke passed: initial skip, pause, manual seek, end skip, EOF and reopen.");
+        return 0;
+    }
     if (argc > 2 && std::strcmp(argv[2], "--expect-read-failure") == 0)
     {
         const Uint64 started = SDL_GetTicks64();
