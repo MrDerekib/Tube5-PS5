@@ -652,8 +652,7 @@ int main()
 #ifdef TUBE5_HW_FRAME
     if (hardware_report.module == 0 && hardware_report.compute == 0 &&
         hardware_report.query[0] == 0)
-        (void)tube5::hardware_frame_probe("/app0/assets/hw-frame.h264",
-                                          "/download0/tube5-hardware-frame.log");
+        (void)tube5::hardware_frame_cycles("/app0/assets/hw-frame.h264", "/download0");
 #endif
 #endif
 #ifdef TUBE5_HOST

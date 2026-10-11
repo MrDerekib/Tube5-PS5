@@ -37,4 +37,6 @@ static_assert(sizeof(VideoFrame) == 32 && sizeof(VideoOutput) == 56);
 static_assert(offsetof(VideoOutput, buffer) == 32);
 // One deterministic AU, no player or display change. Never retry quarantined resources.
 int hardware_frame_probe(const char *asset, const char *log) noexcept;
+// Eight bounded cycles, stop on the first error, with separate per-cycle reports.
+int hardware_frame_cycles(const char *asset, const char *directory) noexcept;
 } // namespace tube5

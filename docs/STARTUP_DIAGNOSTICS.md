@@ -1,5 +1,26 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-56-HWCYCLES: memoria tras ocho ciclos
+
+Ejecuta ocho pruebas de un frame en el mismo proceso, antes de iniciar SDL.
+Cada ciclo crea y destruye su compute queue y decoder; no cambia el player
+ni muestra la imagen. Se detiene al primer error, incluido el de escritura
+del informe de progreso. Nunca reintenta recursos en cuarentena.
+
+Resumen: `/download0/tube5-hardware-cycles.log`, con memoria flexible
+antes/después y retorno por ciclo. Detalle: `tube5-hardware-cycle-1.log`
+hasta `tube5-hardware-cycle-8.log` en el mismo directorio. Son nueve snapshots
+acotados, sobrescritos al siguiente arranque; un resumen incompleto distingue
+los detalles antiguos de los ciclos realmente ejecutados en el arranque actual.
+
+Objetivo: distinguir el coste inicial de 1 MiB de DIAG55 de una pérdida que
+crezca en cada ciclo. Un plateau no demuestra por sí solo la ausencia de toda
+fuga ni valida el render. Tests ASan/UBSan: ocho ciclos completos, parada en
+fallo y ausencia de llamadas hardware si no se puede guardar el progreso.
+Prueba PS5 pendiente; instalar solo con Tube5 cerrada.
+ELF exacto conservado en .local/boot-diag-56; SHA-256 eboot.bin:
+`b2b33364854c2f9dde8fcea71ac4650c3e4bab35fe86da5f1b8d157e1d754761`.
+
 ## BOOT-DIAG-55-HWFRAME: un frame AVC por hardware
 
 DIAG54 confirmó en la PS5 FW13.20 acceso al módulo, compute y consultas

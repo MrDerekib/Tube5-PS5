@@ -222,6 +222,17 @@ int main()
     char log[200]{};
     std::snprintf(log, sizeof(log), "%s/report.log", directory);
     const char *asset = "assets/hw-frame.h264";
+    operation = 0;
+    assert(!tube5::hardware_frame_cycles(asset, directory));
+    assert(operation == 8 * 17);
+    no_resources();
+    operation = 0;
+    fail_operation = 3;
+    assert(tube5::hardware_frame_cycles(asset, directory) == -77 && operation == 3);
+    no_resources();
+    fail_operation = 0;
+    assert(tube5::hardware_frame_cycles(asset, "/missing-tube5-directory") != 0);
+    assert(operation == 3); // No decode when the progress log cannot be written.
     for (unsigned i = 0; i < 10; ++i)
     {
         operation = 0;
@@ -282,5 +293,13 @@ int main()
     }
     assert(waitpid(partial_child, &status, 0) == partial_child && WIFEXITED(status) &&
            !WEXITSTATUS(status));
+    char batch_path[200]{};
+    for (unsigned i = 1; i <= 8; ++i)
+    {
+        std::snprintf(batch_path, sizeof(batch_path), "%s/tube5-hardware-cycle-%u.log", directory, i);
+        assert(unlink(batch_path) == 0);
+    }
+    std::snprintf(batch_path, sizeof(batch_path), "%s/tube5-hardware-cycles.log", directory);
+    assert(unlink(batch_path) == 0);
     assert(unlink(log) == 0 && rmdir(directory) == 0);
 }
