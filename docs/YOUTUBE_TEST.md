@@ -46,6 +46,12 @@ vivos/KIB deberían regresar al nivel inicial; ALLOC es acumulativo y puede crec
 Después probar pausa, saltos, salida durante reproducción y reapertura. La
 validación física de DIAG31 y de la duración nueva queda pendiente.
 
+La captura posterior IMG_4287 muestra el menú con RBUF 0/32 0 KIB, SBUF 0/4
+y DBUF 0/32 0 KIB, todos FAIL 0 ERR 0: los tres pools quedan sin reservas vivas
+tras ese cierre. La etiqueta no se ve en el recorte. Queda confirmar explícitamente
+la reproducción continua de los cinco minutos y valorar audio/fluidez; no se
+deduce la duración reproducida solo de estos contadores.
+
 Preparar un minuto de cada resolución desde sus pistas HD reales, sin ampliar
 el vídeo de 360p:
 

@@ -488,6 +488,14 @@ El MP4 de 300 s se valida con ffprobe (1920x1080 Main/30, AAC-LC estéreo,
 saltos, EOF por seek, reapertura y limpieza; no reproduce íntegros los cinco
 minutos ni ejercita los pools nativos en PS5. El servidor queda en esa variante.
 
+IMG_4287.HEIC muestra los contadores en el menú tras la reproducción: RBUF
+0/32 0 KIB ALLOC 12 FAIL 0 ERR 0; SBUF 0/4 ALLOC 1 FAIL 0 ERR 0;
+DBUF 0/32 0 KIB ALLOC 9029 FAIL 0 ERR 0. Confirma liberación de todas las
+reservas vivas de esos tres pools en ese cierre, sin fallos registrados. No
+demuestra ausencia de fugas en otros allocators. La etiqueta de build queda
+fuera del recorte; los contadores del menú son compatibles con DIAG31. El
+propietario no vio registros antes de abrir; falta reproducir esa observación.
+
 ## BOOT-DIAG-30-HTTP: pool RefStruct de FFmpeg
 
 IMG_4285.HEIC confirma DIAG29 y `MEMORY: ENOMEM`, `MEMFAIL 17 ALIGN
