@@ -97,6 +97,11 @@ salir anticipadamente y reabrir. Comparar barra y contador, y comprobar pools
 a cero en el menú. La confirmación física de DIAG32 queda pendiente; no es
 necesario volver a ver los diez minutos completos para esta prueba de interfaz.
 
+Resultado físico: el propietario confirma avance de barra con el vídeo, color
+amarillo al pausar, avance/retroceso y salida/reapertura correctos. Confirma que
+es un indicador sin interacción directa, comportamiento previsto para DIAG32.
+La prueba funcional de esta interfaz queda superada.
+
 Preparar un minuto de cada resolución desde sus pistas HD reales, sin ampliar
 el vídeo de 360p:
 

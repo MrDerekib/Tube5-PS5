@@ -483,6 +483,12 @@ SHA-256 eboot:
 `b809c5c84af2357c508bb65002c1c85cc13ba769dd2e4a9f31be6f746bef7b95`.
 ELF, eboot y etiqueta preservados en `.local/boot-diag-32/`.
 
+El propietario confirma en consola que la barra avanza junto al vídeo, se vuelve
+amarilla en pausa y acompaña avance/retroceso. También confirma salida y
+reapertura correctas. La barra es solo un indicador, sin interacción directa,
+como estaba previsto; no se ha implementado selección de posición/scrubbing.
+La prueba funcional de la barra en DIAG32 queda superada por reporte textual.
+
 ## BOOT-DIAG-31-HTTP: duración y memoria tras cierre
 
 Conserva los allocators y el reproductor de DIAG30. Muestra los pools directos
