@@ -8,7 +8,10 @@ pausa, seek, salida y reapertura. No se considera validada su duración completa
 El propietario confirma imagen y audio en 720p con DIAG27 y que el clip HTTP
 de 1080p se reproduce con DIAG30. Esta build incorpora descarte de preroll y
 pools directos para AVBuffer, superficies SDL y entradas grandes de RefStruct.
-No se han confirmado todavía el minuto completo, controles ni reapertura en DIAG30.
+El propietario confirma también reproducción hasta el final con salida al menú,
+avance/retroceso y reapertura en DIAG30. Percibe una ligera demora adicional
+al saltar, sin medida de latencia. Pausa y valoración específica de audio/fluidez
+siguen pendientes en esta build.
 No se modifican payloads ni firmware. HTTP es la fuente predeterminada en
 DIAG26; LOCAL sigue disponible en Ajustes.
 
@@ -57,8 +60,10 @@ DIAG29 supera esa etapa pero falla una reserva RefStruct de 5.234.088 bytes.
 DIAG30 añade un pool separado para esa ruta concreta de la biblioteca fijada,
 con liberación emparejada y un checker que bloquea builds si cambia su ABI.
 El propietario confirma que ahora se reproduce en PS5 con DIAG30 (2026-10-11).
-Quedan pendientes duración completa del clip, audio/fluidez, pausa, seek,
-salida y reapertura en esta build. La URL no cambia.
+Confirma después avance/retroceso, reproducción hasta el final con salida y
+reapertura sin problema. Percibe algo más de demora al saltar; no se ha medido.
+Quedan pendientes valoración específica de audio/fluidez, pausa y comprobación
+de consumo/liberación de memoria tras ciclos repetidos. La URL no cambia.
 La portada todavía menciona 20 s; el contador utiliza la duración real.
 
 El resto del documento conserva el historial de las pruebas de 360p.

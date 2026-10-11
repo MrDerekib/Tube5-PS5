@@ -524,6 +524,12 @@ tras instalar DIAG30, con el mismo clip HTTP de 1080p. Esto confirma que se
 supera el fallo de apertura/reproducción observado en DIAG29, no la estabilidad
 del minuto completo ni los controles o la limpieza/reapertura en esta build.
 
+En la prueba posterior el propietario confirma avance y retroceso, reproducción
+hasta el final con salida y reapertura sin problema. Percibe una ligera demora
+adicional al saltar, todavía sin medición. No se ha confirmado pausa específica
+en DIAG30 ni se han observado contadores de memoria tras ciclos repetidos;
+la reapertura funcional no demuestra por sí sola ausencia de fugas.
+
 ## BOOT-DIAG-29-HTTP: píxeles de superficies SDL en memoria directa
 
 El ensayo de 1080p vuelve al menú durante la creación de textura. La captura
