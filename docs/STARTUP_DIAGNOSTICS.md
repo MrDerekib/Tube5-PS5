@@ -1,5 +1,40 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-38-SPONSOR-PREFS: preferencias y aviso de salto
+
+SponsorBlock ON/OFF se guarda al cambiarlo desde Ajustes o mediante Options
+en el player. Ruta PS5 `/data/tube5/settings.conf`, independiente de `/app0`;
+host `.local/tube5/settings.conf`. Formato versionado fijo, lectura acotada y
+solo archivo regular, sin seguir enlaces simbólicos. Si falta o es inválido,
+se utiliza ON. Escritura temporal privada, fsync y rename atómico; ante fallo
+se conserva el cambio en memoria y se muestra NO GUARDADO. No se guarda HTTP/LOCAL.
+
+Aviso PATROCINIO OMITIDO con duración aproximada, durante 2500 ms. Se activa
+después de completar el salto y presentar imagen, no al enviar el seek. Si
+la marca cubre el final, se activa al cerrar y aparece en la biblioteca. No
+tapa el vídeo, errores ni selector. Seek manual o salida cancelan el aviso.
+No cambia decoder, pools ni lógica de seek de DIAG37.
+
+Pruebas host de preferencias: ON/OFF, nueva instancia, reparación de formato
+inválido, permisos 0600, fallo de escritura sin perder el ajuste anterior,
+rechazo de enlace temporal y FIFO sin bloqueo. Modelo de aviso: duración,
+cancelación, entradas inválidas y desbordamiento del contador de milisegundos.
+La persistencia real de `/data` y los avisos en consola quedan pendientes.
+La suite host completa pasa con ASan/UBSan/LSan, incluyendo reproducción,
+saltos y fallos HTTP. Capturas host de Ajustes, aviso del player y aviso de
+biblioteca revisadas sin solapamientos. Las capturas de avisos usan el modo
+QA host, no constituyen una prueba física de notificación en PS5.
+
+Build/FSELF y guard ABI correctos. SHA-256 de eboot.bin:
+`d2f5673c0daeb34fce77990421d1326c3312ba297dcff49b3d38be505692243a`.
+Respaldo privado `.local/boot-diag-38/`.
+
+Prueba física: copiar con Tube5 cerrada, poner SB OFF, cerrar completamente
+la app y abrirla: debe seguir OFF y no saltar el inicio de Veritasium. Poner
+ON, cerrar/reabrir y verificar ON. Reproducir el inicio y comprobar el aviso
+de 4 s; buscar 13:25 y comprobar el aviso final en la biblioteca. Si aparece
+NO GUARDADO, reportarlo: no se da por validada la ruta de almacenamiento PS5.
+
 ## BOOT-DIAG-37-SPONSOR-CLEAN: evitar destellos de patrocinio
 
 Tras validar DIAG36, el propietario observa fotogramas breves antes del salto

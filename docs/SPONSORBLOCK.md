@@ -40,12 +40,24 @@ Los vídeos sin marcas o con error de red siguen reproduciéndose sin saltos.
 
 ## Controles
 
-SponsorBlock está ON inicialmente; su preferencia dura esta sesión, todavía
-no se guarda al cerrar la app. Options en el reproductor cambia ON/OFF;
+SponsorBlock está ON inicialmente. Desde DIAG38, el ajuste se guarda al
+cambiarlo y se recupera al arrancar: `/data/tube5/settings.conf` en PS5 y
+`.local/tube5/settings.conf` en host. Se conserva fuera de `/app0`, por lo que
+copiar una nueva build no lo reemplaza. Escritura temporal, fsync y rename;
+archivo privado versionado y acotado. Si falta o es inválido, se usa ON; un
+error de guardado muestra NO GUARDADO y mantiene el cambio solo en memoria.
+La escritura real en PS5 aún debe comprobarse con DIAG38.
+Options en el reproductor cambia ON/OFF;
 en la biblioteca Options sigue recargando. En Ajustes, cruceta cambia ON/OFF,
 y X conserva el selector HTTP/LOCAL. ON solo actúa si hay segmentos listos.
 El HUD muestra segmentos y solicitudes de salto, no votos ni detecciones IA.
 Un seek ya enviado puede terminar aunque se desactive la opción inmediatamente.
+
+DIAG38 muestra PATROCINIO OMITIDO durante 2,5 segundos, con los segundos
+omitidos aproximados. El aviso empieza al completar el salto, no al solicitarlo;
+los errores y el selector tienen prioridad. Se muestra bajo el vídeo, sin
+taparlo. Si la marca termina el vídeo, aparece en la biblioteca. Los seeks
+manuales y la salida cancelan el aviso pendiente.
 
 DIAG37 programa la marca que empieza en cero antes del primer draw, sin leer
 el reloj aún no inicializado. El resto respeta pausa, seek pendiente y

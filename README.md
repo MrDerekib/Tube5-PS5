@@ -13,7 +13,7 @@ SponsorBlock.
 > Biblioteca LAN y corrección de títulos de DIAG35 validadas en consola.
 > 4K no validado.
 
-## Prueba actual: BOOT-DIAG-37-SPONSOR-CLEAN
+## Prueba actual: BOOT-DIAG-38-SPONSOR-PREFS
 
 La tarjeta **Biblioteca LAN** carga una lista acotada desde el PC. Cruceta:
 seleccionar; X: reproducir; Círculo: volver a la lista; Options: recargarla.
@@ -36,6 +36,10 @@ DIAG37 pule los saltos: programa el patrocinio inicial antes del primer draw,
 oculta imagen y silencia audio durante el seek, y termina directamente cuando
 el segmento alcanza el final. El propietario confirma «mucho mejor» en consola;
 se registra la mejora, no la desaparición absoluta de todos los destellos.
+
+DIAG38 guarda SponsorBlock ON/OFF entre sesiones y muestra durante 2,5 s un
+aviso discreto tras el salto. Si termina el vídeo, el aviso aparece en la
+biblioteca. Persistencia y avisos pendientes de prueba física.
 
 ## Prototipo 01.000.001
 

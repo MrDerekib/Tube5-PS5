@@ -14,6 +14,8 @@
 #include "playback_progress.hpp"
 #include "seek_selection.hpp"
 #include "lan_catalog.hpp"
+#include "preferences.hpp"
+#include "sponsor_notice.hpp"
 #include "video_sync_diagnostics.hpp"
 #include "video_conversion.hpp"
 #include <array>
@@ -39,6 +41,18 @@ std::array<char, 48> build_label{};
 std::array<char, 256> network_url{};
 bool network_test = true;
 bool sponsor_enabled = true;
+bool preference_saved = true;
+tube5::SponsorNotice sponsor_notice;
+#ifdef TUBE5_HOST
+tube5::Preferences preferences(".local/tube5");
+#else
+tube5::Preferences preferences("/data/tube5");
+#endif
+void toggle_sponsor() noexcept
+{
+    sponsor_enabled = !sponsor_enabled;
+    preference_saved = preferences.save(sponsor_enabled);
+}
 const char *sponsor_state_text(tube5::SponsorState state) noexcept
 {
     switch (state)
@@ -163,6 +177,9 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(650, 560, sponsor_enabled ? "ON - IZQ/DER CAMBIAR" : "OFF - IZQ/DER CAMBIAR", 3,
                     Color::white);
         canvas.text(120, 605, "DATOS: SPONSOR.AJAY.APP - CC BY-NC-SA 4.0", 2, muted);
+        canvas.text(650, 630,
+                    preference_saved ? "PREFERENCIA PERSISTENTE" : "NO GUARDADO - SOLO ESTA SESION",
+                    2, preference_saved ? muted : Color::yellow);
         canvas.text(120, 660, "REPRODUCCION", 4, muted);
         canvas.text(650, 660, network_test ? "HTTP - X CAMBIAR" : "LOCAL - X CAMBIAR", 4,
                     Color::white);
@@ -210,10 +227,16 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         if (!error[0] && !selection.active())
         {
             char status[128]{};
-            std::snprintf(status, sizeof(status), "SB %s  %u SEG  %u SALTOS  OPTIONS CAMBIAR",
-                          sponsor_enabled ? "ON" : "OFF", sponsor_skip.data().count,
-                          sponsor_skip.skipped());
-            canvas.text(350, 930, status, 2, muted);
+            if (sponsor_notice.visible(SDL_GetTicks()))
+                std::snprintf(status, sizeof(status), "PATROCINIO OMITIDO - %u SEG",
+                              sponsor_notice.seconds());
+            else
+                std::snprintf(status, sizeof(status), "SB %s  %u SEG  %u SALTOS  %s",
+                              sponsor_enabled ? "ON" : "OFF", sponsor_skip.data().count,
+                              sponsor_skip.skipped(),
+                              preference_saved ? "OPTIONS CAMBIAR" : "NO GUARDADO");
+            canvas.text(350, 930, status, 2,
+                        sponsor_notice.visible(SDL_GetTicks()) ? Color::white : muted);
         }
         if (selection.active())
         {
@@ -258,6 +281,13 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         tube5::memory_diagnostic_status(diagnostics, sizeof(diagnostics));
         canvas.text(800, 155, diagnostics, 2, muted);
 #endif
+    }
+    if (!error[0] && nav.screen == tube5::Screen::library && sponsor_notice.visible(SDL_GetTicks()))
+    {
+        char notice[80]{};
+        std::snprintf(notice, sizeof(notice), "PATROCINIO OMITIDO - %u SEG - VIDEO FINALIZADO",
+                      sponsor_notice.seconds());
+        canvas.text(120, 900, notice, 2, muted);
     }
     if (error[0])
     {
@@ -335,6 +365,9 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
 
 int main()
 {
+    const auto preference_result = preferences.load(sponsor_enabled);
+    preference_saved = preference_result == tube5::Preferences::Load::loaded ||
+                       preference_result == tube5::Preferences::Load::missing;
     tube5_boot_checkpoint("Tube5 D03: MAIN - leer etiqueta");
     ps5::demo::read_asset_text("/app0/build-label.txt", std::span{build_label}, "");
     for (char &character : build_label)
@@ -478,6 +511,7 @@ int main()
     bool opening_player = false;
     const auto start_player = [&](const char *source)
     {
+        sponsor_notice.cancel();
         selection.cancel();
         sponsor_skip.reset(library_playback && library_selected < catalog.data().count
                                ? catalog.data().entries[library_selected].sponsor
@@ -557,7 +591,7 @@ int main()
         if (nav.screen == tube5::Screen::settings &&
             (action == tube5::Command::previous || action == tube5::Command::next))
         {
-            sponsor_enabled = !sponsor_enabled;
+            toggle_sponsor();
             return;
         }
         if (nav.screen == tube5::Screen::settings && action == tube5::Command::select)
@@ -569,7 +603,7 @@ int main()
         {
             if (action == tube5::Command::settings)
             {
-                sponsor_enabled = !sponsor_enabled;
+                toggle_sponsor();
                 return;
             }
             if (media.opening())
@@ -601,6 +635,7 @@ int main()
                     if (const auto destination = selection.confirm(media.duration()))
                     {
                         sponsor_skip.manual_seek();
+                        sponsor_notice.cancel();
                         media.seek_to(*destination);
                     }
                     // A queued second X must not immediately toggle pause.
@@ -616,11 +651,13 @@ int main()
             else if (action == tube5::Command::previous || action == tube5::Command::next)
             {
                 sponsor_skip.manual_seek();
+                sponsor_notice.cancel();
                 media.seek(action == tube5::Command::previous ? -5.0 : 5.0);
             }
             else if (action == tube5::Command::back)
             {
                 selection.cancel();
+                sponsor_notice.cancel();
                 media.close();
                 nav.screen = library_playback ? tube5::Screen::library : tube5::Screen::home;
             }
@@ -647,6 +684,13 @@ int main()
             nav.screen = tube5::Screen::settings;
         else if (std::string_view{screen} == "about")
             nav.screen = tube5::Screen::about;
+        else if (std::string_view{screen} == "player")
+            nav.screen = tube5::Screen::player;
+    }
+    if (std::getenv("TUBE5_PREVIEW_NOTICE"))
+    {
+        sponsor_notice.begin(0, 4);
+        sponsor_notice.complete(SDL_GetTicks());
     }
     bool running = true;
 #endif
@@ -762,8 +806,10 @@ int main()
                 if (const auto target =
                         sponsor_skip.target(0.0, media.duration(), sponsor_enabled, false, false))
                 {
+                    sponsor_notice.begin(0.0, *target);
                     if (*target >= media.duration())
                     {
+                        sponsor_notice.complete(SDL_GetTicks());
                         media.close();
                         nav.screen =
                             library_playback ? tube5::Screen::library : tube5::Screen::home;
@@ -791,8 +837,10 @@ int main()
                     media.position(), media.duration(), sponsor_enabled, media.paused(),
                     media.seeking() || selection.active() || media.frames_uploaded() == 0))
             {
+                sponsor_notice.begin(media.position(), *target);
                 if (*target >= media.duration())
                 {
+                    sponsor_notice.complete(SDL_GetTicks());
                     media.close();
                     nav.screen = library_playback ? tube5::Screen::library : tube5::Screen::home;
                 }
@@ -831,6 +879,11 @@ int main()
         if (nav.screen == tube5::Screen::player)
         {
             media.draw(renderer, SDL_Rect{350, 260, 1220, 620});
+            if (!media.opening() && !media.seeking() && media.frames_presented() &&
+                !media.error()[0])
+                sponsor_notice.complete(SDL_GetTicks());
+            if (media.error()[0])
+                sponsor_notice.cancel();
             if (!media.opening() && media.error()[0])
                 std::snprintf(error, sizeof(error), "%s", media.error());
         }
@@ -899,6 +952,7 @@ int main()
                           "Tube5 D13: primer frame nativo presentado");
 #endif
     media.close();
+    sponsor_notice.cancel();
     catalog.cancel();
     while (catalog.loading())
     {
