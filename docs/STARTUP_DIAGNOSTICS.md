@@ -534,6 +534,12 @@ archivo del servidor LAN, manteniendo la URL y DIAG31. El smoke HTTP pasa
 apertura, decode, pausa, saltos, EOF por seek, reapertura y limpieza; la prueba
 continua de diez minutos en PS5 sigue pendiente. No se preparan variantes extra.
 
+Resultado posterior del propietario: «finalizó los 10 min ok», RBUF ALLOC 872,
+DBUF ALLOC 22075, resto de datos comunicado a cero. Prueba física de duración
+superada por reporte textual; esos ALLOC son acumulativos, no memoria retenida.
+No se recibe captura adicional ni se asigna un valor al ALLOC de SBUF. La
+siguiente prueba es la barra de progreso de DIAG32 usando el mismo MP4.
+
 ## BOOT-DIAG-30-HTTP: pool RefStruct de FFmpeg
 
 IMG_4285.HEIC confirma DIAG29 y `MEMORY: ENOMEM`, `MEMFAIL 17 ALIGN

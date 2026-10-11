@@ -66,8 +66,10 @@ python3 tools/prepare-youtube-test.py 'https://youtu.be/qf31PkeESoU' --height 10
 Se conserva H.264 Main/YUV420 a 30 fps, CRF 23, resolución nativa 1920x1080
 y AAC copiado. El clip privado es `resolution-1080p-600s.mp4` (límite 640 MiB).
 No se cambia eboot ni etiqueta: la consola conserva BOOT-DIAG-31-HTTP.
-La prueba física de diez minutos queda pendiente. Primero reproducción continua
-sin saltos; comprobar imagen/audio y retorno al menú con los tres pools a cero.
+El propietario confirma que los diez minutos completos finalizaron correctamente.
+Tras volver al menú comunica RBUF ALLOC 872 y DBUF ALLOC 22075, «el resto a
+cero». ALLOC es acumulativo, no reservas vivas. No hay captura nueva de este
+resultado; se conserva como reporte textual, sin inferir el ALLOC de SBUF.
 
 Preparado y verificado con ffprobe: 1920x1080, H.264 Main YUV420, 30 fps,
 AAC-LC estéreo/44,1 kHz, 600,003628 s y 187.507.216 bytes. El servidor sirve
