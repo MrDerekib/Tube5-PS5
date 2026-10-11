@@ -44,13 +44,17 @@ Fotografiar los pools en el menú antes de abrir, reproducir los cinco minutos
 sin saltos y revisar audio/fluidez; fotografiar al volver al menú. Los valores
 vivos/KIB deberían regresar al nivel inicial; ALLOC es acumulativo y puede crecer.
 Después probar pausa, saltos, salida durante reproducción y reapertura. La
-validación física de DIAG31 y de la duración nueva queda pendiente.
+validación de sesiones largas repetidas queda pendiente.
 
 La captura posterior IMG_4287 muestra el menú con RBUF 0/32 0 KIB, SBUF 0/4
 y DBUF 0/32 0 KIB, todos FAIL 0 ERR 0: los tres pools quedan sin reservas vivas
-tras ese cierre. La etiqueta no se ve en el recorte. Queda confirmar explícitamente
-la reproducción continua de los cinco minutos y valorar audio/fluidez; no se
-deduce la duración reproducida solo de estos contadores.
+tras ese cierre. La etiqueta no se ve en el recorte. El propietario confirma
+explícitamente que los cinco minutos completos terminaron bien con imagen/audio.
+IMG_4288 muestra los tres pools a cero antes de reproducir, también ALLOC/FAIL/ERR
+a cero: las reservas vivas retornan al nivel inicial tras el clip. Los registros
+previos sí eran visibles, aunque el propietario buscaba texto amarillo. Quedan
+pendientes salida durante reproducción y controles/ciclos repetidos con DIAG31;
+las pruebas equivalentes del minuto con DIAG30 ya pasaron.
 
 Preparar un minuto de cada resolución desde sus pistas HD reales, sin ampliar
 el vídeo de 360p:

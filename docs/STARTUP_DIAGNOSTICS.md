@@ -494,7 +494,15 @@ DBUF 0/32 0 KIB ALLOC 9029 FAIL 0 ERR 0. Confirma liberación de todas las
 reservas vivas de esos tres pools en ese cierre, sin fallos registrados. No
 demuestra ausencia de fugas en otros allocators. La etiqueta de build queda
 fuera del recorte; los contadores del menú son compatibles con DIAG31. El
-propietario no vio registros antes de abrir; falta reproducir esa observación.
+propietario inicialmente no vio registros antes de abrir.
+
+El propietario confirma después que los cinco minutos terminaron bien, con
+imagen/audio correctos, y aclara que los contadores previos sí estaban: buscaba
+texto amarillo. IMG_4288 muestra el menú antes de reproducir, con RBUF 0/32
+0 KIB, SBUF 0/4 y DBUF 0/32 0 KIB; ALLOC/FAIL/ERR todos a cero. Comparada
+con IMG_4287, confirma retorno al nivel inicial de los tres pools tras el clip
+completo. La prueba física de duración y limpieza de esos pools queda superada;
+no es validación de todas las reservas de la app ni de sesiones largas repetidas.
 
 ## BOOT-DIAG-30-HTTP: pool RefStruct de FFmpeg
 
