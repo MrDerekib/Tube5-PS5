@@ -9,7 +9,7 @@ SponsorBlock.
 > Estado actual: vídeo local y HTTP LAN, con diez minutos continuos de 1080p
 > y controles validados en PS5 Fat FW 13.20. El PC prepara y sirve el contenido
 > de YouTube; no hay streaming directo ni bloqueo de anuncios de YouTube.
-> DIAG36 añade SponsorBlock, pendiente de prueba física en PS5.
+> Piloto SponsorBlock de DIAG36 validado por reporte del propietario en PS5.
 > Biblioteca LAN y corrección de títulos de DIAG35 validadas en consola.
 > 4K no validado.
 
@@ -28,7 +28,8 @@ el PC y refrescar la biblioteca sin cambiar la build de consola.
 El flujo completo con una URL nueva a 360p está confirmado en PS5.
 DIAG36 añade saltos de patrocinio en los vídeos completos y permite ON/OFF
 con Options durante reproducción. Consultar [el piloto SponsorBlock](docs/SPONSORBLOCK.md)
-para la prueba corta de Veritasium; todavía no se da por validado en consola.
+para la prueba corta de Veritasium. El propietario confirma que funciona bien
+en consola; esta confirmación no equivale a una prueba exhaustiva de todos los controles.
 Las secciones siguientes conservan el historial del prototipo.
 
 ## Prototipo 01.000.001

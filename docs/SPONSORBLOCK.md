@@ -52,7 +52,7 @@ selector de posición. Una marca se solicita una vez por encuentro: no se
 repite en bucle si el demuxer tarda o falla. Al retroceder manualmente hasta
 una marca, se puede volver a saltar; desactivar SB permite ver esa sección.
 
-## Vídeo real y prueba física pendiente
+## Vídeo real y prueba física
 
 El servicio ha preparado `bHIhgxav9LY` de Veritasium, título actual
 «The Biggest Misconception About Electricity»: 887,536327 s, 360p, 33.329.196 bytes.
@@ -67,7 +67,10 @@ seleccionar cerca de 13:25 y confirmar; al llegar a 13:29,3 debe ir al final
 y volver a la biblioteca. No hace falta ver los quince minutos completos.
 Reabrir con SB OFF y comprobar que no salta el inicio. Probar pausa, seek
 manual y salida; las entradas sin segmentos deben conservar su comportamiento.
-La prueba física de DIAG36 aún no se considera confirmada.
+El propietario confirma «funciona bien» tras la prueba de DIAG36 en PS5 Fat
+FW 13.20. Se registra como validación del piloto en consola; no detalló por
+separado los resultados de ON/OFF, pausa, seek, salida y reapertura, por lo que
+no se atribuye una comprobación exhaustiva de esas combinaciones a este reporte.
 
 ## Resultados automáticos y paquete
 

@@ -18,7 +18,8 @@ el decoder ni el allocator para resolverlo.
 Pasaron el modelo con sanitizadores, parser v1/v2, el test de reproducción con
 dos intervalos sintéticos, caché/persistencia/fallo y la consulta del parser
 contra las cinco entradas del servidor LAN real. El servicio publica los dos
-intervalos verificados de Veritasium. La prueba física de DIAG36 está pendiente;
+intervalos verificados de Veritasium. El propietario confirma «funciona bien»
+en PS5 Fat FW 13.20: piloto DIAG36 validado por reporte, sin desglose de cada control;
 [instrucciones y limitaciones](SPONSORBLOCK.md).
 El smoke test posterior con catálogo/MP4 reales también pasa salto inicial,
 pausa, seek manual, salto final, EOF y reapertura en PC. Paquete firmado y
