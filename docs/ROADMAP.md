@@ -4,6 +4,8 @@
 - [x] Abrir el piloto HTTP de YouTube a 360p y comprobar pausa, seek, salida y reapertura.
 - [x] Validar clips HTTP de 720p/1080p, diez minutos continuos en 1080p y controles.
 - [x] Biblioteca LAN de medios preparados en el PC, antes del proveedor definitivo.
+- [x] Añadir por URL una variante en caché y validar refresco/reproducción en PS5.
+- [ ] Validar adquisición y publicación desde una URL nueva sin caché.
 - [ ] Evaluar 4K nativo: decodificación acelerada, buffers y salida VideoOut;
   realizar después una prueba corta. No hay compatibilidad 4K confirmada.
 - [ ] Elegir e integrar el proveedor de catálogo y reproducción de YouTube.

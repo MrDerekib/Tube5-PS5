@@ -72,8 +72,10 @@ La suite completa pasa nueve pruebas de renderer/navegación y 37 de integració
 además de las comprobaciones de tooling. El servicio real recibe la URL
 `qf31PkeESoU`, reutiliza su MP4 existente y devuelve `ready, reused: true`.
 El catálogo LAN incluye una tercera entrada de 1701 segundos (28:21), 360p,
-sin nueva descarga. El refresco y apertura de esa entrada en PS5 quedan
-pendientes de confirmación del propietario; no hace falta verla entera.
+sin nueva descarga. El propietario confirma en PS5 que la lista se actualiza
+y que las tres entradas se reproducen correctamente. Quedan validados el
+refresco y la apertura de la entrada añadida mediante URL con caché reutilizada.
+No se da por validada la reproducción continua de los 28 minutos completos.
 El smoke test host de su ruta `/media/yt-qf31PkeESoU-360-60.mp4` pasa apertura,
 decodificación, pausa, seeks, salto al final, reapertura y liberación. No
 equivale a haber reproducido los 28 minutos continuos en la consola.
