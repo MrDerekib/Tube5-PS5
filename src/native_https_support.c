@@ -19,7 +19,7 @@ int tube5_resolve_ipv4(const char *host, char *output, size_t capacity, int *nat
     }
     const int resolver = sceNetResolverCreate("tube5_dns", pool, 0);
     int result = resolver;
-    struct in_addr address;
+    struct in_addr address = {0};
     if (resolver >= 0)
     {
         result = sceNetResolverStartNtoa(resolver, host, &address, 2000000, 1, 0);

@@ -153,7 +153,7 @@ fi
 # Keep it scoped to the root player, not the template's separate examples.
 app_wrap_symbols=${APP_WRAP_SYMBOLS:-}
 if [[ $app_source_dir == src && -f $root/src/native_https_support.c ]]; then
-    pacbrew_packages+=(libcurl)
+    pacbrew_packages+=(libcurl json-c)
 fi
 if [[ $app_source_dir == src && -f $root/src/native_refstruct_buffers.cpp ]]; then
     definitions+=(TUBE5_REFSTRUCT_BUFFER_WRAP)

@@ -35,11 +35,13 @@ No priorizar traducción de títulos ni pulido específico del servidor temporal
 Conservarlo como banco de pruebas, sin hacerlo una dependencia del producto.
 
 1. DNS y HTTPS verificados desde la PS5; solicitar metadatos reales sin PC.
-   DIAG42 implementa una prueba oEmbed acotada, pendiente de validación física.
+   DIAG42 validada en consola con nanoDNS: HTTP 200/CURL 0/CERT 0 y título.
 2. Resolver una fuente YouTube reproducible desde consola. Inventariar los
    formatos realmente ofrecidos: resolución, fps, códec, contenedor, bitrate,
    audio y entrega conjunta/separada. No asumir que 1080p/4K ofrecen H.264
    muxado ni que una URL firmada sea permanente.
+   DIAG43 inventaría formatos y comprueba 4 KiB de un MP4 AVC/AAC 360p en
+   googlevideo.com. Host validado; consola pendiente. No es reproducción aún.
 3. Acceder al stream real y validar apertura, sincronización, seek, expiración
    del enlace, reconexión y memoria, sin descargar/transcodificar en el PC.
 4. Reproducción sin anuncios: identificar cómo aparecen en la ruta elegida y
@@ -57,7 +59,8 @@ homebrew, códecs/perfiles soportados, propiedad de buffers y presentación;
 hacer una prueba mínima antes de comprometer 4K o cambiar el pipeline validado.
 El hardware no resuelve DNS, extracción del enlace, publicidad ni autenticación.
 
-Los puntos 2–6 y la aceleración no están implementados ni validados. El orden
+El punto 2 tiene un prototipo parcial; los puntos 3–6 y la aceleración no están
+implementados ni validados en autonomía. El orden
 puede ajustarse a impedimentos demostrados, manteniendo la autonomía prioritaria.
 
 ## Hitos restantes e historial

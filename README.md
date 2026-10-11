@@ -21,12 +21,18 @@ final. La app final no requerirá una companion app en el PC.
 > Biblioteca LAN y corrección de títulos de DIAG35 validadas en consola.
 > 4K no validado.
 
-## Prueba actual: BOOT-DIAG-42-YOUTUBE-DIRECT
+## Prueba actual: BOOT-DIAG-43-YOUTUBE-FORMATS
 
-DIAG42 añade una petición HTTPS directa de metadatos a YouTube desde Ajustes
-(Triángulo → X). No usa el PC como proxy y no cambia los DNS ni desactiva TLS.
-El cliente host recibe metadatos válidos; comprobación en PS5 pendiente.
-Todavía no extrae ni reproduce streams directos. Ver [la prueba directa](docs/YOUTUBE_DIRECT.md).
+DIAG42 queda validada en PS5 Fat FW 13.20: oEmbed devuelve HTTP 200, CURL 0,
+CERT 0, 815 B y el título correcto usando nanoDNS. El DNS 45.56.67.85 devuelve
+0.0.0.0 para YouTube en la comprobación directa y no permite esta petición.
+DIAG43 consulta formatos mediante InnerTube desde Ajustes (Triángulo → X),
+selecciona MP4 AVC/AAC combinado de hasta 360p y verifica una lectura HTTPS
+de solo 4 KiB en el CDN de YouTube. El cliente host obtiene 36 formatos y
+HTTP 206/MP4 válido; validación de DIAG43 en consola pendiente.
+No ejecuta yt-dlp en PS5, usa un PC como proxy ni desactiva TLS.
+Todavía no conecta esa fuente al reproductor ni demuestra bloqueo de anuncios.
+Ver [la prueba directa](docs/YOUTUBE_DIRECT.md).
 
 DIAG40 añade teclado propio y búsqueda con el mando desde Biblioteca LAN
 (Triángulo). Permite seleccionar un resultado, prepararlo mediante el puente

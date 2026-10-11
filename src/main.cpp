@@ -236,13 +236,14 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
     {
         canvas.text(120, 310, "YOUTUBE DIRECTO - SIN PUENTE PC", 4, Color::white);
         const auto stage = probe.stage();
-        const char *status = stage == tube5::ProbeStage::dns ? "DNS: RESOLVIENDO WWW.YOUTUBE.COM"
-                             : stage == tube5::ProbeStage::https ? "HTTPS: CERTIFICADO Y METADATOS"
-                             : stage == tube5::ProbeStage::ready
-                                 ? "OK: METADATOS RECIBIDOS DESDE YOUTUBE"
-                             : stage == tube5::ProbeStage::failed ? "FALLO: CAPTURA ESTA PANTALLA"
-                             : stage == tube5::ProbeStage::cancelled ? "CANCELADO"
-                                                                     : "X INICIAR PRUEBA";
+        const char *status =
+            stage == tube5::ProbeStage::dns         ? "DNS: RESOLVIENDO WWW.YOUTUBE.COM"
+            : stage == tube5::ProbeStage::https     ? "HTTPS: CONSULTANDO FORMATOS YOUTUBE"
+            : stage == tube5::ProbeStage::source    ? "HTTPS: LEYENDO 4 KIB DEL STREAM MP4"
+            : stage == tube5::ProbeStage::ready     ? "OK: FUENTE MP4 RECIBIDA DESDE YOUTUBE"
+            : stage == tube5::ProbeStage::failed    ? "FALLO: CAPTURA ESTA PANTALLA"
+            : stage == tube5::ProbeStage::cancelled ? "CANCELADO"
+                                                    : "X INICIAR PRUEBA";
         canvas.text(120, 430, status, 3,
                     stage == tube5::ProbeStage::failed ? Color::yellow : Color::white);
         if (!probe.loading() && stage != tube5::ProbeStage::idle)
@@ -255,12 +256,26 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             std::snprintf(detail, sizeof(detail), "HTTP %ld  CURL %d  CERT %ld  BYTES %u",
                           result.http, result.curl_error, result.verify, result.bytes);
             canvas.text(120, 565, detail, 3, muted);
-            canvas.text(120, 625, "CA DEL SISTEMA - VERIFICACION TLS ACTIVA", 3, muted);
-            canvas.text(120, 670, result.ca.data(), 1, muted);
-            canvas.text(120, 735, result.title.data(), 2, Color::white);
-            canvas.text(120, 805, result.error.data(), 2, Color::yellow);
+            const auto &formats = result.formats;
+            std::snprintf(detail, sizeof(detail),
+                          "FORMATOS %u  URL %u  CIPHER %u  MAX %uP  HLS %d DASH %d", formats.count,
+                          formats.direct, formats.cipher, formats.max_height, formats.hls,
+                          formats.dash);
+            canvas.text(120, 625, detail, 2, muted);
+            std::snprintf(detail, sizeof(detail), "AVC %u  VP9 %u  AV1 %u  AAC %u  OPUS %u",
+                          formats.avc, formats.vp9, formats.av1, formats.aac, formats.opus);
+            canvas.text(120, 675, detail, 2, muted);
+            std::snprintf(detail, sizeof(detail),
+                          "STREAM ITAG %u %uP  HTTP %ld CURL %d CERT %ld  BYTES %u MP4 %s",
+                          formats.selected_itag, formats.selected_height, result.source_http,
+                          result.source_curl, result.source_verify, result.source_bytes,
+                          result.source_mp4 ? "SI" : "NO");
+            canvas.text(120, 725, detail, 2, result.source_mp4 ? Color::white : Color::yellow);
+            canvas.text(120, 775, result.title.data(), 2, Color::white);
+            canvas.text(120, 825, result.error.data(), 2, Color::yellow);
+            canvas.text(120, 865, result.ca.data(), 1, muted);
         }
-        canvas.text(120, 890, "PRUEBA DE METADATOS - AUN NO REPRODUCE YOUTUBE DIRECTO", 2, muted);
+        canvas.text(120, 925, "TLS VERIFICADO - SOLO 4 KIB; AUN NO ES REPRODUCCION", 2, muted);
     }
     else if (nav.screen == tube5::Screen::settings)
     {
@@ -666,7 +681,7 @@ int main()
                 nav.screen = tube5::Screen::settings;
             }
             else if (action == tube5::Command::select && !youtube_probe.loading())
-                (void)youtube_probe.begin();
+                (void)youtube_probe.begin(tube5::ProbeMode::formats);
             return;
         }
         if (nav.screen == tube5::Screen::settings && action == tube5::Command::search)
@@ -922,7 +937,7 @@ int main()
     if (std::getenv("TUBE5_PREVIEW_ONLINE_RUN"))
     {
         nav.screen = tube5::Screen::online;
-        (void)youtube_probe.begin();
+        (void)youtube_probe.begin(tube5::ProbeMode::formats);
     }
     bool running = true;
 #endif

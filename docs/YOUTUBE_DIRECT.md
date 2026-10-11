@@ -1,4 +1,48 @@
-# DIAG42: primera petición directa a YouTube
+# YouTube directo: DIAG43 formatos y lectura mínima del CDN
+
+## Prueba actual (DIAG43)
+
+Con nanoDNS activo, cerrar Tube5 y copiar `dist/PPSA99999/` completa.
+Comprobar `BOOT-DIAG-43-YOUTUBE-FORMATS`. Ajustes → Triángulo → X solicita
+formatos del vídeo conocido y comprueba una fuente MP4 360p directamente
+contra YouTube, sin utilizar el puente del PC. Fotografiar el resultado.
+
+Esperado: consulta HTTP 200/CURL 0/CERT 0; formatos y códecs; línea STREAM
+con ITAG 18 360P, HTTP 206/CURL 0/CERT 0, BYTES 4096 y MP4 SI. Repetir X y
+comprobar Círculo durante la consulta. La fuente no se reproduce todavía:
+solo leemos cuatro KiB, no el vídeo completo. No hay que esperar veinte minutos.
+La build local conserva su clave LAN privada: no publicar carpeta/ZIP.
+
+El protocolo experimental usa InnerTube player y un perfil Android observado
+en [yt-dlp](https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/extractor/youtube/_base.py).
+No ejecuta yt-dlp, Python o un extractor JavaScript en la PS5. Las versiones
+de cliente y restricciones de YouTube pueden cambiar; no se promete acceso
+a todos los vídeos, cuentas, contenidos restringidos ni URL permanente.
+
+JSON estricto/UTF-8 mediante json-c, respuesta descomprimida <=1 MiB,
+profundidad <=32 y <=128 formatos. Body en heap acotado, no un MiB en el stack
+del hilo SDL. Se inventarían AVC/VP9/AV1/AAC/Opus y máxima altura ofrecida.
+No confundir presencia en la respuesta con disponibilidad de URL o soporte
+del decoder. Solo MP4 conjunto AVC/AAC <=360p y URL directa es seleccionable;
+se informa pero no se descifran signatures ni se implementa SABR/adaptive/HLS.
+
+El CDN permitido es un subdominio válido de googlevideo.com, HTTPS/443,
+ruta videoplayback, sin usuario/puerto alternativo/fragmentos. Resolución IPv4
+actual de la consola, rechazando 0.0.0.0 y direcciones privadas/locales.
+Sin redirecciones o proxy; verificación de cadena y nombre siempre activa.
+La segunda petición pide Range 0-4095 y exige HTTP 206, Content-Range correcto,
+4096 B y ftyp. La URL firmada se conserva solo en memoria y no se registra.
+Cada HTTPS mantiene límites de conexión 5 s/total 10 s y cancelación; hay
+dos fases DNS, con la limitación de cancelación de resolver indicada abajo.
+
+Host: 36 formatos, una URL explícita, máxima altura 2160p; AVC 7/VP9 9/AV1 8,
+AAC 7/Opus 6. Fuente itag 18 360p: HTTP 206/CURL 0/CERT 0, 4096 B y MP4 válido.
+Parser/cancelación y suite host con sanitizadores comprobados; UI revisada.
+Build/FSELF y guard ABI pasan. Prueba DIAG43 en consola pendiente.
+No se modifica el player validado ni se afirma reproducción/autonomía completa,
+bloqueo publicitario, SponsorBlock directo o hardware decoding por este resultado.
+
+## Historial: DIAG42, primera petición directa a YouTube
 
 Esta prueba nativa solicita los metadatos oEmbed de `bHIhgxav9LY` directamente
 a `www.youtube.com`, sin consultar ni descargar nada del puente del PC.
@@ -70,7 +114,11 @@ Build nativa/FSELF y guard RefStruct correctos; no depende de
 `libScePosixForWebKit` según la tabla NEEDED del ELF. La integración reutiliza
 el adaptador comunitario con exclusiones para fcntl/dladdr/mkstemp ya provistos
 por Tube5/SDK, en lugar de añadir un segundo wrapper de sockets.
-Validación física de DIAG42 pendiente.
+Validación física DIAG42 mediante IMG_4292 en PS5 Fat FW 13.20 con nanoDNS:
+IP 142.251.153.4, HTTP 200/CURL 0/CERT 0, 815 B y título correcto.
+El DNS previo 45.56.67.85 responde 0.0.0.0 para ambos dominios youtube.com y
+www.youtube.com, confirmado por consulta UDP directa desde PC. IMG_4291
+coincide con esa respuesta; no demuestra un fallo del adaptador de Tube5.
 
 Tras validar: estudiar extracción de formatos y entrega de medios desde la
 consola, incluidos flujos separados y códecs; investigar aceleración nativa

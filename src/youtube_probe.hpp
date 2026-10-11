@@ -5,6 +5,7 @@
 #include <atomic>
 #include <string_view>
 #include <curl/curl.h>
+#include "youtube_formats.hpp"
 namespace tube5
 {
 enum class ProbeStage
@@ -12,9 +13,15 @@ enum class ProbeStage
     idle,
     dns,
     https,
+    source,
     ready,
     failed,
     cancelled
+};
+enum class ProbeMode
+{
+    metadata,
+    formats
 };
 struct ProbeResult
 {
@@ -25,6 +32,12 @@ struct ProbeResult
     unsigned bytes = 0;
     int dns_error = 0, curl_error = 0;
     long http = 0, verify = -1;
+    ProbeMode mode = ProbeMode::metadata;
+    YouTubeFormats formats{};
+    long source_http = 0, source_verify = -1;
+    int source_curl = 0;
+    unsigned source_bytes = 0;
+    bool source_mp4 = false;
 };
 // Bounded JSON string reader for the oEmbed diagnostic, not a YouTube resolver.
 bool probe_title(std::string_view json, std::array<char, 128> &title) noexcept;
@@ -32,7 +45,7 @@ class YouTubeProbe
 {
   public:
     ~YouTubeProbe();
-    bool begin() noexcept;
+    bool begin(ProbeMode mode = ProbeMode::metadata) noexcept;
     void cancel() noexcept
     {
         cancelled_ = true;

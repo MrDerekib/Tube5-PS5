@@ -1,5 +1,33 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-43-YOUTUBE-FORMATS: formatos y primeros bytes del CDN
+
+Ajustes → Triángulo → X consulta InnerTube player para `bHIhgxav9LY`, sin
+PC, cuentas, cookies ni generadores de tokens externos. Perfil experimental
+Android 21.26.364 investigado en yt-dlp; se reutiliza el transporte TLS nativo
+validado por DIAG42. JSON acotado a 1 MiB, profundidad 32 y 128 formatos;
+inventario AVC/VP9/AV1/AAC/Opus y máxima resolución ofrecida, no soportada.
+Selección de MP4 AVC/AAC combinado <=360p con URL HTTPS explícita: ni firmas
+cifradas, formatos separados, SABR ni manifiestos se consideran reproducibles.
+
+Resuelve por separado el host del CDN, restringido a subdominios de
+googlevideo.com y ruta videoplayback, sin puertos alternativos, credenciales,
+redirecciones o IPs privadas/0.0.0.0. Range 0-4095, máximo 4096 B, HTTP 206,
+Content-Range esperado, cadena/nombre TLS válidos y cabecera ftyp requeridos.
+La URL firmada solo permanece en memoria: no aparece en UI, logs, Git o dist.
+DNS bloqueado ahora se detiene explícitamente antes de intentar HTTPS.
+
+Host con sanitizadores: 36 formatos, una URL explícita combinada, máximo 2160p,
+AVC 7/VP9 9/AV1 8/AAC 7/Opus 6; MP4 360p itag 18, HTTP 206/CURL 0/CERT 0,
+4096 B y ftyp válidos. Captura de UI revisada. Suite host completa pasa.
+Estos datos no demuestran reproducción, acceso a todos los formatos ni 4K.
+Decoder, pools, audio, biblioteca y servicio LAN no cambian.
+
+Build/FSELF e integridad/guard ABI correctos. SHA-256 de eboot.bin:
+`fea9f433052f837b0d96cc676de71c7ab32b974a886ce8a6af0b897093d967cd`.
+Validación física pendiente: repetir con nanoDNS activo, fotografiar resultado
+y comprobar cancelación/repetición. Ver [prueba directa](YOUTUBE_DIRECT.md).
+
 ## BOOT-DIAG-42-YOUTUBE-DIRECT: DNS/HTTPS sin puente
 
 Ajustes → Triángulo → X solicita oEmbed real de Veritasium desde PS5.
@@ -19,6 +47,13 @@ La batería host completa pasa; la captura de la pantalla de resultado host
 se revisa sin solapamientos. Eboot y ELF exactos respaldados en
 `.local/boot-diag-42/`. SHA-256 de eboot.bin:
 `fa8475f2d28b731880001349af03ce4a3ee5a395281531224744a4df1d23140e`.
+
+Resultado físico: IMG_4291 con DNS 45.56.67.85 muestra 0.0.0.0, HTTP 0/CURL 7
+y ningún byte. Consulta DNS UDP directa desde PC confirma 0.0.0.0, rcode 0,
+para youtube.com y www.youtube.com. No demuestra el bloqueo de todo Internet.
+Tras activar nanoDNS, IMG_4292 muestra IP 142.251.153.4, HTTP 200/CURL 0/CERT 0,
+815 B y título correcto. Metadatos directos y TLS de DIAG42 validados en esa PS5
+por captura; la autonomía de streaming todavía no está validada.
 
 
 ## BOOT-DIAG-41-REFSTRUCT-SMALL: reservas RefStruct pequeñas

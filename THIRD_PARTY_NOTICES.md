@@ -58,6 +58,14 @@ in the release audit. The native HTTPS adapter reuses the template's
 `examples/update-check/console_curl.c` (BlackBearReloaded, GPL-3.0-or-later),
 preserving Tube5's existing fcntl/dladdr implementations and SDK mkstemp.
 
+DIAG43 adds PacBrew json-c 0.19 (MIT) for strict, bounded player-response
+parsing; its license/source must be included in the release audit. The
+experimental Android InnerTube protocol profile is researched from
+[yt-dlp's maintained client profiles](https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/extractor/youtube/_base.py).
+No yt-dlp implementation, Python runtime or JavaScript extractor is bundled
+in the native app. Profile/version changes and YouTube restrictions remain
+compatibility risks, not a promise of unrestricted playback.
+
 Build recipes and source archive references are published in
 [pacbrew-repo](https://github.com/ps5-payload-dev/pacbrew-repo).
 The SDL_kitchensink source is pinned at
