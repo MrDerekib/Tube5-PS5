@@ -6,6 +6,13 @@ Aplicación multimedia homebrew nativa para PlayStation 5, diseñada para una
 experiencia de salón y preparada para integrar saltos de segmentos mediante
 SponsorBlock.
 
+**Requisito obligatorio:** Tube5 debe buscar y reproducir YouTube desde la PS5
+sin un PC ni servidor local obligatorio durante su uso. El puente LAN actual
+es un banco de pruebas del reproductor, no la arquitectura del producto final.
+La autonomía todavía no está implementada ni validada. La próxima prioridad
+es demostrar acceso y reproducción desde la consola, antes de ampliar búsqueda
+o interfaz sobre el puente.
+
 > Estado actual: vídeo local y HTTP LAN, con diez minutos continuos de 1080p
 > y controles validados en PS5 Fat FW 13.20. El PC prepara y sirve el contenido
 > de YouTube; no hay streaming directo ni bloqueo de anuncios de YouTube.
@@ -39,7 +46,7 @@ se registra la mejora, no la desaparición absoluta de todos los destellos.
 
 DIAG38 guarda SponsorBlock ON/OFF entre sesiones y muestra durante 2,5 s un
 aviso discreto tras el salto. Si termina el vídeo, el aviso aparece en la
-biblioteca. Los avisos aún no tienen confirmación física específica.
+biblioteca. El propietario confirma ambos avisos, incluido el del salto final.
 El guardado de DIAG38 falla en consola (NO GUARDADO). DIAG39 usa el
 almacenamiento del título `/download0` y muestra operación/errno si falla;
 el propietario confirma que guarda el ajuste y lo recupera tras cerrar y

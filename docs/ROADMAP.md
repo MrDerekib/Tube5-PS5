@@ -1,5 +1,27 @@
 # Próximos hitos
 
+## Requisito de producto y prioridad inmediata
+
+Funcionar sin PC es obligatorio, no una mejora opcional. La búsqueda, selección,
+resolución del medio, reproducción y consulta SponsorBlock deben poder hacerse
+desde PS5 sin preparar ni servir vídeos desde un PC/servidor local obligatorio.
+El puente actual solo ha permitido validar el player, controles, memoria y seeks;
+no satisface este criterio de lanzamiento.
+
+Antes de desarrollar búsqueda sobre el puente:
+
+- [ ] Probar DNS/HTTPS desde la app nativa manteniendo las protecciones de la consola.
+- [ ] Evaluar acceso a metadatos y resolución de medios YouTube desde PS5.
+- [ ] Reproducir un vídeo YouTube sin conversión ni servicio del PC; verificar
+  formatos, audio/vídeo, seek y límites de memoria sobre la fuente real.
+- [ ] Consultar SponsorBlock desde consola sin la caché obligatoria del PC.
+- [ ] Integrar búsqueda y selección autónomas con el mando tras demostrar esa ruta.
+
+No se promete que cambiar los DNS baste. Si la prueba de viabilidad encuentra
+un impedimento, documentarlo antes de continuar invirtiendo en interfaz del puente.
+
+## Hitos restantes e historial
+
 - [x] Validar navegación DualSense y vídeo local con audio, pausa y seek en PS5 13.20.
 - [x] Abrir el piloto HTTP de YouTube a 360p y comprobar pausa, seek, salida y reapertura.
 - [x] Validar clips HTTP de 720p/1080p, diez minutos continuos en 1080p y controles.
@@ -14,7 +36,7 @@
 - [x] Validar el piloto DIAG36 SponsorBlock en consola por reporte del propietario.
 - [x] Implementar persistencia ON/OFF y aviso discreto de salto en DIAG38.
 - [x] Validar persistencia ON/OFF en consola con la corrección DIAG39.
-- [ ] Confirmar los avisos de salto en consola.
+- [x] Confirmar los avisos inicial y final de salto en consola por reporte del propietario.
 - [ ] Sustituir los recursos visuales de la plantilla por identidad de Tube5.
 - [ ] Elegir y comprobar un Title ID propio antes de publicar.
 - [ ] Completar la auditoría de licencias del reproductor, adjuntar sus textos y

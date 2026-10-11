@@ -1,5 +1,11 @@
 # Servicio local de URLs de YouTube
 
+Este servicio es un banco de pruebas temporal. Tube5 tiene como requisito
+obligatorio funcionar sin PC ni servidor local durante su uso; este puente
+no cumple ese requisito ni se considera la arquitectura final. La siguiente
+prioridad es validar acceso y reproducción autónomos en PS5, no ampliar la
+búsqueda basada en este servicio.
+
 El servicio prepara un MP4 en el PC y lo publica en la biblioteca LAN.
 No es streaming directo de YouTube, búsqueda en YouTube ni SponsorBlock.
 La entrada de URLs funciona desde `BOOT-DIAG-35-LIBRARY`; los saltos
