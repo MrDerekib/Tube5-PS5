@@ -46,10 +46,9 @@ def media_url(url):
             and not parsed.fragment and not re.search(r"[\s\\]", url))
 
 
-def probe(video_id):
+def extract(opener, video_id):
     if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
         raise ValueError("expected an 11-character YouTube ID")
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
     client = {"clientName": "VISIONOS", "clientVersion": "1.04",
               "clientScreen": "WATCH", "platform": "MOBILE", "deviceMake": "Apple",
               "deviceModel": "RealityDevice17,1", "osName": "visionOS",
@@ -67,6 +66,12 @@ def probe(video_id):
     if player.get("videoDetails", {}).get("videoId") != video_id:
         raise ValueError("player identity missing/mismatched: "
                          + str(player.get("playabilityStatus", {}).get("status")))
+    return player, cpn
+
+
+def probe(video_id):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    player, cpn = extract(opener, video_id)
     streams = player.get("streamingData", {})
     formats = streams.get("formats", []) + streams.get("adaptiveFormats", [])
     print(json.dumps({"id": video_id, "profile": "VISIONOS", "formats": len(formats),

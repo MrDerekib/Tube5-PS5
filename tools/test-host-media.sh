@@ -121,6 +121,8 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
 build/youtube-search-test
 python3 -m unittest discover -s tests -p test_youtube_search.py -v
 python3 -m unittest discover -s tests -p test_youtube_bridge.py -v
+python3 -m unittest discover -s tests -p test_youtube_adaptive_probe.py -v
+python3 -m unittest discover -s tests -p test_youtube_ranges.py -v
 python3 -m unittest discover -s tests -p test_sponsorblock.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc tests/test_native_framebuffer.cpp src/native_framebuffer.cpp -o build/native-framebuffer-test

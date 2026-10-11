@@ -39,6 +39,7 @@ static void require(bool value, const char *message)
 
 int main(int argc, char **argv)
 {
+    std::setvbuf(stdout, nullptr, _IOLBF, 0);
     const bool youtube = argc > 1 && std::strcmp(argv[1], "--youtube-direct") == 0;
     const bool native_sponsor = (argc > 2 && std::strcmp(argv[2], "--sponsor-native") == 0) ||
                                 (argc > 4 && std::strcmp(argv[4], "--sponsor-native") == 0);
@@ -430,6 +431,56 @@ int main(int argc, char **argv)
     require(player.position() <= backward_from - 4.0,
             "playing backward seek actually changes clock");
     require(!player.error()[0], "no hidden seek errors");
+    if (youtube && argc > 4 && std::strcmp(argv[4], "--seek-stress") == 0)
+    {
+        require(player.duration() > 610, "seek stress requires a sufficiently long video");
+        for (unsigned step = 0; step < 7; ++step)
+        {
+            double target = 0;
+            if (step == 1)
+            {
+                target = player.position() + 30;
+                player.seek(30);
+            }
+            else if (step == 2)
+            {
+                target = player.position() + 15;
+                for (unsigned press = 0; press < 3; ++press)
+                    player.seek(5);
+            }
+            else
+            {
+                constexpr double destinations[] = {30, 0, 0, 300, 600, 30, 0};
+                target = destinations[step];
+                player.seek_to(target);
+            }
+            const auto before = player.frames_uploaded();
+            const auto started = SDL_GetTicks64();
+            bool reached = false;
+            while (SDL_GetTicks64() - started < 12000)
+            {
+                player.draw(renderer, SDL_Rect{0, 0, 640, 360});
+                SDL_RenderPresent(renderer);
+                if (player.check_network_failure())
+                {
+                    std::fprintf(stderr, "Seek stress step %u failed: %s\n", step, player.error());
+                    break;
+                }
+                if (SDL_GetTicks64() - started >= 250 && !player.seeking() &&
+                    player.frames_uploaded() >= before + 2 &&
+                    player.position() >= target - 0.5 && player.position() < target + 4)
+                {
+                    reached = true;
+                    break;
+                }
+                SDL_Delay(16);
+            }
+            std::printf("Seek stress step %u target %.3f reached %.3f frames %u ms %llu\n",
+                        step, target, player.position(), player.frames_uploaded(),
+                        static_cast<unsigned long long>(SDL_GetTicks64() - started));
+            require(reached && !player.error()[0], "stress seek reaches decoded video without HTTP failure");
+        }
+    }
     unsigned lock_errors = 0, seeks = 0;
     int seek_error = 0;
     tube5::pipeline_diagnostic_status(2, pipeline, sizeof(pipeline));
