@@ -530,6 +530,15 @@ adicional al saltar, todavía sin medición. Confirma posteriormente pausa y tre
 ciclos correctos en DIAG30. No se han observado contadores de memoria tras esos
 ciclos; la reapertura funcional no demuestra por sí sola ausencia de fugas.
 
+IMG_4286.HEIC muestra DIAG30 reproduciendo a 00:42/01:00: RBUF 10/32
+5120 KIB ALLOC 342 FAIL 0 ERR 0; SBUF 1/4 ALLOC 6 FAIL 0 ERR 0;
+DBUF 18/32 24576 KIB ALLOC 7830 FAIL 0 ERR 0. MEMFAIL 0, VSEND 1270,
+VDEC 1268 ERR 0/0, LOCKFAIL 0; FR 1265, SYNC DROP 0, YUV FAIL 0 DROP 0.
+MS LOOP 17 WORK 15 UI 2 VIDEO 8 COPY 5. Son valores durante reproducción,
+no tras cierre: ALLOC es acumulativo y no demuestra memoria retenida. Esta
+build no muestra pools en el menú sin error; la petición de una captura allí
+no permitía comprobar limpieza. Falta instrumentar el estado tras cierre.
+
 ## BOOT-DIAG-29-HTTP: píxeles de superficies SDL en memoria directa
 
 El ensayo de 1080p vuelve al menú durante la creación de textura. La captura
