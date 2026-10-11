@@ -34,7 +34,8 @@ Las secciones siguientes conservan el historial del prototipo.
 
 DIAG37 pule los saltos: programa el patrocinio inicial antes del primer draw,
 oculta imagen y silencia audio durante el seek, y termina directamente cuando
-el segmento alcanza el final. Corrección pendiente de validación física.
+el segmento alcanza el final. El propietario confirma «mucho mejor» en consola;
+se registra la mejora, no la desaparición absoluta de todos los destellos.
 
 ## Prototipo 01.000.001
 

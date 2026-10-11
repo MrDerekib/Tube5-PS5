@@ -91,10 +91,12 @@ Build nativa/FSELF, integridad y guard de ABI RefStruct correctos.
 SHA-256 de eboot.bin:
 `59690d33db18b4d2f77023918a3deedeea82aa2f2eb8f9f2acd652bad33ec175`.
 
-Paquete de pulido DIAG37 (pendiente de prueba en consola):
+Paquete de pulido DIAG37 (mejora confirmada por el propietario en consola):
 `6f55e9d0ed8a1325d24857522c1d7a3ee2d3b139816fc1bc47398c9ccb007f9a`.
 Repetir el inicio y el salto desde 13:25: no deben verse los fotogramas de
 patrocinio antes de empezar en 0:04 ni una cola tras volver a la biblioteca.
+El resultado reportado es «mucho mejor»; no se considera confirmada la ausencia
+absoluta de destellos en todas las condiciones.
 Respaldo privado `.local/boot-diag-36/`; carpeta de despliegue `dist/PPSA99999/`.
 
 ## Atribución

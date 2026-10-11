@@ -19,7 +19,10 @@ El smoke sintético comprueba que la primera imagen presentada esté en >=4 s,
 pausa, seek manual y cierre directo del patrocinio final. También pasa con
 catálogo y MP4 reales de Veritasium (posición 4,512 s tras el inicio y solicitud
 809,716→887 s cerrada sin seek final). Suite host con ASan/UBSan/LSan correcta,
-incluidos timeout, cancelación y fallos HTTP. Prueba física pendiente.
+incluidos timeout, cancelación y fallos HTTP. Tras probar DIAG37 en PS5 Fat
+FW 13.20, el propietario confirma «mucho mejor». Mejora física confirmada por
+reporte; no se afirma que todos los destellos hayan desaparecido ni se atribuye
+una batería exhaustiva de controles a esta confirmación.
 SHA-256 de eboot.bin:
 `6f55e9d0ed8a1325d24857522c1d7a3ee2d3b139816fc1bc47398c9ccb007f9a`.
 
