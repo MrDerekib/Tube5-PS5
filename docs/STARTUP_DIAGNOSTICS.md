@@ -519,6 +519,11 @@ sin insistir. Validación física pendiente.
 SHA-256 eboot:
 `e5cdbd9eb036047d97ec6017b25e09806baf4ea191c2d4c306802b1dea29f105`.
 
+Actualización 2026-10-11: el propietario confirma «ahora sí se reproduce»
+tras instalar DIAG30, con el mismo clip HTTP de 1080p. Esto confirma que se
+supera el fallo de apertura/reproducción observado en DIAG29, no la estabilidad
+del minuto completo ni los controles o la limpieza/reapertura en esta build.
+
 ## BOOT-DIAG-29-HTTP: píxeles de superficies SDL en memoria directa
 
 El ensayo de 1080p vuelve al menú durante la creación de textura. La captura

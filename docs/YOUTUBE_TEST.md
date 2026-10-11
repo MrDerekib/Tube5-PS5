@@ -5,9 +5,10 @@ el MP4 preparado a Tube5 por HTTP LAN. **No es streaming directo de YouTube**,
 ni una integración de catálogo/búsqueda, ni SponsorBlock. El PC necesita estar
 encendido. El propietario confirma apertura del vídeo completo con DIAG25,
 pausa, seek, salida y reapertura. No se considera validada su duración completa.
-El propietario confirma imagen y audio en 720p con DIAG27. La candidata actual
-es DIAG30, con descarte de preroll y pools directos para AVBuffer, superficies
-SDL y entradas grandes de RefStruct, para repetir el minuto de 1080p.
+El propietario confirma imagen y audio en 720p con DIAG27 y que el clip HTTP
+de 1080p se reproduce con DIAG30. Esta build incorpora descarte de preroll y
+pools directos para AVBuffer, superficies SDL y entradas grandes de RefStruct.
+No se han confirmado todavía el minuto completo, controles ni reapertura en DIAG30.
 No se modifican payloads ni firmware. HTTP es la fuente predeterminada en
 DIAG26; LOCAL sigue disponible en Ajustes.
 
@@ -55,7 +56,9 @@ y 32 MiB, con liberación al soltar la última referencia SDL.
 DIAG29 supera esa etapa pero falla una reserva RefStruct de 5.234.088 bytes.
 DIAG30 añade un pool separado para esa ruta concreta de la biblioteca fijada,
 con liberación emparejada y un checker que bloquea builds si cambia su ABI.
-La validación de esta nueva build en PS5 sigue pendiente. La URL no cambia.
+El propietario confirma que ahora se reproduce en PS5 con DIAG30 (2026-10-11).
+Quedan pendientes duración completa del clip, audio/fluidez, pausa, seek,
+salida y reapertura en esta build. La URL no cambia.
 La portada todavía menciona 20 s; el contador utiliza la duración real.
 
 El resto del documento conserva el historial de las pruebas de 360p.
