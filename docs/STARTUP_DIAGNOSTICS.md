@@ -526,9 +526,9 @@ del minuto completo ni los controles o la limpieza/reapertura en esta build.
 
 En la prueba posterior el propietario confirma avance y retroceso, reproducción
 hasta el final con salida y reapertura sin problema. Percibe una ligera demora
-adicional al saltar, todavía sin medición. No se ha confirmado pausa específica
-en DIAG30 ni se han observado contadores de memoria tras ciclos repetidos;
-la reapertura funcional no demuestra por sí sola ausencia de fugas.
+adicional al saltar, todavía sin medición. Confirma posteriormente pausa y tres
+ciclos correctos en DIAG30. No se han observado contadores de memoria tras esos
+ciclos; la reapertura funcional no demuestra por sí sola ausencia de fugas.
 
 ## BOOT-DIAG-29-HTTP: píxeles de superficies SDL en memoria directa
 
