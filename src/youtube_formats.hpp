@@ -5,8 +5,16 @@
 namespace tube5
 {
 constexpr unsigned youtube_player_limit = 1024 * 1024;
+struct YouTubeQuality
+{
+    unsigned height = 0;
+    bool playable = false, separate = false;
+};
 struct YouTubeFormats
 {
+    std::array<char, 12> video_id{};
+    std::array<YouTubeQuality, 16> qualities{};
+    unsigned quality_count = 0;
     std::array<char, 128> title{};
     std::array<char, 48> status{};
     std::array<char, 128> reason{};
@@ -19,7 +27,8 @@ struct YouTubeFormats
     bool hls = false, dash = false;
 };
 bool youtube_media_host(std::string_view url, std::array<char, 256> &host) noexcept;
-// Strict, depth- and body-bounded JSON. Only combined AVC/AAC MP4 <=360p
-// is eligible for the initial byte probe; adaptive formats are inventory only.
-bool parse_youtube_formats(std::string_view json, YouTubeFormats &out) noexcept;
+// Auto chooses <=360p. Explicit height may select combined AVC/AAC <=1080p;
+// adaptive/cipher-only formats are inventoried but cannot enter this player.
+bool parse_youtube_formats(std::string_view json, YouTubeFormats &out,
+                           unsigned requested_height = 0) noexcept;
 } // namespace tube5

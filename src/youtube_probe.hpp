@@ -7,6 +7,7 @@
 #include <curl/curl.h>
 #include "youtube_formats.hpp"
 #include "sponsor_api.hpp"
+#include "youtube_input.hpp"
 namespace tube5
 {
 enum class ProbeStage
@@ -27,8 +28,8 @@ enum class ProbeMode
 };
 struct ProbeResult
 {
-    // Fixed diagnostic video; SponsorBlock uses this same video's timeline.
-    std::array<char, 12> video_id{"bHIhgxav9LY"};
+    std::array<char, 12> video_id{};
+    unsigned requested_height = 0;
     SponsorResponse sponsor{};
     std::array<char, 16> ip{};
     std::array<char, 160> ca{};
@@ -50,7 +51,8 @@ class YouTubeProbe
 {
   public:
     ~YouTubeProbe();
-    bool begin(ProbeMode mode = ProbeMode::metadata) noexcept;
+    bool begin(ProbeMode mode = ProbeMode::metadata, std::string_view input = youtube_test_id,
+               unsigned height = 0) noexcept;
     void cancel() noexcept
     {
         cancelled_ = true;

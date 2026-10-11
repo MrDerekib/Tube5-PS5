@@ -1,5 +1,38 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-46-VIDEO-QUALITY: ID/URL y selector autónomos
+
+R1 desde pantalla directa abre un teclado de 72 teclas con mayúsculas/minúsculas
+y caracteres de URL. L1 limpia, Options borra, X escribe, Triángulo consulta.
+Entrada hasta 1024 caracteres, ID estrictamente de once, hosts y rutas YouTube
+permitidos. No sigue enlaces ni redirecciones introducidas: genera URL oEmbed y
+POST InnerTube con ID validado. videoDetails.videoId debe coincidir con la
+solicitud; el mismo ID sirve para SponsorBlock, sin segmentos de la prueba previa.
+La fuente ahora distingue las letras minúsculas y símbolos de enlaces.
+
+Options antes de reproducir abre inventario de calidades por altura. Solo
+MP4 combinado AVC/AAC con URL permitida <=1080p se habilita como LISTA.
+Auto conserva <=360p. X en una opción habilitada renueva la fuente y segmentos;
+Triángulo restaura Auto. Las opciones adaptativas/cifradas/sin URL/códecs no
+habilitados permanecen bloqueadas, con explicación. No se valida 4K ni se
+habilita una calidad por contar únicamente su altura. No cambia durante play.
+Inventario compacto (16 alturas), una sola URL firmada en memoria, sin logs.
+
+Host resolver con el enlace qf31PkeESoU: título del vídeo de TikTok correcto,
+HTTP 200/CURL 0/CERT 0, 50 formatos, una URL directa, MP4 360p/HTTP 206 verificado.
+Smoke host sobre esa fuente de 1701 s: imagen, diez segundos, pausa, seeks,
+EOF mediante seek y reapertura correctos; cinco rangos, FAIL 0, RX 2172 KiB.
+No se vio el vídeo completo. Tests de URL/ID, teclado, selección combinada y
+rechazo de adaptativos pasan, junto con la suite de regresión/sanitizadores.
+Previews de teclado y selector real revisadas: ID case-sensitive y 360p LISTA;
+144/240/480/720/1080/1440/2160p separados no habilitados en esta respuesta.
+Build nativa y guard ABI correctos; nueva UI y selector pendientes de PS5.
+SHA-256 de eboot.bin:
+`38d0b0489b612ebf5c465473ae7160e1dea58452b7869a1e55ba973e44e72148`.
+Comprobar nueva ID, pause/seeks/reapertura, identidad/segmentos correctos,
+selección manual 360p y rechazo de una opción pendiente sin colgarse.
+
+
 ## BOOT-DIAG-45-YOUTUBE-SPONSOR: API autónoma y segmentos en barra
 
 Build nativa/FSELF y guard ABI correctos. SHA-256 de eboot.bin:

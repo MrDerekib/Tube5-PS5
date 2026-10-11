@@ -1,4 +1,27 @@
-# YouTube directo: DIAG45 SponsorBlock autónomo
+# YouTube directo: DIAG46 URL/ID y calidad
+
+## Entrada y selector (DIAG46)
+
+Desde Ajustes → Triángulo, R1 abre entrada ID/URL con teclado del mando.
+L1 limpia; Options borra; X escribe; Triángulo valida y consulta. Para probar
+otro vídeo puede introducirse `qf31PkeESoU`, respetando mayúsculas/minúsculas.
+Acepta ID de once caracteres y enlaces youtu.be/watch/shorts/live/embed de
+hosts YouTube reconocidos. Aceptar /live no implementa streaming en vivo.
+Rechaza hosts/puertos/credenciales ajenos, ID codificado o parámetro v duplicado.
+No conecta al enlace recibido: construye las solicitudes HTTPS oficiales con
+el ID validado. Verifica que videoDetails.videoId coincide antes del CDN y SB.
+
+Options en la pantalla directa abre calidades: X aplica una opción LISTA y
+renueva la consulta; Triángulo vuelve a Auto. X en la pantalla directa reproduce.
+Solo MP4 AVC/AAC combinado con URL HTTPS válida y <=1080p puede ser elegible;
+Auto mantiene <=360p. Audio/vídeo separados, formatos sin URL/cifrados y otros
+códecs no entran en el player. No hay adaptación automática ni cambio durante
+el play ni persistencia de vídeo/calidad. Los controles Options dentro del
+player siguen cambiando SponsorBlock, no calidad.
+
+El selector guarda únicamente inventario por altura (hasta 16), no dieciséis
+URLs de 8 KiB en memoria. Tras elegir, se conserva solo la fuente seleccionada.
+Nueva entrada/selector pendientes de validación en PS5.
 
 ## SponsorBlock y barra (DIAG45)
 
@@ -12,12 +35,12 @@ Triángulo vuelve a consultar el enlace y los segmentos. El propietario confirma
 en PS5 Fat FW 13.20 (2026-10-11) consulta, saltos inicial/final, ON/OFF y marcas
 correctos, sin PC. Los fallos de API siguen validados solo en host.
 
-## Prueba actual (DIAG44)
+## Reproducción y controles (DIAG44–46)
 
 1. Con Tube5 cerrada, copiar `dist/PPSA99999/` completa. Mantener nanoDNS activo.
-2. Comprobar `BOOT-DIAG-45-YOUTUBE-SPONSOR`.
+2. Comprobar `BOOT-DIAG-46-VIDEO-QUALITY`.
 3. Ajustes → Triángulo → X consulta formatos y verifica primeros bytes.
-4. Cuando MP4 SI, pulsar X otra vez: abre el vídeo de Veritasium directamente.
+4. Cuando MP4 SI, pulsar X otra vez: abre el vídeo seleccionado directamente.
 5. Probar 20–30 s de imagen/audio, pausa/reanudar, +/-5 s y Círculo para salir.
 6. X vuelve a reproducir. Triángulo en la pantalla directa renueva el enlace.
 

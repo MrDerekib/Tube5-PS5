@@ -11,9 +11,6 @@
 namespace
 {
 constexpr const char *host = "www.youtube.com";
-constexpr const char *url =
-    "https://www.youtube.com/"
-    "oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DbHIhgxav9LY&format=json";
 struct Body
 {
     explicit Body(std::size_t limit = 16384)
@@ -63,8 +60,8 @@ constexpr const char *player_url = "https://www.youtube.com/youtubei/v1/player?p
 // Protocol profile observed in upstream yt-dlp, not a bundled extractor.
 constexpr const char *player_agent =
     "com.google.android.youtube/21.26.364 (Linux; U; Android 11) gzip";
-constexpr const char *player_body =
-    R"({"context":{"client":{"clientName":"ANDROID","clientVersion":"21.26.364","androidSdkVersion":30,"osName":"Android","osVersion":"11","userAgent":"com.google.android.youtube/21.26.364 (Linux; U; Android 11) gzip","hl":"es","gl":"ES"}},"videoId":"bHIhgxav9LY","contentCheckOk":true,"racyCheckOk":true})";
+constexpr const char *player_body_format =
+    R"({"context":{"client":{"clientName":"ANDROID","clientVersion":"21.26.364","androidSdkVersion":30,"osName":"Android","osVersion":"11","userAgent":"com.google.android.youtube/21.26.364 (Linux; U; Android 11) gzip","hl":"es","gl":"ES"}},"videoId":"%s","contentCheckOk":true,"racyCheckOk":true})";
 } // namespace
 namespace tube5
 {
@@ -132,13 +129,21 @@ YouTubeProbe::~YouTubeProbe()
     if (thread_)
         SDL_WaitThread(thread_, nullptr);
 }
-bool YouTubeProbe::begin(ProbeMode mode) noexcept
+bool YouTubeProbe::begin(ProbeMode mode, std::string_view input, unsigned height) noexcept
 {
     if (loading())
         return false;
     result_ = {};
     pending_ = {};
     result_.mode = pending_.mode = mode;
+    if (!youtube_input_id(input, pending_.video_id) || height > 1080)
+    {
+        stage_ = ProbeStage::failed;
+        std::snprintf(result_.error.data(), result_.error.size(), "ID/URL O CALIDAD NO VALIDA");
+        return false;
+    }
+    result_.video_id = pending_.video_id;
+    result_.requested_height = pending_.requested_height = height;
     done_ = cancelled_ = false;
     stage_ = ProbeStage::dns;
     thread_ = SDL_CreateThread(worker, "tube5-direct", this);
@@ -157,6 +162,12 @@ int YouTubeProbe::worker(void *opaque) noexcept
 {
     auto &probe = *static_cast<YouTubeProbe *>(opaque);
     auto &out = probe.pending_;
+    char url[256]{}, player_body[768]{};
+    std::snprintf(url, sizeof(url),
+                  "https://www.youtube.com/"
+                  "oembed?url=https%%3A%%2F%%2Fwww.youtube.com%%2Fwatch%%3Fv%%3D%s&format=json",
+                  out.video_id.data());
+    std::snprintf(player_body, sizeof(player_body), player_body_format, out.video_id.data());
     const int dns = resolve_https_ipv4(host, out.ip.data(), out.ip.size(), out.dns_error);
 #ifdef TUBE5_HOST
     std::snprintf(out.ca.data(), out.ca.size(), "CA DEL SISTEMA HOST - NO ES PRUEBA PS5");
@@ -258,15 +269,19 @@ int YouTubeProbe::worker(void *opaque) noexcept
                           "YOUTUBE: RESPUESTA NO ES METADATOS OEMBED");
         else if (out.mode == ProbeMode::formats && !probe.cancelled_)
         {
-            if (!parse_youtube_formats({body.bytes.get(), body.used}, out.formats))
+            if (!parse_youtube_formats({body.bytes.get(), body.used}, out.formats,
+                                       out.requested_height))
                 std::snprintf(out.error.data(), out.error.size(),
                               "PLAYER: JSON INVALIDO O FUERA DE LIMITES");
             else if (std::strcmp(out.formats.status.data(), "OK") != 0)
                 std::snprintf(out.error.data(), out.error.size(), "PLAYER: %.40s %.40s",
                               out.formats.status.data(), out.formats.reason.data());
+            else if (std::strcmp(out.video_id.data(), out.formats.video_id.data()) != 0)
+                std::snprintf(out.error.data(), out.error.size(),
+                              "PLAYER: ID DE VIDEO NO COINCIDE");
             else if (!out.formats.source[0])
                 std::snprintf(out.error.data(), out.error.size(),
-                              "FORMATOS OK - SIN MP4 AVC/AAC DIRECTO <=360P");
+                              "SIN MP4 COMBINADO PARA ESTA CALIDAD - OPTIONS CALIDAD");
             else
             {
                 out.title = out.formats.title;

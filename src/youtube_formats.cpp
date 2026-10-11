@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "youtube_formats.hpp"
+#include "youtube_input.hpp"
 #include <algorithm>
 #include <cstring>
 #include <json-c/json.h>
@@ -78,7 +79,8 @@ bool youtube_media_host(std::string_view url, std::array<char, 256> &host) noexc
     std::copy(name.begin(), name.end(), host.begin());
     return true;
 }
-bool parse_youtube_formats(std::string_view json, YouTubeFormats &out) noexcept
+bool parse_youtube_formats(std::string_view json, YouTubeFormats &out,
+                           unsigned requested_height) noexcept
 {
     out = {};
     if (json.empty() || json.size() > youtube_player_limit)
@@ -103,6 +105,9 @@ bool parse_youtube_formats(std::string_view json, YouTubeFormats &out) noexcept
     display(status, out.status);
     display(string_member(playability, "reason"), out.reason);
     display(string_member(member(root, "videoDetails", json_type_object), "title"), out.title);
+    const auto video_id = string_member(member(root, "videoDetails", json_type_object), "videoId");
+    if (valid_youtube_id(video_id))
+        std::copy(video_id.begin(), video_id.end(), out.video_id.begin());
     auto *stream = member(root, "streamingData", json_type_object);
     out.hls = !string_member(stream, "hlsManifestUrl").empty();
     out.dash = !string_member(stream, "dashManifestUrl").empty();
@@ -138,9 +143,30 @@ bool parse_youtube_formats(std::string_view json, YouTubeFormats &out) noexcept
             out.av1 += mime.find("av01") != std::string_view::npos;
             out.opus += mime.find("opus") != std::string_view::npos;
             std::array<char, 256> host{};
-            if (status == "OK" && std::strcmp(group, "formats") == 0 && height && height <= 360 &&
-                height > out.selected_height && mime.starts_with("video/mp4;") && avc && aac &&
-                youtube_media_host(url, host))
+            const bool separate = std::strcmp(group, "adaptiveFormats") == 0;
+            const bool eligible = status == "OK" && !separate && height && height <= 1080 &&
+                                  mime.starts_with("video/mp4;") && avc && aac &&
+                                  youtube_media_host(url, host);
+            if (height)
+            {
+                unsigned q = 0;
+                while (q < out.quality_count && out.qualities[q].height != height)
+                    ++q;
+                if (q == out.quality_count)
+                {
+                    if (q == out.qualities.size())
+                    {
+                        bounded = false;
+                        break;
+                    }
+                    out.qualities[q].height = height;
+                    ++out.quality_count;
+                }
+                out.qualities[q].playable |= eligible;
+                out.qualities[q].separate |= separate;
+            }
+            if (eligible && (requested_height ? height == requested_height : height <= 360) &&
+                height > out.selected_height)
             {
                 std::copy(url.begin(), url.end(), out.source.begin());
                 out.source[url.size()] = '\0';
@@ -150,6 +176,8 @@ bool parse_youtube_formats(std::string_view json, YouTubeFormats &out) noexcept
             }
         }
     }
+    std::sort(out.qualities.begin(), out.qualities.begin() + out.quality_count,
+              [](const auto &a, const auto &b) { return a.height < b.height; });
     json_object_put(root);
     if (!bounded || status.empty())
     {

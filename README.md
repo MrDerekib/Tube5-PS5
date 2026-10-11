@@ -22,7 +22,22 @@ final. La app final no requerirá una companion app en el PC.
 > Biblioteca LAN y corrección de títulos de DIAG35 validadas en consola.
 > 4K no validado.
 
-## Prueba actual: BOOT-DIAG-45-YOUTUBE-SPONSOR
+## Prueba actual: BOOT-DIAG-46-VIDEO-QUALITY
+
+DIAG46 permite abrir otro vídeo sin PC: en la pantalla directa, R1 abre el
+teclado de ID/URL; L1 limpia, Options borra, X escribe y Triángulo consulta.
+Los ID distinguen mayúsculas/minúsculas, ahora visibles también en la fuente.
+Se extrae únicamente el ID de enlaces YouTube reconocidos, nunca se conecta al
+dominio introducido. La fuente y SponsorBlock usan la misma identidad verificada.
+
+Options en la pantalla directa abre las calidades inventariadas. Solo las
+opciones LISTA tienen MP4 H.264/AAC combinado con URL directa y altura <=1080p.
+Auto mantiene el máximo de 360p validado; una selección manual renueva la
+fuente antes de reproducir. Las demás aparecen como pendientes/no compatibles,
+sin intentar enviar vídeo sin audio al player. 720p/1080p directos desde YouTube
+no están validados: en el vídeo consultado solo 360p cumple esta ruta.
+No cambia calidad durante reproducción; selección de vídeo/calidad solo en
+esta sesión. La nueva entrada y selector están pendientes de prueba física.
 
 DIAG45 consulta la API de SponsorBlock directamente desde PS5 por HTTPS, sin
 PC. Solicita el prefijo SHA-256 del ID, filtra sponsor/skip, valida duración
@@ -47,8 +62,8 @@ TLS verificado, peticiones Range y caché fija de 512 KiB; no prepara, descarga
 completo ni transcodifica en el PC. El smoke real host pasa imagen, pausa,
 seeks, EOF por seek y reapertura. El propietario confirma en PS5 MP4 360p,
 audio, pausa, avance/retroceso, salida y reapertura correctos (2026-10-11).
-Solo el vídeo fijo y el MP4 combinado <=360p: aún no hay búsqueda autónoma,
-cuenta, renovación automática ni hardware decoding. SponsorBlock directo está
+DIAG46 añade URL/ID y selección de MP4 combinado; aún no hay búsqueda autónoma,
+streams de audio/vídeo separados, cuenta, renovación automática ni hardware decoding. SponsorBlock directo está
 integrado y validado en PS5 en DIAG45 para la categoría sponsor/skip.
 La ausencia de anuncios no se da por validada por esta prueba.
 Ver [la prueba directa](docs/YOUTUBE_DIRECT.md).

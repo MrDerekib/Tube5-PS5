@@ -11,7 +11,9 @@ enum class Screen
     player,
     library,
     search,
-    online
+    online,
+    video_input,
+    quality
 };
 enum class Command
 {

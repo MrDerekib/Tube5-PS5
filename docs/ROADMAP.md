@@ -26,6 +26,8 @@ que bloqueen ahora el desarrollo sobre el puente:
   saltos inicial/final, ON/OFF y marcas naranjas correctos. Los fallos de API
   no bloquean reproducción; esa degradación está probada en host, no en PS5.
 - [ ] Integrar búsqueda y selección autónomas con el mando tras demostrar esa ruta.
+  DIAG46 añade entrada de ID/URL y selector de calidad, pendientes de prueba
+  física; búsqueda por texto todavía no es autónoma.
 
 No se promete que cambiar los DNS baste. Evaluar y documentar los impedimentos
 de autonomía durante el desarrollo para no confundir los prototipos con el
@@ -56,6 +58,7 @@ Conservarlo como banco de pruebas, sin hacerlo una dependencia del producto.
 4. Reproducción sin anuncios: identificar cómo aparecen en la ruta elegida y
    verificar su exclusión. No equiparar acceso a oEmbed o al HTML con bloqueo
    de publicidad implementado. SponsorBlock debe consultarse también desde PS5.
+   DIAG45 valida sponsor/skip directo; no valida exclusión de anuncios YouTube.
 5. Velocidad de reproducción con sincronización y audio adecuados; reanudación
    local por ID desde el último punto, sin confundir EOF con una pausa.
 6. Inicio de sesión seguro, biblioteca personal e integración de cuenta.
@@ -67,6 +70,22 @@ El player actual decodifica por software. Identificar APIs accesibles en título
 homebrew, códecs/perfiles soportados, propiedad de buffers y presentación;
 hacer una prueba mínima antes de comprometer 4K o cambiar el pipeline validado.
 El hardware no resuelve DNS, extracción del enlace, publicidad ni autenticación.
+
+### Calidad directa, no variantes preparadas en PC
+
+- [ ] Validar DIAG46: nueva URL/ID, identidad de fuente y segmentos, selector,
+  pausa/seeks/reapertura y rechazo de una calidad no compatible sin crash.
+- [ ] Unir vídeo y audio adaptativos desde dos fuentes HTTPS, conservando rangos,
+  TLS, memoria acotada, reloj común y seek/cancelación de ambas fuentes.
+- [ ] Resolver ausencia de URLs, firmas/tokens o manifiestos cuando sean
+  necesarios; no presentar esos formatos como reproducibles por inventariarlos.
+- [ ] Probar 720p/1080p desde YouTube sobre esa ruta; no extrapolar las pruebas LAN.
+- [ ] Evaluar VP9/AV1/Opus, perfiles/fps y hardware antes de habilitar 4K.
+
+DIAG46 Auto mantiene <=360p; manual solo permite MP4 combinado H.264/AAC con
+URL HTTPS permitida hasta 1080p si realmente se ofrece. Los formatos separados
+y los códecs no habilitados se muestran pendientes, sin selección reproducible.
+La calidad no cambia durante el play ni se persiste todavía.
 
 ### Diagnóstico de DNS para el usuario
 

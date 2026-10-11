@@ -26,7 +26,8 @@ int main(int argc, char **argv)
         tube5::YouTubeProbe probe;
         const auto started = SDL_GetTicks64();
         const bool formats = std::strcmp(argv[1], "--formats") == 0;
-        assert(probe.begin(formats ? tube5::ProbeMode::formats : tube5::ProbeMode::metadata));
+        assert(probe.begin(formats ? tube5::ProbeMode::formats : tube5::ProbeMode::metadata,
+                           argc > 2 ? argv[2] : "bHIhgxav9LY"));
         assert(SDL_GetTicks64() - started < 250);
         if (std::strcmp(argv[1], "--cancel") == 0)
             probe.cancel();

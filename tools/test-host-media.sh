@@ -34,6 +34,9 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc "${curl_cflags[@]}" tests/test_youtube_formats.cpp src/youtube_formats.cpp \
     "${curl_libs[@]}" -o build/youtube-formats-test
 build/youtube-formats-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
+    -Isrc tests/test_youtube_input.cpp -o build/youtube-input-test
+build/youtube-input-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_HOST \
     -Isrc -I"$source_root/include" "${cflags[@]}" "${curl_cflags[@]}" tests/test_youtube_stream.cpp \
     src/youtube_stream.cpp src/youtube_formats.cpp src/verified_https.cpp src/network_source.cpp \

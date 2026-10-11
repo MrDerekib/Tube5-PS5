@@ -29,6 +29,20 @@ int main()
            result.av1 == 1 && result.opus == 1);
     assert(result.selected_itag == 18 && result.selected_height == 360 && result.source[0]);
     assert(std::strcmp(result.title.data(), "Test") == 0);
+    assert(result.quality_count == 3 && result.qualities[0].height == 360 &&
+           result.qualities[0].playable && !result.qualities[1].playable &&
+           result.qualities[1].separate);
+    assert(tube5::parse_youtube_formats(valid, result, 1080));
+    assert(!result.source[0]); // Never feed video-only/cipher to the muxed player.
+    assert(tube5::parse_youtube_formats(valid, result, 360) && result.selected_height == 360);
+    const char *combined =
+        R"({"playabilityStatus":{"status":"OK"},"videoDetails":{"videoId":"qf31PkeESoU"},"streamingData":{"formats":[{"itag":22,"height":720,"mimeType":"video/mp4; codecs=\"avc1.x, mp4a.x\"","url":"https://rr1.googlevideo.com/videoplayback?x=2"},{"itag":18,"height":360,"mimeType":"video/mp4; codecs=\"avc1.x, mp4a.x\"","url":"https://rr1.googlevideo.com/videoplayback?x=1"}]}})";
+    assert(tube5::parse_youtube_formats(combined, result) && result.selected_height == 360);
+    assert(std::strcmp(result.video_id.data(), "qf31PkeESoU") == 0);
+    assert(result.quality_count == 2 && result.qualities[1].playable);
+    assert(tube5::parse_youtube_formats(combined, result, 720) && result.selected_height == 720);
+    assert(result.selected_itag == 22);
+    assert(tube5::parse_youtube_formats(combined, result, 1080) && !result.source[0]);
     assert(tube5::parse_youtube_formats(
         R"({"playabilityStatus":{"status":"LOGIN_REQUIRED","reason":"Sign in"}})", result));
     assert(std::strcmp(result.status.data(), "LOGIN_REQUIRED") == 0 && !result.source[0]);

@@ -48,7 +48,9 @@ int main(int argc, char **argv)
     tube5::YouTubeProbe probe;
     if (youtube)
     {
-        require(probe.begin(tube5::ProbeMode::formats), "launch direct resolver");
+        const char *input =
+            argc > 2 && std::strncmp(argv[2], "--", 2) != 0 ? argv[2] : "bHIhgxav9LY";
+        require(probe.begin(tube5::ProbeMode::formats, input), "launch direct resolver");
         const auto started = SDL_GetTicks64();
         while (probe.loading())
         {
