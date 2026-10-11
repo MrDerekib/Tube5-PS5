@@ -18,6 +18,34 @@ DIAG26; LOCAL sigue disponible en Ajustes.
 
 ## Pruebas de resolución: DIAG26/DIAG27/DIAG28
 
+### Prueba de duración 1080p: DIAG31
+
+Tras pasar el minuto de 1080p y tres ciclos con DIAG30, DIAG31 conserva el
+reproductor y los allocators. Añade contadores RBUF/SBUF/DBUF al menú principal
+sin necesidad de provocar un error y corrige la descripción fija de «20 segundos».
+Se prepara un clip de cinco minutos, con la misma normalización HD:
+
+```bash
+python3 tools/prepare-youtube-test.py 'https://youtu.be/qf31PkeESoU' --height 1080 --seconds 300
+```
+
+`--seconds` admite 60 (por defecto), 300 o 600 para HD. Se verifica la duración
+solicitada con margen de un segundo, sin escalar ni cambiar perfil, fps o CRF.
+Cada duración tiene su propio archivo privado; no sobrescribe las pruebas anteriores.
+Los límites de tamaño crecen proporcionalmente a la duración (320 MiB para 300 s).
+
+Archivo preparado y verificado: 1920x1080, H.264 Main YUV420 a 30 fps,
+AAC-LC estéreo/44,1 kHz, 300,001814 s y 89.846.983 bytes. El servidor LAN
+sirve esta variante en `http://192.168.8.176:8080/test-clip.mp4`.
+
+Con Tube5 cerrada, copiar `dist/PPSA99999/` y verificar BOOT-DIAG-31-HTTP.
+La URL se mantiene, con el servidor apuntando a `resolution-1080p-300s.mp4`.
+Fotografiar los pools en el menú antes de abrir, reproducir los cinco minutos
+sin saltos y revisar audio/fluidez; fotografiar al volver al menú. Los valores
+vivos/KIB deberían regresar al nivel inicial; ALLOC es acumulativo y puede crecer.
+Después probar pausa, saltos, salida durante reproducción y reapertura. La
+validación física de DIAG31 y de la duración nueva queda pendiente.
+
 Preparar un minuto de cada resolución desde sus pistas HD reales, sin ampliar
 el vídeo de 360p:
 

@@ -54,6 +54,17 @@ class PrepareTests(unittest.TestCase):
             self.assertIn(f"[height={height}]", prepare.format_selection(height))
             self.assertIn("[fps<=60]", prepare.format_selection(height))
 
+    def test_extended_hd_duration_is_checked(self):
+        video = dict(codec_type="video", codec_name="h264", pix_fmt="yuv420p",
+                     width=1920, height=1080, r_frame_rate="30/1")
+        audio = dict(codec_type="audio", codec_name="aac", channels=2)
+        for seconds in (300, 600):
+            probe = dict(streams=[video, audio], format=dict(duration=str(seconds + 0.02)))
+            self.assertAlmostEqual(prepare.validate_media(probe, 1080, seconds), seconds + 0.02)
+            for duration in (60, seconds - 2, seconds + 2):
+                with self.assertRaises(ValueError):
+                    prepare.validate_media(dict(probe, format=dict(duration=str(duration))), 1080, seconds)
+
 
 if __name__ == "__main__":
     unittest.main()

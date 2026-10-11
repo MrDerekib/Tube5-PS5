@@ -42,7 +42,7 @@ def youtube_id(value):
     return identifier
 
 
-def validate_media(probe, height=360):
+def validate_media(probe, height=360, seconds=60):
     video = [s for s in probe["streams"] if s["codec_type"] == "video"]
     audio = [s for s in probe["streams"] if s["codec_type"] == "audio"]
     if len(video) != 1 or len(audio) != 1:
@@ -59,8 +59,8 @@ def validate_media(probe, height=360):
     duration = float(probe["format"]["duration"])
     if not 20 <= duration <= 3600:
         raise ValueError("Test media must be between 20 seconds and one hour")
-    if height != 360 and not 59 <= duration <= 61:
-        raise ValueError("Resolution test must last approximately 60 seconds")
+    if height != 360 and not seconds - 1 <= duration <= seconds + 1:
+        raise ValueError(f"Resolution test must last approximately {seconds} seconds")
     return duration
 
 
@@ -68,7 +68,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("url")
     parser.add_argument("--height", type=int, choices=tuple(WIDTHS), default=360,
-                        help="720/1080 prepare a 60-second H.264 Main 30-fps resolution test")
+                        help="720/1080 prepare an H.264 Main 30-fps resolution test")
+    parser.add_argument("--seconds", type=int, choices=(60, 300, 600), default=60,
+                        help="HD test length; ignored for the full 360p pilot")
     args = parser.parse_args()
     try:
         identifier = youtube_id(args.url)
@@ -89,38 +91,40 @@ def main():
         cache = ROOT / ".local" / "youtube" / identifier
         cache.mkdir(parents=True, exist_ok=True)
         resolution_test = args.height != 360
-        final = cache / (f"resolution-{args.height}p-60s.mp4" if resolution_test else "media.mp4")
+        if resolution_test and duration < args.seconds:
+            raise ValueError("Source is shorter than the requested HD test")
+        final = cache / (f"resolution-{args.height}p-{args.seconds}s.mp4" if resolution_test else "media.mp4")
         if final.exists():
             raise ValueError(f"Prepared media already exists; use it without downloading again: {final}")
         print(f"Preparing: {info.get('title', identifier)} ({duration} s)", flush=True)
         with tempfile.TemporaryDirectory(prefix="prepare-", dir=cache) as temporary:
             work = Path(temporary)
             downloaded = work / "download.mp4"
-            # For HD tests request only the first minute. Full-source filesize
+            # For HD tests request only the selected section. Full-source filesize
             # estimates must not reject a short section of a much larger track.
-            limits = (["--download-sections", "*0-60"] if resolution_test
+            limits = (["--download-sections", f"*0-{args.seconds}"] if resolution_test
                       else ["--max-filesize", "128M"])
             subprocess.run(base + ["--no-progress"] + limits + ["-S", "lang",
                                    "-f", format_selection(args.height), "--merge-output-format", "mp4", "-o",
-                                   str(work / "download.%(ext)s"), canonical], check=True, timeout=600)
-            byte_limit = (64 if resolution_test else 256) * 1024 * 1024
+                                   str(work / "download.%(ext)s"), canonical], check=True, timeout=1200)
+            byte_limit = (64 * (args.seconds // 60) if resolution_test else 256) * 1024 * 1024
             if not downloaded.is_file() or downloaded.stat().st_size > byte_limit:
                 raise ValueError(f"Download missing or exceeds the {byte_limit // (1024 * 1024)} MiB pilot limit")
             prepared = work / "media.mp4"
             # Default pilot retains YouTube's codecs. HD tests normalize video
             # to Main/30fps without scaling; the audio track is copied intact.
-            video_options = (["-t", "60", "-vf", "fps=30", "-c:v", "libx264",
+            video_options = (["-t", str(args.seconds), "-vf", "fps=30", "-c:v", "libx264",
                               "-threads", "2", "-preset", "fast", "-crf", "23",
                               "-profile:v", "main", "-level:v", "3.1" if args.height == 720 else "4.0",
                               "-pix_fmt", "yuv420p", "-c:a", "copy"]
                              if resolution_test else ["-c", "copy"])
             subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-n", "-i", str(downloaded),
                             "-map", "0:v:0", "-map", "0:a:0"] + video_options + ["-movflags",
-                            "+faststart", str(prepared)], check=True, timeout=120)
+                            "+faststart", str(prepared)], check=True, timeout=1200)
             probe = json.loads(subprocess.check_output(
                 ["ffprobe", "-v", "error", "-show_streams", "-show_format", "-of", "json",
                  str(prepared)], text=True, timeout=30))
-            validate_media(probe, args.height)
+            validate_media(probe, args.height, args.seconds)
             if prepared.stat().st_size > byte_limit:
                 raise ValueError("Prepared file exceeds the pilot size limit")
             metadata = {"id": identifier, "title": info.get("title", identifier),

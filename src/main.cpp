@@ -49,6 +49,24 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
     canvas.text(1380, 80, "01.000.001", 3, muted);
     if (build_label[0])
         canvas.text(120, 240, build_label.data(), 2, Color::yellow);
+#ifdef TUBE5_DIAGNOSTICS
+    if (nav.screen == tube5::Screen::home && !media.opening() && !error[0])
+    {
+        char pools[192]{};
+#ifdef TUBE5_REFSTRUCT_BUFFER_WRAP
+        tube5::native_refstruct_buffer_status(pools, sizeof(pools));
+        canvas.text(800, 35, pools, 2, muted);
+#endif
+#ifdef TUBE5_SURFACE_BUFFER_WRAP
+        tube5::native_surface_buffer_status(pools, sizeof(pools));
+        canvas.text(800, 65, pools, 2, muted);
+#endif
+#ifdef TUBE5_MEDIA_BUFFER_WRAP
+        tube5::native_media_buffer_status(pools, sizeof(pools));
+        canvas.text(800, 95, pools, 2, muted);
+#endif
+    }
+#endif
     if (nav.screen == tube5::Screen::home)
     {
         canvas.text(120, 310, "VAMOS A PROBARLO", 6, Color::white);
@@ -76,7 +94,7 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             canvas.text(x + 30, 715, details[i], 3, muted);
         }
         canvas.text(120, 830,
-                    network_test ? "CLIP HTTP DE 20 SEGUNDOS. PC EN LA MISMA RED."
+                    network_test ? "VIDEO HTTP. PC EN LA MISMA RED."
                                  : "CLIP LOCAL DE 20 SEGUNDOS. NO REQUIERE INTERNET.",
                     3, muted);
     }

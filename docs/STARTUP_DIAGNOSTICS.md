@@ -464,6 +464,30 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-31-HTTP: duración y memoria tras cierre
+
+Conserva los allocators y el reproductor de DIAG30. Muestra los pools directos
+RBUF/SBUF/DBUF en el menú principal cuando no hay una apertura en curso ni un
+error, además de los marcadores durante reproducción y fallo. Esto permite
+comparar reservas vivas antes/después del cierre sin provocar un error. ALLOC
+es acumulativo; no debe confundirse con slots vivos o KIB retenidos.
+La portada HTTP deja de anunciar una duración fija de 20 s.
+
+La preparación HD admite ahora secciones de 60, 300 o 600 s, con validación de
+duración, archivos separados y límites de tamaño proporcionales. La siguiente
+prueba es 1080p/30 fps durante cinco minutos, manteniendo H.264 Main YUV420,
+CRF 23 y audio AAC copiado. Validación física pendiente.
+
+Build/FSELF y guard del ABI RefStruct válidos; batería completa de host con
+sanitizadores aprobada, incluyendo los cuatro tests de preparación de YouTube.
+SHA-256 de eboot DIAG31:
+`3265333bdfbc7de88cd03bcca60434988f82a52536c6a9cb83890f1c9dc7a9ad`.
+ELF, eboot y etiqueta se conservan en `.local/boot-diag-31/` para simbolización.
+El MP4 de 300 s se valida con ffprobe (1920x1080 Main/30, AAC-LC estéreo,
+300,001814 s, 89.846.983 bytes). El smoke HTTP pasa apertura, decode, pausa,
+saltos, EOF por seek, reapertura y limpieza; no reproduce íntegros los cinco
+minutos ni ejercita los pools nativos en PS5. El servidor queda en esa variante.
+
 ## BOOT-DIAG-30-HTTP: pool RefStruct de FFmpeg
 
 IMG_4285.HEIC confirma DIAG29 y `MEMORY: ENOMEM`, `MEMFAIL 17 ALIGN
