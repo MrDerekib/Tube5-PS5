@@ -51,7 +51,7 @@ def byte_range(header, size):
     return start, min(end, size - 1)
 
 
-def handler_for(clip, stall_headers=False, library=None, sponsor=None):
+def handler_for(clip, stall_headers=False, library=None, sponsor=None, console=None):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -63,7 +63,23 @@ def handler_for(clip, stall_headers=False, library=None, sponsor=None):
             self.send_clip(False)
 
         def do_GET(self):
-            self.send_clip(True)
+            if self.path.startswith("/tube5/"):
+                if console:
+                    console.handle(self, "GET")
+                else:
+                    self.send_error(404)
+            else:
+                self.send_clip(True)
+
+        def do_POST(self):
+            if console and self.path.startswith("/tube5/"):
+                console.handle(self, "POST")
+            else:
+                self.send_error(404)
+
+        def log_message(self, format, *args):
+            if not self.path.startswith("/tube5/"):
+                super().log_message(format, *args)
 
         def send_clip(self, body):
             entries = library.snapshot() if hasattr(library, "snapshot") else library
@@ -159,16 +175,27 @@ def main():
     parser.add_argument("--youtube-control", action="store_true",
                         help="Enable local authenticated URL submission (also enables library)")
     parser.add_argument("--control-port", type=int, default=8081)
+    parser.add_argument("--console-ip", help="Opt-in authenticated console search/control for this IPv4 only")
     parser.add_argument("--sponsorblock", action="store_true", help="Read-only sponsor category with private cache")
     parser.add_argument("--clip", type=Path,
                         default=Path(__file__).resolve().parents[1] / "assets/test-clip.mp4")
     args = parser.parse_args()
+    if args.console_ip:
+        import ipaddress
+        try:
+            ipaddress.IPv4Address(args.console_ip)
+            if ipaddress.IPv4Address(args.bind).is_unspecified:
+                raise ValueError("Wildcard bind unsupported for console control")
+        except ValueError:
+            parser.error("console-ip and bind must be concrete IPv4 addresses")
+        if not args.youtube_control:
+            parser.error("console-ip requires youtube-control")
     clip = args.clip.resolve(strict=True)
     if not clip.is_file() or clip.stat().st_size == 0:
         parser.error("clip must be a nonempty file")
     local = Path(__file__).resolve().parents[1] / "assets/test-clip.mp4"
     library = library_entries(clip, local) if args.library or args.youtube_control or args.sponsorblock else None
-    bridge = control = control_thread = sponsor = None
+    bridge = control = control_thread = sponsor = console = None
     if args.youtube_control:
         spec = importlib.util.spec_from_file_location("tube5_bridge", Path(__file__).with_name("youtube-bridge.py"))
         module = importlib.util.module_from_spec(spec)
@@ -183,13 +210,18 @@ def main():
             raise
         library = bridge
     try:
+        if args.console_ip:
+            spec_search = importlib.util.spec_from_file_location("tube5_search", Path(__file__).with_name("youtube-search.py"))
+            module_search = importlib.util.module_from_spec(spec_search)
+            spec_search.loader.exec_module(module_search)
+            console = module_search.ConsoleBridge(bridge, args.console_ip)
         if args.sponsorblock:
             spec = importlib.util.spec_from_file_location("tube5_sponsor", Path(__file__).with_name("sponsorblock-cache.py"))
             module_sb = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module_sb)
             sponsor = module_sb.SponsorCache()
             sponsor.decorate(library.snapshot() if bridge else library)
-        server = ThreadingHTTPServer((args.bind, args.port), handler_for(clip, args.stall_headers, library, sponsor))
+        server = ThreadingHTTPServer((args.bind, args.port), handler_for(clip, args.stall_headers, library, sponsor, console))
         if bridge:
             control.RequestHandlerClass = module.control_handler(bridge)
             control.daemon_threads = True
@@ -202,6 +234,8 @@ def main():
             control.server_close()
         if sponsor:
             sponsor.close()
+        if console:
+            console.close()
         if 'server' in locals():
             server.server_close()
         raise
@@ -232,6 +266,8 @@ def main():
             bridge.close()
         if sponsor:
             sponsor.close()
+        if console:
+            console.close()
 
 
 if __name__ == "__main__":

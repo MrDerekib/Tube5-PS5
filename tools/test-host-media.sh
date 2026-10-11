@@ -70,6 +70,11 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc "${cflags[@]}" tests/test_lan_catalog.cpp src/lan_catalog.cpp \
     build/native-network-host.o "${libs[@]}" "$native_network_wraps" -o build/lan-catalog-test
 build/lan-catalog-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
+    -Isrc "${cflags[@]}" tests/test_youtube_search.cpp src/youtube_search.cpp src/lan_catalog.cpp \
+    build/native-network-host.o "${libs[@]}" "$native_network_wraps" -o build/youtube-search-test
+build/youtube-search-test
+python3 -m unittest discover -s tests -p test_youtube_search.py -v
 python3 -m unittest discover -s tests -p test_youtube_bridge.py -v
 python3 -m unittest discover -s tests -p test_sponsorblock.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
@@ -112,6 +117,6 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/media-smoke assets/test-clip.m
 python3 -m unittest discover -s tests -p test_http_test_server.py -v
 python3 -m unittest discover -s tests -p test_youtube_prepare.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_AUDIO_WRAP -DTUBE5_HOST -DTUBE5_OFFSCREEN -DTUBE5_CONVERSION_WRAP -DTUBE5_NETWORK_WRAP -DTUBE5_SEEK_WRAP -ffunction-sections -fdata-sections \
-    -Isrc -I"$source_root/include" "${cflags[@]}" src/main.cpp src/lan_catalog.cpp src/audio_reader.cpp src/demo_renderer.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/native_sdl.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
+    -Isrc -I"$source_root/include" "${cflags[@]}" src/main.cpp src/lan_catalog.cpp src/youtube_search.cpp src/audio_reader.cpp src/demo_renderer.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/native_sdl.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
     build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "$native_network_wraps" -Wl,--gc-sections,--wrap=Kit_GetAudioDecoderData,--wrap=sws_scale_frame,--wrap=Kit_WritePacketBuffer,--wrap=Kit_FindAVPixelFormat,--wrap=avformat_open_input,--wrap=avformat_find_stream_info,--wrap=av_read_frame,--wrap=avcodec_receive_frame,--wrap=avformat_seek_file -o build/tube5-host
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy TUBE5_PREVIEW=build/ui-preview.bmp build/tube5-host

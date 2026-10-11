@@ -316,6 +316,9 @@ cp "$param" "$app/sce_sys/param.json"
 if [[ $app_source_dir == src && -f $root/.local/network-test-url.txt ]]; then
     cp "$root/.local/network-test-url.txt" "$app/network-test-url.txt"
 fi
+if [[ $app_source_dir == src && -f $root/.local/bridge/console-token ]]; then
+    cp "$root/.local/bridge/console-token" "$app/console-token.txt"
+fi
 for asset in icon0.png pic0.dds pic1.dds snd0.at9; do
     [[ -f $root/$app_sce_sys/$asset ]] && cp "$root/$app_sce_sys/$asset" "$app/sce_sys/$asset"
 done

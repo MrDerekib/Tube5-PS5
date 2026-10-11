@@ -16,6 +16,7 @@
 #include "lan_catalog.hpp"
 #include "preferences.hpp"
 #include "sponsor_notice.hpp"
+#include "youtube_search.hpp"
 #include "video_sync_diagnostics.hpp"
 #include "video_conversion.hpp"
 #include <array>
@@ -39,6 +40,18 @@ constexpr auto accent = static_cast<Color>(0xff8261ff);
 constexpr auto muted = static_cast<Color>(0xffbbaea5);
 std::array<char, 48> build_label{};
 std::array<char, 256> network_url{};
+std::array<char, 65> console_token{};
+enum class SearchPage
+{
+    keyboard,
+    searching,
+    results,
+    preparing
+};
+SearchPage search_page = SearchPage::keyboard;
+tube5::SearchKeyboard search_keyboard;
+tube5::SearchData search_results;
+unsigned search_selected = 0;
 bool network_test = true;
 bool sponsor_enabled = true;
 bool preference_saved = true;
@@ -166,6 +179,56 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
                 if (!error[0])
                     canvas.text(120, 855, sponsor_state_text(entry.sponsor.state), 2, muted);
             }
+        }
+    }
+    else if (nav.screen == tube5::Screen::search)
+    {
+        canvas.text(120, 310, "BUSCAR EN YOUTUBE", 5, Color::white);
+        canvas.text(120, 370,
+                    search_keyboard.query()[0] ? search_keyboard.query() : "ESCRIBE UNA BUSQUEDA",
+                    3, muted);
+        if (search_page == SearchPage::keyboard)
+        {
+            for (unsigned i = 0; i < tube5::SearchKeyboard::keys.size(); ++i)
+            {
+                const unsigned x = 120 + (i % 10) * 135, y = 460 + (i / 10) * 75;
+                canvas.rectangle(x, y, 110, 60, i == search_keyboard.selected() ? accent : panel);
+                char key[2]{tube5::SearchKeyboard::keys[i], 0};
+                canvas.text(x + (key[0] == ' ' ? 30 : 35), y + 15, key[0] == ' ' ? "ESP" : key,
+                            key[0] == ' ' ? 2 : 4, Color::white);
+            }
+            canvas.text(120, 825, "TRIANGULO BUSCAR   OPTIONS BORRAR   CIRCULO VOLVER", 3, muted);
+        }
+        else if (search_page == SearchPage::results)
+        {
+            if (!search_results.count)
+                canvas.text(120, 470, "SIN RESULTADOS COMPATIBLES", 4, muted);
+            for (unsigned i = 0; i < search_results.count; ++i)
+            {
+                canvas.rectangle(120, 430 + i * 50, 1540, 44,
+                                 i == search_selected ? accent : panel);
+                canvas.text(140, 440 + i * 50, search_results.entries[i].title.data(), 2,
+                            Color::white);
+            }
+            if (!error[0] && search_selected < search_results.count)
+            {
+                const auto &entry = search_results.entries[search_selected];
+                char detail[96]{};
+                std::snprintf(detail, sizeof(detail), "%s  %u:%02u", entry.channel.data(),
+                              entry.seconds / 60, entry.seconds % 60);
+                canvas.text(120, 860, detail, 2, muted);
+            }
+            canvas.text(120, 915, "X PREPARAR EN EL PC   TRIANGULO NUEVA BUSQUEDA", 3, muted);
+        }
+        else
+        {
+            canvas.text(120, 500,
+                        search_page == SearchPage::searching ? "BUSCANDO..."
+                                                             : "PREPARANDO VIDEO EN EL PC...",
+                        4, Color::white);
+            canvas.text(120, 590, "LA INTERFAZ SIGUE ACTIVA - CIRCULO VOLVER", 3, muted);
+            if (search_page == SearchPage::preparing)
+                canvas.text(120, 655, "AL VOLVER, EL TRABAJO DEL PC CONTINUA", 2, muted);
         }
     }
     else if (nav.screen == tube5::Screen::settings)
@@ -336,15 +399,16 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         }
 #endif
     }
-    canvas.text(120, nav.screen == tube5::Screen::player ? 1040 : 995,
-                nav.screen == tube5::Screen::player
-                    ? (selection.active()
-                           ? "IZQ/DER 5 SEG  L1/R1 30 SEG  X CONFIRMAR  CIRCULO CANCELAR"
-                           : "X PAUSA  IZQ/DER 5 SEG  TRIANGULO BUSCAR  CIRCULO VOLVER")
-                    : (nav.screen == tube5::Screen::library
-                           ? "CRUCETA MOVER  X REPRODUCIR  CIRCULO VOLVER  OPTIONS RECARGAR"
-                           : "CRUCETA MOVER   X ABRIR   CIRCULO VOLVER   OPTIONS AJUSTES"),
-                3, muted);
+    canvas.text(
+        120, nav.screen == tube5::Screen::player ? 1040 : 995,
+        nav.screen == tube5::Screen::player
+            ? (selection.active() ? "IZQ/DER 5 SEG  L1/R1 30 SEG  X CONFIRMAR  CIRCULO CANCELAR"
+                                  : "X PAUSA  IZQ/DER 5 SEG  TRIANGULO BUSCAR  CIRCULO VOLVER")
+            : (nav.screen == tube5::Screen::search ? "CRUCETA MOVER   X ELEGIR   CIRCULO VOLVER"
+               : nav.screen == tube5::Screen::library
+                   ? "X REPRODUCIR  TRIANGULO BUSCAR  OPTIONS RECARGAR  CIRCULO VOLVER"
+                   : "CRUCETA MOVER   X ABRIR   CIRCULO VOLVER   OPTIONS AJUSTES"),
+        3, muted);
 }
 
 [[noreturn]] void fatal(const char *stage)
@@ -379,8 +443,10 @@ int main()
             character = static_cast<char>(character - 'a' + 'A');
 #ifdef TUBE5_HOST
     ps5::demo::read_asset_text(".local/network-test-url.txt", std::span{network_url}, "");
+    ps5::demo::read_asset_text(".local/bridge/console-token", std::span{console_token}, "");
 #else
     ps5::demo::read_asset_text("/app0/network-test-url.txt", std::span{network_url}, "");
+    ps5::demo::read_asset_text("/app0/console-token.txt", std::span{console_token}, "");
 #endif
 #ifndef TUBE5_HOST
     tube5_boot_checkpoint("Tube5 D04: iniciar UserService");
@@ -503,6 +569,10 @@ int main()
     tube5::SeekSelection selection;
     tube5::LanCatalog catalog;
     tube5::SponsorSkip sponsor_skip;
+    tube5::YouTubeSearch youtube_search;
+    tube5::YouTubeSearch::Request search_request = tube5::YouTubeSearch::Request::search;
+    Uint64 search_started = 0, search_poll_at = 0;
+    std::array<char, 49> requested_entry{};
     unsigned library_selected = 0;
     bool library_playback = false;
     std::array<char, 256> active_media_url{};
@@ -553,6 +623,80 @@ int main()
     };
     const auto command = [&](tube5::Command action)
     {
+        if (nav.screen == tube5::Screen::search)
+        {
+            if (action == tube5::Command::back)
+            {
+                youtube_search.cancel();
+                error[0] = 0;
+                if (search_page == SearchPage::results)
+                    search_page = SearchPage::keyboard;
+                else
+                    nav.screen = tube5::Screen::library;
+                return;
+            }
+            if (youtube_search.loading() || search_page == SearchPage::searching ||
+                search_page == SearchPage::preparing)
+                return;
+            if (search_page == SearchPage::keyboard)
+            {
+                if (action == tube5::Command::previous)
+                    search_keyboard.move(-1);
+                else if (action == tube5::Command::next)
+                    search_keyboard.move(1);
+                else if (action == tube5::Command::coarse_previous)
+                    search_keyboard.move(-10);
+                else if (action == tube5::Command::coarse_next)
+                    search_keyboard.move(10);
+                else if (action == tube5::Command::select)
+                    search_keyboard.choose();
+                else if (action == tube5::Command::settings)
+                    search_keyboard.erase();
+                else if (action == tube5::Command::search)
+                {
+                    error[0] = 0;
+                    search_request = tube5::YouTubeSearch::Request::search;
+                    if (youtube_search.begin(network_url.data(), console_token.data(),
+                                             search_request, search_keyboard.query()))
+                    {
+                        search_page = SearchPage::searching;
+                        search_started = SDL_GetTicks64();
+                    }
+                    else
+                        std::snprintf(error, sizeof(error), "%s",
+                                      youtube_search.error()[0] ? youtube_search.error()
+                                                                : "ESCRIBE UNA BUSQUEDA VALIDA");
+                }
+            }
+            else if (search_page == SearchPage::results)
+            {
+                if (action == tube5::Command::search)
+                {
+                    search_page = SearchPage::keyboard;
+                    error[0] = 0;
+                }
+                else if (search_results.count &&
+                         (action == tube5::Command::previous || action == tube5::Command::next))
+                    search_selected = (search_selected + search_results.count +
+                                       (action == tube5::Command::previous ? -1 : 1)) %
+                                      search_results.count;
+                else if (action == tube5::Command::select && search_selected < search_results.count)
+                {
+                    error[0] = 0;
+                    search_request = tube5::YouTubeSearch::Request::prepare;
+                    if (youtube_search.begin(network_url.data(), console_token.data(),
+                                             search_request,
+                                             search_results.entries[search_selected].id.data()))
+                    {
+                        search_page = SearchPage::preparing;
+                        search_started = SDL_GetTicks64();
+                    }
+                    else
+                        std::snprintf(error, sizeof(error), "%s", youtube_search.error());
+                }
+            }
+            return;
+        }
         if (nav.screen == tube5::Screen::home && nav.selected == 0 && network_test &&
             action == tube5::Command::select)
         {
@@ -564,6 +708,13 @@ int main()
         }
         if (nav.screen == tube5::Screen::library)
         {
+            if (action == tube5::Command::search && !catalog.loading())
+            {
+                nav.screen = tube5::Screen::search;
+                search_page = SearchPage::keyboard;
+                error[0] = 0;
+                return;
+            }
             if (catalog.loading())
             {
                 if (action == tube5::Command::back)
@@ -690,6 +841,24 @@ int main()
             nav.screen = tube5::Screen::about;
         else if (std::string_view{screen} == "player")
             nav.screen = tube5::Screen::player;
+        else if (std::string_view{screen} == "search" ||
+                 std::string_view{screen} == "search-results")
+        {
+            nav.screen = tube5::Screen::search;
+            if (std::string_view{screen} == "search-results")
+            {
+                search_page = SearchPage::results;
+                search_results.count = 8;
+                for (auto &entry : search_results.entries)
+                {
+                    std::snprintf(entry.title.data(), entry.title.size(),
+                                  "RESULTADO DE PRUEBA - TITULO LARGO PARA COMPROBAR LA LISTA Y "
+                                  "LOS CONTROLES");
+                    std::snprintf(entry.channel.data(), entry.channel.size(), "CANAL DE PRUEBA");
+                    entry.seconds = 887;
+                }
+            }
+        }
     }
     if (std::getenv("TUBE5_PREVIEW_NOTICE"))
     {
@@ -723,12 +892,22 @@ int main()
                 switch (event.cbutton.button)
                 {
                 case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-                case SDL_CONTROLLER_BUTTON_DPAD_UP:
                     command(tube5::Command::previous);
                     break;
+                case SDL_CONTROLLER_BUTTON_DPAD_UP:
+                    command(nav.screen == tube5::Screen::search &&
+                                    search_page == SearchPage::keyboard
+                                ? tube5::Command::coarse_previous
+                                : tube5::Command::previous);
+                    break;
                 case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
                     command(tube5::Command::next);
+                    break;
+                case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+                    command(nav.screen == tube5::Screen::search &&
+                                    search_page == SearchPage::keyboard
+                                ? tube5::Command::coarse_next
+                                : tube5::Command::next);
                     break;
                 case SDL_CONTROLLER_BUTTON_A:
                     command(tube5::Command::select);
@@ -757,12 +936,22 @@ int main()
                 switch (event.key.keysym.sym)
                 {
                 case SDLK_LEFT:
-                case SDLK_UP:
                     command(tube5::Command::previous);
                     break;
+                case SDLK_UP:
+                    command(nav.screen == tube5::Screen::search &&
+                                    search_page == SearchPage::keyboard
+                                ? tube5::Command::coarse_previous
+                                : tube5::Command::previous);
+                    break;
                 case SDLK_RIGHT:
-                case SDLK_DOWN:
                     command(tube5::Command::next);
+                    break;
+                case SDLK_DOWN:
+                    command(nav.screen == tube5::Screen::search &&
+                                    search_page == SearchPage::keyboard
+                                ? tube5::Command::coarse_next
+                                : tube5::Command::next);
                     break;
                 case SDLK_RETURN:
                 case SDLK_SPACE:
@@ -793,6 +982,67 @@ int main()
 #endif
             if (opening_player)
                 break;
+        }
+        if (youtube_search.loading())
+        {
+            youtube_search.poll();
+            if (!youtube_search.loading() && !youtube_search.cancelled() &&
+                nav.screen == tube5::Screen::search)
+            {
+                const auto &result = youtube_search.data();
+                if (youtube_search.error()[0] || result.state == tube5::SearchState::failed ||
+                    result.state == tube5::SearchState::idle)
+                {
+                    std::snprintf(error, sizeof(error), "%s",
+                                  youtube_search.error()[0] ? youtube_search.error()
+                                                            : "BUSQUEDA O PREPARACION FALLIDA");
+                    search_page = search_request == tube5::YouTubeSearch::Request::search
+                                      ? SearchPage::keyboard
+                                      : SearchPage::results;
+                }
+                else if (result.state == tube5::SearchState::ready)
+                {
+                    if (search_request == tube5::YouTubeSearch::Request::search)
+                    {
+                        search_results = result;
+                        search_selected = 0;
+                        search_page = SearchPage::results;
+                    }
+                    else
+                    {
+                        requested_entry = result.prepared_id;
+                        nav.screen = tube5::Screen::library;
+                        load_catalog();
+                    }
+                    SDL_FlushEvent(SDL_CONTROLLERBUTTONDOWN);
+                    SDL_FlushEvent(SDL_KEYDOWN);
+                    select_ready_at = SDL_GetTicks() + 350;
+                }
+                else
+                    search_poll_at = SDL_GetTicks64() + 1000;
+            }
+        }
+        if (nav.screen == tube5::Screen::search && !youtube_search.loading() &&
+            (search_page == SearchPage::searching || search_page == SearchPage::preparing) &&
+            SDL_GetTicks64() >= search_poll_at)
+        {
+            const bool searching = search_page == SearchPage::searching;
+            if (SDL_GetTicks64() - search_started > (searching ? 60000u : 2500000u))
+            {
+                std::snprintf(error, sizeof(error), "TIEMPO DE ESPERA AGOTADO");
+                search_page = searching ? SearchPage::keyboard : SearchPage::results;
+            }
+            else
+            {
+                search_request = searching ? tube5::YouTubeSearch::Request::search
+                                           : tube5::YouTubeSearch::Request::job;
+                if (!youtube_search.begin(network_url.data(), console_token.data(), search_request,
+                                          searching ? search_keyboard.query() : ""))
+                {
+                    std::snprintf(error, sizeof(error), "%s", youtube_search.error());
+                    search_page = searching ? SearchPage::keyboard : SearchPage::results;
+                }
+            }
         }
         if (media.opening())
         {
@@ -862,6 +1112,14 @@ int main()
                     nav.screen = tube5::Screen::home;
                 else if (catalog.error()[0])
                     std::snprintf(error, sizeof(error), "%s", catalog.error());
+                else if (requested_entry[0])
+                {
+                    for (unsigned i = 0; i < catalog.data().count; ++i)
+                        if (std::string_view{catalog.data().entries[i].id.data()} ==
+                            requested_entry.data())
+                            library_selected = i;
+                    requested_entry = {};
+                }
                 SDL_FlushEvent(SDL_CONTROLLERBUTTONDOWN);
                 SDL_FlushEvent(SDL_KEYDOWN);
             }
@@ -957,6 +1215,12 @@ int main()
 #endif
     media.close();
     sponsor_notice.cancel();
+    youtube_search.cancel();
+    while (youtube_search.loading())
+    {
+        youtube_search.poll();
+        SDL_Delay(5);
+    }
     catalog.cancel();
     while (catalog.loading())
     {

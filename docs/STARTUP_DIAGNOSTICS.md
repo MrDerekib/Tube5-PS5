@@ -1,5 +1,29 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-40-SEARCH: búsqueda con mando sobre el puente temporal
+
+Añade teclado propio, hasta ocho resultados y preparación desde la consola.
+No abre el teclado de sistema ni cambia decoder, pools, audio o SponsorBlock.
+El transporte LAN está separado del teclado/listado. La autonomía sin PC sigue
+siendo requisito del producto final, todavía no implementado.
+
+El servidor habilita control únicamente con `--console-ip`, IP/Host exactos y
+clave persistente privada. La build local incluye `console-token.txt`: no
+publicar el ZIP emparejado. Ver [protocolo, límites y prueba](YOUTUBE_SEARCH.md).
+
+Suite host con sanitizadores correcta, incluido GET/POST del cliente C++ contra
+servidor local. Búsqueda real de metadatos correcta, sin descargar nuevos vídeos.
+Teclado y ocho filas revisados en capturas host; no constituyen prueba en PS5.
+Build/FSELF y guard ABI correctos. Prueba física pendiente: buscar
+`VERITASIUM ELECTRICITY`, elegir el primer resultado ya cacheado, abrirlo desde
+la biblioteca y comprobar salida/reapertura y cancelación de una búsqueda.
+
+SHA-256 de eboot.bin:
+`55479770c07fc5f7419d1856e4236008d495eed8c26dc3ecdbfe481b7ca04243`.
+Respaldo privado `.local/boot-diag-40/`. ZIP local: 18 entradas, incluida la clave;
+no adjuntarlo a releases públicas.
+
+
 ## BOOT-DIAG-39-SPONSOR-STORAGE: almacenamiento del título
 
 El propietario confirma que DIAG38 muestra NO GUARDADO - SOLO ESTA SESION al

@@ -9,7 +9,8 @@ enum class Screen
     settings,
     about,
     player,
-    library
+    library,
+    search
 };
 enum class Command
 {

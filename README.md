@@ -21,7 +21,14 @@ final. La app final no requerirá una companion app en el PC.
 > Biblioteca LAN y corrección de títulos de DIAG35 validadas en consola.
 > 4K no validado.
 
-## Prueba actual: BOOT-DIAG-39-SPONSOR-STORAGE
+## Prueba actual: BOOT-DIAG-40-SEARCH
+
+DIAG40 añade teclado propio y búsqueda con el mando desde Biblioteca LAN
+(Triángulo). Permite seleccionar un resultado, prepararlo mediante el puente
+temporal y volver a la biblioteca con el vídeo seleccionado. Pruebas host y
+búsqueda real comprobadas; validación en PS5 pendiente. Ver [controles y prueba](docs/YOUTUBE_SEARCH.md).
+Esta build local contiene una clave de emparejamiento: no compartir su carpeta
+ni ZIP públicamente. El repositorio público no contiene esa clave.
 
 La tarjeta **Biblioteca LAN** carga una lista acotada desde el PC. Cruceta:
 seleccionar; X: reproducir; Círculo: volver a la lista; Options: recargarla.
