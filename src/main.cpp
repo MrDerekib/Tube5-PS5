@@ -11,6 +11,7 @@
 #include "native_surface_buffers.hpp"
 #include "native_refstruct_buffers.hpp"
 #include "native_framebuffer.hpp"
+#include "playback_progress.hpp"
 #include "video_sync_diagnostics.hpp"
 #include "video_conversion.hpp"
 #include <array>
@@ -142,6 +143,12 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             static_cast<int>(media.position()) % 60, static_cast<int>(media.duration()) / 60,
             static_cast<int>(media.duration()) % 60);
         canvas.text(350, 900, status, 4, Color::white);
+        // Below the video overlay (which ends at y=880), above the clock and
+        // diagnostic/error rows. Uses the same clock as the existing timestamp.
+        canvas.rectangle(350, 885, 1220, 8, panel);
+        const unsigned progress =
+            tube5::playback_progress_width(media.position(), media.duration(), 1220);
+        canvas.rectangle(350, 885, progress, 8, media.paused() ? Color::yellow : accent);
 #ifdef TUBE5_DIAGNOSTICS
         char diagnostics[192]{};
 #ifdef TUBE5_REFSTRUCT_BUFFER_WRAP

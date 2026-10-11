@@ -464,6 +464,25 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-32-HTTP: barra de progreso
+
+Preparada mientras la consola prueba diez minutos con DIAG31. No cambia el
+servidor, el MP4, codecs, allocators, red ni controles. Añade una barra de
+1220x8 píxeles debajo del área de vídeo (y=885), sobre el contador existente.
+Usa posición/duración del reproductor: acento durante reproducción y amarillo
+en pausa. No es una barra de buffer ni un control de selección/scrubbing.
+El ancho se limita a 0..1220; tiempos no finitos, duración no positiva y posición
+no positiva devuelven cero. No añade reservas ni texturas.
+
+Tests de geometría: inicio/mitad/final, sobrepaso, negativos, cero, NaN/infinito,
+valores extremos, avance/retroceso y estabilidad con el mismo reloj pausado.
+Build/FSELF y guard ABI RefStruct válidos. Batería completa de host con
+sanitizadores aprobada, incluyendo la geometría de progreso y la regresión HTTP.
+Validación física de la barra pendiente.
+SHA-256 eboot:
+`b809c5c84af2357c508bb65002c1c85cc13ba769dd2e4a9f31be6f746bef7b95`.
+ELF, eboot y etiqueta preservados en `.local/boot-diag-32/`.
+
 ## BOOT-DIAG-31-HTTP: duración y memoria tras cierre
 
 Conserva los allocators y el reproductor de DIAG30. Muestra los pools directos

@@ -81,6 +81,20 @@ guardar archivos. Esto confirma codificación VAAPI disponible, no equivalencia
 de calidad/bitrate o rendimiento medido frente a libx264. No se cambia todavía
 el preparador ni el clip activo a un encoder distinto.
 
+### Siguiente interfaz: progreso en DIAG32
+
+DIAG32 queda preparada sin tocar la prueba activa de diez minutos con DIAG31.
+No hace falta descargar ni preparar otro clip. Tras terminar esa prueba y cerrar
+Tube5, copiar `dist/PPSA99999/` y verificar BOOT-DIAG-32-HTTP. Conserva la URL
+y el MP4 de diez minutos. Añade una barra de posición bajo el vídeo, amarilla
+en pausa; no representa buffer ni admite scrubbing. Los controles no cambian.
+
+Prueba breve: observar avance de barra/contador, pausar y comprobar que se
+mantienen, saltar cinco segundos adelante/atrás (también en pausa), reanudar,
+salir anticipadamente y reabrir. Comparar barra y contador, y comprobar pools
+a cero en el menú. La confirmación física de DIAG32 queda pendiente; no es
+necesario volver a ver los diez minutos completos para esta prueba de interfaz.
+
 Preparar un minuto de cada resolución desde sus pistas HD reales, sin ampliar
 el vídeo de 360p:
 
