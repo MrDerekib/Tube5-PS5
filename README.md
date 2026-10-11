@@ -9,9 +9,10 @@ SponsorBlock.
 **Requisito obligatorio:** Tube5 debe buscar y reproducir YouTube desde la PS5
 sin un PC ni servidor local obligatorio durante su uso. El puente LAN actual
 es un banco de pruebas del reproductor, no la arquitectura del producto final.
-La autonomía todavía no está implementada ni validada. La próxima prioridad
-es demostrar acceso y reproducción desde la consola, antes de ampliar búsqueda
-o interfaz sobre el puente.
+La autonomía todavía no está implementada ni validada. El PC puede seguir
+usándose durante el desarrollo para probar búsqueda, interfaz y reproducción;
+el requisito no obliga a eliminarlo ahora, pero sí antes de publicar el producto
+final. La app final no requerirá una companion app en el PC.
 
 > Estado actual: vídeo local y HTTP LAN, con diez minutos continuos de 1080p
 > y controles validados en PS5 Fat FW 13.20. El PC prepara y sirve el contenido

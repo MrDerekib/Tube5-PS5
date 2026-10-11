@@ -2,9 +2,10 @@
 
 Este servicio es un banco de pruebas temporal. Tube5 tiene como requisito
 obligatorio funcionar sin PC ni servidor local durante su uso; este puente
-no cumple ese requisito ni se considera la arquitectura final. La siguiente
-prioridad es validar acceso y reproducción autónomos en PS5, no ampliar la
-búsqueda basada en este servicio.
+no cumple ese requisito ni se considera la arquitectura final. Puede seguir
+usándose y ampliándose durante el desarrollo, incluida la búsqueda provisional.
+Eliminar la dependencia del PC es un criterio del producto final, no un bloqueo
+de esta fase. La app publicada no requerirá una companion app en el PC.
 
 El servicio prepara un MP4 en el PC y lo publica en la biblioteca LAN.
 No es streaming directo de YouTube, búsqueda en YouTube ni SponsorBlock.

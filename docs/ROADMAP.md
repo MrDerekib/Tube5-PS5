@@ -1,6 +1,6 @@
 # Próximos hitos
 
-## Requisito de producto y prioridad inmediata
+## Objetivo final y desarrollo incremental
 
 Funcionar sin PC es obligatorio, no una mejora opcional. La búsqueda, selección,
 resolución del medio, reproducción y consulta SponsorBlock deben poder hacerse
@@ -8,7 +8,14 @@ desde PS5 sin preparar ni servir vídeos desde un PC/servidor local obligatorio.
 El puente actual solo ha permitido validar el player, controles, memoria y seeks;
 no satisface este criterio de lanzamiento.
 
-Antes de desarrollar búsqueda sobre el puente:
+El PC puede seguir siendo una herramienta temporal de desarrollo. El propietario
+aclara que la autonomía es el objetivo final, no una exigencia para esta fase.
+Podemos prototipar búsqueda e interfaz usando el puente, manteniendo separada
+esa integración para sustituirla después. No se publicará como producto final
+una app que requiera una companion app en el PC.
+
+Validaciones de autonomía necesarias antes del producto final, no prerrequisitos
+que bloqueen ahora el desarrollo sobre el puente:
 
 - [ ] Probar DNS/HTTPS desde la app nativa manteniendo las protecciones de la consola.
 - [ ] Evaluar acceso a metadatos y resolución de medios YouTube desde PS5.
@@ -17,8 +24,9 @@ Antes de desarrollar búsqueda sobre el puente:
 - [ ] Consultar SponsorBlock desde consola sin la caché obligatoria del PC.
 - [ ] Integrar búsqueda y selección autónomas con el mando tras demostrar esa ruta.
 
-No se promete que cambiar los DNS baste. Si la prueba de viabilidad encuentra
-un impedimento, documentarlo antes de continuar invirtiendo en interfaz del puente.
+No se promete que cambiar los DNS baste. Evaluar y documentar los impedimentos
+de autonomía durante el desarrollo para no confundir los prototipos con el
+cumplimiento del objetivo final.
 
 ## Hitos restantes e historial
 
