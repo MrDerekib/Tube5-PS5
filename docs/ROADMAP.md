@@ -76,10 +76,12 @@ DIAG53: propietario confirma ciclos cortos, pausa/seeks, reproducción directa
 fallo antiguo de DIAG52; el logger registra fallos gestionados, no sesiones
 exitosas. Validación limitada a esta consola FW13.20 y al vídeo probado.
 
-Siguiente fase: DIAG54 consulta VideoDec2 (módulo decimal 207) y requisitos de
-memoria H.264 High para 1080p/1440p/2160p, manteniendo el player software.
+DIAG54: consultas VideoDec2 (módulo decimal 207), compute y requisitos de
+memoria H.264 High 1080p/1440p/2160p confirmadas con retorno cero en FW13.20.
 Un query exitoso NO valida decodificación, presentación ni rendimiento.
-Después: frame H.264 conocido, lifecycle create/decode/reset/delete, integración
+DIAG55 preparada: un frame H.264 sintético, lifecycle create/decode/reset/delete
+y log FTP, sin presentación ni cambio del player. Validación PS5 pendiente.
+Después: integración
 1080p con audio/reloj/seeks, presentación GPU, VP9 SDR 1440p y 2160p. Conservar
 software como alternativa. No asumir AV1 por hardware ni HDR antes de pruebas.
 Referencias: ProsperoLight y ps5-hardware-video-decoding-research de

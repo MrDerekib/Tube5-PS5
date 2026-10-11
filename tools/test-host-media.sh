@@ -18,7 +18,7 @@ read -r -a libs <<< "$(pkg-config --libs sdl2 libavformat libavcodec libswscale 
 read -r -a curl_cflags <<< "$(pkg-config --cflags libcurl json-c openssl)"
 read -r -a curl_libs <<< "$(pkg-config --libs libcurl json-c openssl)"
 probe_sources=(src/youtube_visitor.cpp)
-player_sources=(src/shared_playback_clock.cpp src/hardware_video_probe.cpp)
+player_sources=(src/shared_playback_clock.cpp src/hardware_video_probe.cpp src/hardware_frame_probe.cpp)
 player_clock_wraps=-Wl,--wrap=Kit_CreateTimer,--wrap=Kit_CreateSecondaryTimer
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc -I"$source_root/include" "${cflags[@]}" tests/test_shared_playback_clock.cpp \
@@ -153,6 +153,10 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc tests/test_hardware_video_probe.cpp src/hardware_video_probe.cpp \
     -o build/hardware-video-probe-off-test
 build/hardware-video-probe-off-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
+    -DTUBE5_HW_FRAME -Isrc tests/test_hardware_frame_probe.cpp src/hardware_frame_probe.cpp \
+    src/failure_log.cpp -o build/hardware-frame-probe-test
+build/hardware-frame-probe-test
 python3 -m unittest discover -s tests -p test_parser_wrap.py -v
 python3 -m unittest discover -s tests -p test_refstruct_wrap.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \

@@ -1,5 +1,37 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-55-HWFRAME: un frame AVC por hardware
+
+DIAG54 confirmó en la PS5 FW13.20 acceso al módulo, compute y consultas
+H.264 High 1080p/1440p/2160p, todas con retorno cero. No valida reproducción.
+
+DIAG55 añade un probe opt-in TUBE5_HW_FRAME antes de iniciar SDL. Crea una
+compute queue y un decoder 1920x1088, decodifica una única unidad Annex B
+1920x1080 sintética propia y destruye ambos. No muestra el frame, no usa
+YouTube y no modifica el reproductor software. La memoria está acotada a
+256 MiB: workspace CPU flexible; compute/GPU/shared/input/frame directos.
+Un error de destrucción o handle ambiguo retiene los buffers hasta cerrar
+el proceso, sin reutilizarlos. No cambia permisos ni categoría Multimedia.
+
+Informe por etapas: `/download0/tube5-hardware-frame.log`; incluye decode,
+flush si procede, metadatos de salida, muestras de luma, cleanup y memoria
+flexible antes/después. Un retorno correcto no valida todavía presentación
+GPU, reproducción continua, rendimiento, sincronización ni 4K.
+
+Fixture regenerable con `bash tools/prepare-hardware-frame.sh`: H.264 High,
+yuv420p, un IDR, sin B frames, cuatro slices, SPS/PPS/AUD incluidos.
+SHA-256: `7a7dfd18660386f4ebc038287510fb4395a13b36d10815e1b9de22852f76055b`.
+Referencia software: LUMA SAMPLES 2170 SUM 268586 MIN 32 MAX 212; comparar
+con la salida real, sin asumir que una modificación del buffer prueba
+por sí sola la corrección visual. ABI contrastada con ProsperoLight.
+
+Tests host ASan/UBSan: diez ciclos, fallos en cada etapa de creación,
+flush diferido, puntero de salida inválido, asset ausente y cuarentena por
+fallo de delete/handle ambiguo. Suite completa pasada. Prueba PS5 pendiente:
+abrir el menú y recuperar el informe; no hace falta reproducir otro vídeo.
+ELF y artefactos exactos conservados en .local/boot-diag-55; SHA-256 eboot.bin:
+`cba5107f2f99cd3804020aff42b4e16333423b7d3dfb31ea7cad627e0825ff14`.
+
 ## BOOT-DIAG-54-HWQUERY: acceso VideoDec2, sin cambiar el player
 
 La build 53 pasa las pruebas del propietario: ciclos cortos, pausa/seeks,
@@ -33,9 +65,8 @@ libSceVideodec2; sus cuerpos nunca se empaquetan ni ejecutan en consola.
 Pruebas host: tamaños/campos ABI, configuración exacta de tres modos, retorno
 correcto, fallos de módulo/compute/modo, limpieza de informes entre consultas,
 probe desactivado sin llamadas nativas. Compilación, imports y firma verificados.
-Prueba PS5 pendiente: cerrar Tube5, instalar 54, abrir y dejar en el menú para
-recuperar hardware.log por FTP. Después vendrá un frame AVC conocido; no pedir
-otra reproducción completa para validar una mera consulta de capacidades.
+Prueba PS5 completada: módulo, compute y los tres modos devuelven cero en
+FW13.20. Informe conservado en .local/boot-diag-54/ps5-hardware-query.log.
 ELF exacto guardado en .local/boot-diag-54; SHA-256 eboot.bin:
 `3702873c81090c4e27f515f603f604f27d4079dd1993082c6e638ce331c367fe`.
 

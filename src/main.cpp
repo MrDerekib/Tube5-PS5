@@ -18,6 +18,7 @@
 #include "preferences.hpp"
 #include "failure_log.hpp"
 #include "hardware_video_probe.hpp"
+#include "hardware_frame_probe.hpp"
 #include "sponsor_notice.hpp"
 #include "youtube_search.hpp"
 #include "youtube_probe.hpp"
@@ -648,6 +649,12 @@ int main()
             used += std::min<std::size_t>(length, sizeof(hardware_log) - used - 1);
     }
     (void)tube5::write_failure_log("/download0/tube5-hardware.log", hardware_log, used);
+#ifdef TUBE5_HW_FRAME
+    if (hardware_report.module == 0 && hardware_report.compute == 0 &&
+        hardware_report.query[0] == 0)
+        (void)tube5::hardware_frame_probe("/app0/assets/hw-frame.h264",
+                                          "/download0/tube5-hardware-frame.log");
+#endif
 #endif
 #ifdef TUBE5_HOST
     ps5::demo::read_asset_text(".local/network-test-url.txt", std::span{network_url}, "");
