@@ -1,5 +1,41 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-51-FASTREALLOC: llamador del crecimiento que falla
+
+IMG_4262, DIAG50: reproducción continua 1080p falla aproximadamente al minuto
+4 con HTTP READ: ENOMEM, READ 15207/15208 ERR -12, MEMFAIL 1 REALLOC 263192B,
+ALLOC FAIL STAGE PLAYING AUDIO 1 VIDEO 1. FIRSTFAIL REALLOC 263192B A0
+REL 0X118B87B, FFALLOC NONE. El ELF exacto de DIAG50 resuelve ese retorno a
+av_fast_realloc+0x6b (instrucción call +0x65). RBUF/SBUF/PBUF/DBUF quedan liberados y
+FAIL 0. Esto no identifica todavía el buffer ni prueba una fuga. Otro error de
+TEXTURE: Out of memory fue reportado al iniciar el player.
+
+av_fast_realloc sirve a múltiples funciones, incluidas tablas MOV y buffers
+del parser. No redirigir todos sus realloc indiscriminadamente al pool PBUF.
+DIAG51 envuelve su API pública y delega a la implementación original, conservando
+límites, crecimiento, contenido, devolución y actualización de size. Solo al
+fallar guarda su llamador externo, tamaño mínimo solicitado (NEED) y capacidad
+anterior (OLD), antes de que FFmpeg la ponga a cero. No recorre la pila, no usa
+TLS ni reserva memoria en la traza. FFALLOC conserva la primera evidencia hasta
+la próxima apertura. No cambia los pools ni intenta corregir el allocator o 403.
+Referencia: [FFmpeg n7.1 mem.c](https://github.com/FFmpeg/FFmpeg/blob/n7.1/libavutil/mem.c).
+
+Al fallar, fotografiar FIRSTFAIL y FFALLOC, especialmente su REL. Se resuelve
+contra .local/boot-diag-51/llvm-pie.elf, nunca contra el ELF de DIAG50.
+Prueba: cerrar Tube5, copiar carpeta completa, verificar BOOT-DIAG-51-FASTREALLOC,
+1080p, mismo vídeo, SB OFF, reproducir sin controles hasta el fallo. Si ocurre
+un 403, capturar las seis líneas HTTPS; si falla TEXTURE al abrir, capturar el
+panel de memoria y no insistir.
+
+Tests específicos ASan/UBSan/LSan: éxito, capacidad suficiente sin crecimiento,
+fallo conservando OLD aunque size pase a cero, cero sin falso fallo, primer
+origen no reemplazado por otro error. LSan requirió ejecución fuera del sandbox.
+Nueve tests unitarios de aplicación y tres del guard de parser pasan. Build,
+ABI parser/refstruct y FSELF validados. El ELF confirma que mov_read_trun y
+ff_combine_frame llaman a la nueva traza y esta al original sin recursión.
+SHA-256 de eboot.bin:
+`fa2eeb28f7cc3bac6ea57d2b5a5e83a4fcd534922bb08ef6dd028dc41a3e47fc`.
+
 ## BOOT-DIAG-50-YTREAD: primera lectura HTTPS rechazada
 
 En DIAG49 el usuario confirma 1080p, pausa y SponsorBlock, pero recibe HTTP 403

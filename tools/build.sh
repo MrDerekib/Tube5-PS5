@@ -181,7 +181,7 @@ if [[ $app_source_dir == src && -f $root/src/native_media_buffers.cpp ]]; then
 fi
 if [[ $app_source_dir == src && " ${definitions[*]} " == *" TUBE5_DIAGNOSTICS "* ]]; then
     definitions+=(TUBE5_ALLOC_CALLER_WRAP)
-    app_wrap_symbols+=" av_malloc av_mallocz"
+    app_wrap_symbols+=" av_malloc av_mallocz av_fast_realloc"
 fi
 if [[ $app_source_dir == src && -f $root/src/audio_reader.cpp ]]; then
     definitions+=(TUBE5_AUDIO_WRAP)

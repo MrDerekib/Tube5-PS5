@@ -11,6 +11,7 @@ extern "C" int __wrap_posix_memalign(void **, std::size_t, std::size_t);
 #ifdef TUBE5_ALLOC_CALLER_WRAP
 extern "C" void *__wrap_av_malloc(std::size_t);
 extern "C" void *__wrap_av_mallocz(std::size_t);
+extern "C" void *__wrap_av_fast_realloc(void *, unsigned *, std::size_t);
 #endif
 namespace
 {
@@ -33,6 +34,14 @@ extern "C" void *__real_av_malloc(std::size_t bytes)
 extern "C" void *__real_av_mallocz(std::size_t bytes)
 {
     return __real_av_malloc(bytes);
+}
+extern "C" void *__real_av_fast_realloc(void *address, unsigned *size, std::size_t needed)
+{
+    assert(address == &token);
+    if (needed <= *size)
+        return address;
+    *size = fail ? 0 : static_cast<unsigned>(needed);
+    return fail ? nullptr : address;
 }
 #endif
 extern "C" void *__real_malloc(std::size_t bytes)
@@ -112,5 +121,25 @@ int main()
     assert(std::strncmp(later, "FFALLOC MALLOCZ 1024B A0 REL ", 28) == 0);
     fail = false;
     assert(__wrap_av_malloc(1024) == &token && __wrap_av_mallocz(1024) == &token);
+    tube5::reset_memory_diagnostic();
+    unsigned capacity = 200000;
+    assert(__wrap_av_fast_realloc(&token, &capacity, 247680) == &token);
+    assert(capacity == 247680);
+    tube5::memory_allocation_origin_status(1, later, sizeof(later));
+    assert(std::strcmp(later, "FFALLOC NONE") == 0);
+    fail = true;
+    assert(__wrap_av_fast_realloc(&token, &capacity, 247680) == &token);
+    assert(__wrap_av_fast_realloc(&token, &capacity, 300000) == nullptr);
+    assert(capacity == 0);
+    tube5::memory_allocation_origin_status(1, first, sizeof(first));
+    assert(std::strncmp(first, "FFALLOC FASTREALLOC NEED 300000 OLD 247680 REL ", 45) == 0);
+    assert(__wrap_av_mallocz(1024) == nullptr);
+    tube5::memory_allocation_origin_status(1, later, sizeof(later));
+    assert(std::strcmp(first, later) == 0);
+    tube5::reset_memory_diagnostic();
+    capacity = 1;
+    assert(__wrap_av_fast_realloc(&token, &capacity, 0) == &token);
+    tube5::memory_allocation_origin_status(1, later, sizeof(later));
+    assert(std::strcmp(later, "FFALLOC NONE") == 0);
 #endif
 }

@@ -106,6 +106,15 @@ void memory_allocation_origin_status(unsigned row, char *text, std::size_t capac
     const auto magnitude = origin.relative < 0
                                ? std::uintptr_t{0} - static_cast<std::uintptr_t>(origin.relative)
                                : static_cast<std::uintptr_t>(origin.relative);
+    if (origin.kind == 6)
+    {
+        // For av_fast_realloc the outer caller identifies the actual buffer.
+        // Its incoming capacity is saved before FFmpeg clears it on failure.
+        std::snprintf(text, capacity, "%s FASTREALLOC NEED %zu OLD %zu REL %s0X%zX",
+                      ffmpeg ? "FFALLOC" : "FIRSTFAIL", origin.bytes, origin.alignment,
+                      origin.relative < 0 ? "-" : "", static_cast<std::size_t>(magnitude));
+        return;
+    }
     // The bitmap UI supports uppercase and '-', but neither '+' nor lowercase.
     std::snprintf(text, capacity, "%s %s %zuB A%zu REL %s0X%zX", ffmpeg ? "FFALLOC" : "FIRSTFAIL",
                   name, origin.bytes, origin.alignment, origin.relative < 0 ? "-" : "",
@@ -198,6 +207,15 @@ extern "C" int __wrap_posix_memalign(void **address, std::size_t alignment, std:
 // its requestor without stack walking, TLS, logging or allocation in the hook.
 extern "C" void *__real_av_malloc(std::size_t);
 extern "C" void *__real_av_mallocz(std::size_t);
+extern "C" void *__real_av_fast_realloc(void *, unsigned *, std::size_t);
+extern "C" void *__wrap_av_fast_realloc(void *address, unsigned *size, std::size_t needed)
+{
+    const unsigned previous = *size;
+    void *result = __real_av_fast_realloc(address, size, needed);
+    if (!result && needed)
+        record_origin(true, 6, needed, previous, __builtin_return_address(0));
+    return result;
+}
 extern "C" void *__wrap_av_mallocz(std::size_t bytes)
 {
 #ifdef TUBE5_PARSER_BUFFER_WRAP
