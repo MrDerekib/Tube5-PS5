@@ -169,7 +169,7 @@ if [[ $app_source_dir == src && " ${definitions[*]} " == *" TUBE5_DIAGNOSTICS "*
 fi
 if [[ $app_source_dir == src && -f $root/src/native_surface_buffers.cpp ]]; then
     definitions+=(TUBE5_SURFACE_BUFFER_WRAP)
-    app_wrap_symbols+=" SDL_CreateRGBSurface_REAL SDL_FreeSurface_REAL"
+    app_wrap_symbols+=" SDL_CreateRGBSurface_REAL SDL_FreeSurface_REAL SDL_SIMDAlloc_REAL SDL_SIMDFree_REAL"
 fi
 if [[ $app_source_dir == src && -f $root/src/seek_preroll.hpp ]]; then
     definitions+=(TUBE5_SEEK_WRAP)
@@ -316,6 +316,9 @@ if [[ " ${definitions[*]} " == *" TUBE5_REFSTRUCT_BUFFER_WRAP "* ]]; then
 fi
 if [[ " ${definitions[*]} " == *" TUBE5_PARSER_BUFFER_WRAP "* ]]; then
     python3 "$root/tools/check-parser-wrap.py" "$build/llvm-pie.elf"
+fi
+if [[ " ${definitions[*]} " == *" TUBE5_SURFACE_BUFFER_WRAP "* ]]; then
+    python3 "$root/tools/check-yuv-wrap.py" "$build/llvm-pie.elf"
 fi
 
 app="$dist/$title_id"

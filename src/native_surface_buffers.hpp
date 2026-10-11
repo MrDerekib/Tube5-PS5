@@ -4,6 +4,7 @@
 #include <cstddef>
 namespace tube5
 {
+void *allocate_texture_yuv(std::size_t bytes, void *caller) noexcept;
 SDL_Surface *create_texture_surface(Uint32 flags, int width, int height, int depth, Uint32 red,
                                     Uint32 green, Uint32 blue, Uint32 alpha) noexcept;
 void native_surface_buffer_status(char *text, std::size_t capacity) noexcept;

@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cstdio>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 int main()
 {
@@ -18,6 +19,8 @@ int main()
     assert(!tube5::write_failure_log(path, "SECOND\n", 7));
     int fd = open(path, O_RDONLY);
     assert(fd >= 0);
+    struct stat metadata{};
+    assert(fstat(fd, &metadata) == 0 && (metadata.st_mode & 0777) == 0644);
     char text[64]{};
     assert(read(fd, text, sizeof(text)) == 7);
     assert(!std::strcmp(text, "SECOND\n"));

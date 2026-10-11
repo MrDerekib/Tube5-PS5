@@ -132,6 +132,7 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     src/native_surface_buffers.cpp src/native_framebuffer.cpp "${libs[@]}" \
     -Wl,--wrap=SDL_CreateRGBSurfaceFrom -o build/native-surface-buffers-test
 build/native-surface-buffers-test
+python3 -m unittest discover -s tests -p test_yuv_wrap.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -DTUBE5_REFSTRUCT_BUFFER_WRAP -Isrc "${cflags[@]}" tests/test_native_refstruct_buffers.cpp \
     src/native_refstruct_buffers.cpp src/native_framebuffer.cpp "${libs[@]}" \

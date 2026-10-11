@@ -1,5 +1,43 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-53-YUVPOOL: planos SDL fuera del heap
+
+DIAG52 completó el vídeo directo 1080p entero en consola. La reapertura falló
+en TEXTURE_CREATE: MALLOC 3110440B, FIRSTFAIL REL 0X74224, antes del primer
+frame. Se reprodujo también después de cuatro ciclos cortos, algunos con seek.
+Los dos informes recuperados por FTP muestran HTTP 206 para audio y vídeo,
+961 MiB de memoria flexible antes de abrir y todos los pools nativos libres
+tras el cierre. No demuestra fuga frente a fragmentación del heap libc.
+
+El retorno, relativo a __wrap_posix_memalign en el ELF exacto de DIAG52,
+es SDL_malloc_REAL+0x14. La reserva coincide con los planos IYUV 1920x1080
+(3110400 bytes) más el padding de SDL_SIMDAlloc. SDL_SW_CreateYUVTexture
+los reserva mediante SIMDAlloc en el retorno +0xc8.
+
+DIAG53 intercepta únicamente ese callsite para tamaños 64 KiB–4 MiB.
+Dos slots de memoria directa CPU cached, alineación 16 KiB, máximo 8 MiB,
+sin modificar las estructuras privadas SDL. SDL_SIMDFree reconoce solo
+punteros propios; los demás conservan su allocator original. Al cerrar se
+desmapea y libera; un fallo de limpieza pone el slot en cuarentena. Sin slot
+o si la reserva nativa falla, conserva la ruta SDL original. El build valida
+el callsite y ambas rutas de limpieza (creación fallida y destrucción).
+SBUF añade YBUF: slots vivos, reservas, fallos y último error.
+
+FTP confirmado: puerto 2121; informe visible en
+`/mnt/sandbox/PPSA99999_000/download0/tube5-debug.log` mientras el título está
+montado. DIAG52 creaba el informe 0600, propietario UID 1, impidiendo leerlo
+desde el payload FTP. Se recuperó cambiando solo ese archivo a 0644. DIAG53
+mantiene el temporal privado y da lectura 0644 al informe numérico completo
+antes de renombrarlo; no altera permisos de ajustes ni tokens.
+
+Pruebas: cien ciclos nativos simulados, alineación, escrituras, dos slots
+simultáneos, fallback por límites/caller/agotamiento/reserva/mapeo, cuarentena,
+guards positivos y negativos y permiso del informe. Compilación y firma válidas.
+Validación en consola pendiente: cinco ciclos cortos a 1080p, pausa y seeks;
+después reproducción completa y reapertura sin cerrar Tube5.
+ELF exacto guardado localmente en .local/boot-diag-53. SHA-256 eboot.bin:
+`c5360d32adaa1b80ada06446ab5a165243dcf91cdd855192df471abc16b9e827`.
+
 ## BOOT-DIAG-52-MOVINDEX: índice fragmentado nativo y log del último fallo
 
 IMG_4263, DIAG51, 1080p continuo aproximadamente cinco minutos: MEMFAIL 1

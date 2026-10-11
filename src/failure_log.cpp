@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 namespace tube5
 {
@@ -54,6 +55,10 @@ int write_failure_log(const char *path, const char *report, std::size_t size) no
         used += static_cast<std::size_t>(count);
     }
     if (!error && ::fsync(fd) != 0)
+        error = errno;
+    // Numeric-only snapshots are readable by the separate FTP payload UID.
+    // Keep the incomplete temporary private; never relax settings/token files.
+    if (!error && ::fchmod(fd, 0644) != 0)
         error = errno;
     if (::close(fd) != 0 && !error)
         error = errno;

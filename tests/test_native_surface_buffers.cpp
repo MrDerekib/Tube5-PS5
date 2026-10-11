@@ -8,6 +8,19 @@
 #include <cstring>
 
 extern "C" void __wrap_SDL_FreeSurface_REAL(SDL_Surface *);
+extern "C" void __wrap_SDL_SIMDFree_REAL(void *);
+extern "C" void *SDL_SW_CreateYUVTexture(Uint32, int, int)
+{
+    return nullptr;
+}
+extern "C" void *__real_SDL_SIMDAlloc_REAL(std::size_t bytes)
+{
+    return SDL_SIMDAlloc(bytes);
+}
+extern "C" void __real_SDL_SIMDFree_REAL(void *address)
+{
+    SDL_SIMDFree(address);
+}
 extern "C" SDL_Surface *__real_SDL_CreateRGBSurfaceFrom(void *, int, int, int, int, Uint32, Uint32,
                                                         Uint32, Uint32);
 namespace
@@ -128,6 +141,46 @@ int main()
 {
     SDL_SetMainReady();
     assert(SDL_Init(0) == 0);
+    const auto yuv_caller =
+        reinterpret_cast<void *>(reinterpret_cast<std::uintptr_t>(&SDL_SW_CreateYUVTexture) + 0xc8);
+    constexpr std::size_t yuv_bytes = 1920 * 1080 * 3 / 2;
+    // Fixed planes bypass the heap, stay aligned, and release every cycle.
+    for (unsigned cycle = 0; cycle < 100; ++cycle)
+    {
+        void *planes = tube5::allocate_texture_yuv(yuv_bytes, yuv_caller);
+        assert(planes == memory[0] && reinterpret_cast<std::uintptr_t>(planes) % 0x4000 == 0);
+        std::memset(planes, 0x71, yuv_bytes);
+        __wrap_SDL_SIMDFree_REAL(planes);
+        assert(!mapped[0] && !allocated[0]);
+    }
+    void *first = tube5::allocate_texture_yuv(yuv_bytes, yuv_caller);
+    void *second = tube5::allocate_texture_yuv(yuv_bytes, yuv_caller);
+    void *fallback = tube5::allocate_texture_yuv(yuv_bytes, yuv_caller);
+    assert(first == memory[0] && second == memory[1] && fallback != first && fallback != second);
+    __wrap_SDL_SIMDFree_REAL(fallback);
+    __wrap_SDL_SIMDFree_REAL(second);
+    __wrap_SDL_SIMDFree_REAL(first);
+    for (const auto bytes : {std::size_t{32}, std::size_t{4 * 1024 * 1024 + 1}})
+    {
+        fallback = tube5::allocate_texture_yuv(bytes, yuv_caller);
+        assert(fallback && !mapped[0]);
+        __wrap_SDL_SIMDFree_REAL(fallback);
+    }
+    fallback = tube5::allocate_texture_yuv(yuv_bytes, nullptr);
+    assert(fallback && !mapped[0]);
+    __wrap_SDL_SIMDFree_REAL(fallback);
+    allocation_error = -77;
+    fallback = tube5::allocate_texture_yuv(yuv_bytes, yuv_caller);
+    assert(fallback && !mapped[0]);
+    __wrap_SDL_SIMDFree_REAL(fallback);
+    allocation_error = 0;
+    map_error = -88;
+    fallback = tube5::allocate_texture_yuv(yuv_bytes, yuv_caller);
+    assert(fallback && !allocated[0]);
+    __wrap_SDL_SIMDFree_REAL(fallback);
+    map_error = 0;
+    __wrap_SDL_SIMDFree_REAL(nullptr);
+    releases = 0;         // The existing RGB reference-count tests count their own releases.
     original_fail = true; // Pixel storage still works if the old allocator fails.
     SDL_Surface *surface = create();
     assert(surface && original_calls == 0 && surface->pixels == memory[0]);
@@ -187,5 +240,13 @@ int main()
     assert(surface && surface->pixels != retired);
     __wrap_SDL_FreeSurface_REAL(surface);
     __wrap_SDL_FreeSurface_REAL(nullptr);
+    first = tube5::allocate_texture_yuv(yuv_bytes, yuv_caller);
+    assert(first);
+    unmap_error = -90;
+    __wrap_SDL_SIMDFree_REAL(first);
+    unmap_error = 0;
+    second = tube5::allocate_texture_yuv(yuv_bytes, yuv_caller);
+    assert(second && second != first); // Never reuse a quarantined YUV slot.
+    __wrap_SDL_SIMDFree_REAL(second);
     SDL_Quit();
 }
