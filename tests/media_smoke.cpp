@@ -148,7 +148,8 @@ int main(int argc, char **argv)
     else
         require(player.open(renderer, clip), player.error());
     if (argc > 2 && (std::strcmp(argv[2], "--sponsor-test") == 0 ||
-                     std::strcmp(argv[2], "--sponsor-real") == 0))
+                     std::strcmp(argv[2], "--sponsor-real") == 0 ||
+                     std::strcmp(argv[2], "--sponsor-native") == 0))
     {
         tube5::SponsorData data;
         data.state = tube5::SponsorState::ready;
@@ -156,6 +157,13 @@ int main(int argc, char **argv)
         const unsigned end_ms = static_cast<unsigned>(std::round(player.duration() * 1000));
         data.ranges[1] = {end_ms - 5000, end_ms};
         data.count = 2;
+        if (std::strcmp(argv[2], "--sponsor-native") == 0)
+        {
+            require(youtube, "native SponsorBlock requires the direct resolver");
+            data = tube5::aligned_sponsor(probe.result().sponsor, player.duration());
+            require(data.state == tube5::SponsorState::ready && data.count == 2,
+                    "two real API segments aligned to direct source");
+        }
         if (std::strcmp(argv[2], "--sponsor-real") == 0)
         {
             tube5::LanCatalog catalog;

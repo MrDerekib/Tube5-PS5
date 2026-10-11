@@ -1,9 +1,19 @@
-# YouTube directo: DIAG44 reproducción candidata
+# YouTube directo: DIAG45 SponsorBlock autónomo
+
+## SponsorBlock y barra (DIAG45)
+
+Se consulta la API directamente por HTTPS desde PS5 antes del play, sin servicio
+PC: prefijo SHA-256 de cuatro caracteres, coincidencia exacta de ID, sponsor/skip,
+validación de intervalos y duración real. No se envían cuentas/votos/telemetría.
+La atribución CC BY-NC-SA 4.0 permanece en Ajustes/Acerca de y avisos de terceros.
+Si falla o los tiempos no coinciden, el vídeo sigue disponible sin saltos y
+con aviso. Los segmentos naranjas son visibles también con Options → SB OFF.
+Triángulo vuelve a consultar el enlace y los segmentos. Validación PS5 pendiente.
 
 ## Prueba actual (DIAG44)
 
 1. Con Tube5 cerrada, copiar `dist/PPSA99999/` completa. Mantener nanoDNS activo.
-2. Comprobar `BOOT-DIAG-44-YOUTUBE-STREAM`.
+2. Comprobar `BOOT-DIAG-45-YOUTUBE-SPONSOR`.
 3. Ajustes → Triángulo → X consulta formatos y verifica primeros bytes.
 4. Cuando MP4 SI, pulsar X otra vez: abre el vídeo de Veritasium directamente.
 5. Probar 20–30 s de imagen/audio, pausa/reanudar, +/-5 s y Círculo para salir.
@@ -30,8 +40,8 @@ e integridad/guard ABI válidos. El propietario valida DIAG44 en PS5 Fat FW 13.2
 Reproducción prolongada completa y expiración/reconexión todavía pendientes.
 
 Esta primera ruta usa un solo vídeo público fijo y MP4 AVC/AAC combinado <=360p.
-SponsorBlock todavía no se consulta desde consola (aviso explícito en player);
-el piloto previo de biblioteca LAN lo conserva. No afirmar ausencia de anuncios
+SponsorBlock se consulta desde consola en DIAG45, pendiente de prueba física;
+el piloto previo de biblioteca LAN se conserva. No afirmar ausencia de anuncios
 por haber recibido el MP4. Búsqueda autónoma, más vídeos/calidades, tokens,
 expiración/reconexión, login y aceleración siguen pendientes.
 

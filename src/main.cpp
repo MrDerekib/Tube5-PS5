@@ -240,6 +240,7 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             stage == tube5::ProbeStage::dns         ? "DNS: RESOLVIENDO WWW.YOUTUBE.COM"
             : stage == tube5::ProbeStage::https     ? "HTTPS: CONSULTANDO FORMATOS YOUTUBE"
             : stage == tube5::ProbeStage::source    ? "HTTPS: LEYENDO 4 KIB DEL STREAM MP4"
+            : stage == tube5::ProbeStage::sponsor   ? "HTTPS: CONSULTANDO API SPONSORBLOCK"
             : stage == tube5::ProbeStage::ready     ? "OK: FUENTE MP4 RECIBIDA DESDE YOUTUBE"
             : stage == tube5::ProbeStage::failed    ? "FALLO: CAPTURA ESTA PANTALLA"
             : stage == tube5::ProbeStage::cancelled ? "CANCELADO"
@@ -274,7 +275,13 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             canvas.text(120, 775, result.title.data(), 2, Color::white);
             canvas.text(120, 825, result.error.data(), 2, Color::yellow);
             if (!error[0])
-                canvas.text(120, 865, result.ca.data(), 1, muted);
+            {
+                std::snprintf(detail, sizeof(detail),
+                              "SB API: HTTP %ld CURL %d CERT %ld SEG %u %.60s", result.sponsor.http,
+                              result.sponsor.curl_error, result.sponsor.verify,
+                              result.sponsor.data.count, result.sponsor.error.data());
+                canvas.text(120, 865, detail, 1, muted);
+            }
         }
         canvas.text(120, 925, "TLS VERIFICADO - X REPRODUCIR 360P CUANDO MP4 SI", 2, muted);
     }
@@ -341,15 +348,30 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         const unsigned progress =
             tube5::playback_progress_width(media.position(), media.duration(), 1220);
         canvas.rectangle(350, 885, progress, 8, media.paused() ? Color::yellow : accent);
+        // Keep marks visible after the playhead passes and while auto-skip is OFF.
+        if (sponsor_skip.data().state == tube5::SponsorState::ready)
+            for (unsigned i = 0; i < sponsor_skip.data().count; ++i)
+            {
+                const auto &range = sponsor_skip.data().ranges[i];
+                const unsigned left =
+                    tube5::playback_progress_width(range.start_ms / 1000.0, media.duration(), 1220);
+                const unsigned right =
+                    tube5::playback_progress_width(range.end_ms / 1000.0, media.duration(), 1220);
+                if (left < 1220 && range.end_ms > range.start_ms)
+                    canvas.rectangle(350 + left, 885, std::max(1u, right - left), 8,
+                                     static_cast<Color>(0xff3773ff));
+            }
+        canvas.rectangle(350 + std::min(progress, 1218u), 883, 2, 12, Color::white);
         if (!error[0] && !selection.active())
         {
             char status[128]{};
             if (sponsor_notice.visible(SDL_GetTicks()))
                 std::snprintf(status, sizeof(status), "PATROCINIO OMITIDO - %u SEG",
                               sponsor_notice.seconds());
-            else if (media.youtube_direct())
-                std::snprintf(status, sizeof(status),
-                              "YOUTUBE DIRECTO - SPONSORBLOCK AUN NO CONSULTADO");
+            else if (sponsor_skip.data().state == tube5::SponsorState::unavailable)
+                std::snprintf(status, sizeof(status), "SB NO DISPONIBLE - VIDEO SIN SALTOS");
+            else if (sponsor_skip.data().state == tube5::SponsorState::unaligned)
+                std::snprintf(status, sizeof(status), "SB DURACION NO COINCIDE - VIDEO SIN SALTOS");
             else
                 std::snprintf(status, sizeof(status), "SB %s  %u SEG  %u SALTOS  %s",
                               sponsor_enabled ? "ON" : "OFF", sponsor_skip.data().count,
@@ -975,6 +997,20 @@ int main()
         sponsor_notice.begin(0, 4);
         sponsor_notice.complete(SDL_GetTicks());
     }
+    if (std::getenv("TUBE5_PREVIEW_SEGMENTS"))
+    {
+        network_test = false;
+        nav.screen = tube5::Screen::player;
+        start_player(nullptr);
+        tube5::SponsorData fixture;
+        fixture.state = tube5::SponsorState::ready;
+        fixture.count = 2;
+        fixture.ranges[0] = {0, 4000};
+        fixture.ranges[1] = {15000, 20000};
+        sponsor_skip.reset(fixture);
+        sponsor_enabled = false;
+        media.toggle_pause();
+    }
     if (std::getenv("TUBE5_PREVIEW_ONLINE_RUN"))
     {
         nav.screen = tube5::Screen::online;
@@ -1172,6 +1208,9 @@ int main()
                 nav.screen = playback_return();
             else if (result == tube5::MediaPlayer::OpenResult::ready)
             {
+                if (direct_playback)
+                    sponsor_skip.reset(
+                        tube5::aligned_sponsor(youtube_probe.result().sponsor, media.duration()));
                 // Evaluate the known start, never the uninitialized player clock.
                 if (const auto target =
                         sponsor_skip.target(0.0, media.duration(), sponsor_enabled, false, false))

@@ -6,6 +6,7 @@
 #include <string_view>
 #include <curl/curl.h>
 #include "youtube_formats.hpp"
+#include "sponsor_api.hpp"
 namespace tube5
 {
 enum class ProbeStage
@@ -14,6 +15,7 @@ enum class ProbeStage
     dns,
     https,
     source,
+    sponsor,
     ready,
     failed,
     cancelled
@@ -25,6 +27,9 @@ enum class ProbeMode
 };
 struct ProbeResult
 {
+    // Fixed diagnostic video; SponsorBlock uses this same video's timeline.
+    std::array<char, 12> video_id{"bHIhgxav9LY"};
+    SponsorResponse sponsor{};
     std::array<char, 16> ip{};
     std::array<char, 160> ca{};
     std::array<char, 128> title{};

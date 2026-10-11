@@ -22,6 +22,8 @@ que bloqueen ahora el desarrollo sobre el puente:
 - [ ] Reproducir un vídeo YouTube sin conversión ni servicio del PC; verificar
   formatos, audio/vídeo, seek y límites de memoria sobre la fuente real.
 - [ ] Consultar SponsorBlock desde consola sin la caché obligatoria del PC.
+  DIAG45 integrado: API HTTPS con prefijo hash, fallos no bloquean reproducción;
+  salto inicial/final y marcas naranjas ON/OFF pendientes de validación PS5.
 - [ ] Integrar búsqueda y selección autónomas con el mando tras demostrar esa ruta.
 
 No se promete que cambiar los DNS baste. Evaluar y documentar los impedimentos
@@ -84,8 +86,10 @@ El hardware no resuelve DNS, extracción del enlace, publicidad ni autenticació
   general; no usar la comprobación de PSN como requisito de Tube5.
 
 Los puntos 2–3 tienen prototipos parciales: MP4 360p y controles validados en PS5,
-pero estabilidad prolongada y expiración/reconexión pendientes. Los puntos 4–6 y la aceleración no están
-implementados ni validados en autonomía. El orden
+pero estabilidad prolongada y expiración/reconexión pendientes. Los puntos 4–6
+y la aceleración no están
+validados completamente en autonomía; DIAG45 añade el prototipo SponsorBlock
+directo del punto 4. El orden
 puede ajustarse a impedimentos demostrados, manteniendo la autonomía prioritaria.
 
 ## Hitos restantes e historial

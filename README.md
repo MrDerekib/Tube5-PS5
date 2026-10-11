@@ -22,7 +22,15 @@ final. La app final no requerirá una companion app en el PC.
 > Biblioteca LAN y corrección de títulos de DIAG35 validadas en consola.
 > 4K no validado.
 
-## Prueba actual: BOOT-DIAG-44-YOUTUBE-STREAM
+## Prueba actual: BOOT-DIAG-45-YOUTUBE-SPONSOR
+
+DIAG45 consulta la API de SponsorBlock directamente desde PS5 por HTTPS, sin
+PC. Solicita el prefijo SHA-256 del ID, filtra sponsor/skip, valida duración
+contra el stream y aplica los saltos existentes. Consulta antes de reproducir
+para evitar mostrar el segmento inicial. Si falla, reproduce sin saltos con
+aviso. Los segmentos se dibujan en naranja en la barra, también con SB OFF.
+Options conserva el ajuste ON/OFF; Triángulo renueva fuente y segmentos.
+Esta integración nueva sigue pendiente de validación física en PS5.
 
 DIAG42 queda validada en PS5 Fat FW 13.20: oEmbed devuelve HTTP 200, CURL 0,
 CERT 0, 815 B y el título correcto usando nanoDNS. El DNS 45.56.67.85 devuelve
@@ -39,7 +47,8 @@ completo ni transcodifica en el PC. El smoke real host pasa imagen, pausa,
 seeks, EOF por seek y reapertura. El propietario confirma en PS5 MP4 360p,
 audio, pausa, avance/retroceso, salida y reapertura correctos (2026-10-11).
 Solo el vídeo fijo y el MP4 combinado <=360p: aún no hay búsqueda autónoma,
-SponsorBlock directo, cuenta, renovación automática ni hardware decoding.
+cuenta, renovación automática ni hardware decoding. SponsorBlock directo está
+integrado en DIAG45, pendiente de validación física.
 La ausencia de anuncios no se da por validada por esta prueba.
 Ver [la prueba directa](docs/YOUTUBE_DIRECT.md).
 

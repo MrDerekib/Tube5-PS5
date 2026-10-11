@@ -32,6 +32,9 @@ to milliseconds. These transformed data retain their data license, not the
 GPL license of Tube5's independently written integration code. Source/license
 are shown in-app and in LAN response headers; private cached records are not
 committed or bundled. No endorsement by SponsorBlock is implied.
+DIAG45 also requests hash-prefix API data directly from PS5 over verified HTTPS,
+keeps it only in memory, aligns it to the direct stream and draws its intervals
+on the progress bar. It does not submit segments, votes or viewing telemetry.
 
 
 ### Tube5 playback prototype

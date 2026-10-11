@@ -292,6 +292,12 @@ int YouTubeProbe::worker(void *opaque) noexcept
                         std::snprintf(out.error.data(), out.error.size(),
                                       "STREAM: NO VALIDADO HTTP %ld CURL %d CERT %ld",
                                       out.source_http, out.source_curl, out.source_verify);
+                    else if (!probe.cancelled_)
+                    {
+                        probe.stage_ = ProbeStage::sponsor;
+                        // Optional service: its failure must not prevent playback.
+                        out.sponsor = fetch_sponsor(out.video_id.data(), probe.cancelled_);
+                    }
                 }
             }
         }

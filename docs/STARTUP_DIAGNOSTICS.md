@@ -1,5 +1,47 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-45-YOUTUBE-SPONSOR: API autónoma y segmentos en barra
+
+Build nativa/FSELF y guard ABI correctos. SHA-256 de eboot.bin:
+`eb3f477e532e10c745294acb6a50d708a6dc023648c3a974b15d6382fdfdbf05`.
+
+La misma ruta de DIAG44 consulta ahora SponsorBlock antes de permitir el play.
+GET HTTPS a sponsor.ajay.app/api/skipSegments con cuatro caracteres del SHA-256
+del ID, siguiendo la [API oficial](https://wiki.sponsor.ajay.app/w/API_Docs).
+No envía el ID completo, cuentas, votos ni eventos de visualización; no usa PC.
+Una consulta por resolución/renovación de fuente, no por frame ni por seek.
+Solo sponsor/skip; otras categorías quedan para un futuro preset.
+
+TLS verifica cadena/nombre con la CA de consola, DNS público fijado, sin
+redirects/proxy. Timeout de petición 5 s (DNS aparte), cuerpo limitado a 128 KiB,
+JSON estricto/profundidad 16, hasta 256 vídeos del prefijo y 128 segmentos.
+Selecciona exclusivamente el ID solicitado, rechaza duplicados y entradas
+inválidas, fusiona solapados y no aplica más de ocho rangos. Si se supera ese
+límite, no aplica una selección incompleta. Votes negativos se ignoran.
+404 significa sin segmentos; fallo HTTP/TLS/DNS/JSON no impide ver el vídeo.
+La pantalla directa muestra HTTP/CURL/CERT/SEG o aviso de fallo independiente.
+
+Antes del salto inicial se compara la duración real del decoder con la de los
+segmentos: divergencia >2 s desactiva los rangos; no usa tiempos transcodificados.
+Las marcas naranjas se pintan sobre la barra existente tanto ON como OFF,
+con indicador blanco de posición. La persistencia y los saltos inicial/final
+son los ya validados en LAN; ahora reciben datos de la API desde la consola.
+
+Prueba host de API: HTTP 200, CURL 0, CERT 0, dos segmentos 0–4 s y
+809.300–887.501 s, duración declarada 887.501 s (los datos pueden cambiar).
+Smoke host con fuente YouTube directa y datos reales: primer frame después de
+4 s, pausa y seek manual correctos, salto 809.725 → 887.000 s, cierre/reapertura
+correctos. No se reproduce entero: el test hace seek al patrocinio final.
+Tests offline cubren JSON/tipos/rangos/solapados/duración/límites, 404 sin marcas,
+fallos HTTP/TLS/timeout, cuerpo excesivo, DNS bloqueado y cancelación.
+Suite host/sanitizadores correcta. Preview de player con SB OFF revisada:
+rangos naranjas visibles sobre la barra y posición blanca, sin solapar el reloj.
+Prueba física pendiente: copiar carpeta con Tube5 cerrada, nanoDNS activo,
+Ajustes → Triángulo → X → esperar MP4 SI y SB API → X.
+Verificar marcas, salto inicial en ON, no salto en OFF, pausa/seek/reapertura.
+Para el segmento final basta seek hacia 13:30, no ver los 15 minutos completos.
+
+
 ## BOOT-DIAG-44-YOUTUBE-STREAM: primera reproducción autónoma candidata
 
 Tras el éxito de DIAG43 (IMG_4293), X en la pantalla de formatos abre la URL
