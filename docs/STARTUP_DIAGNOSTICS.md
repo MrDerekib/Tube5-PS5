@@ -504,6 +504,17 @@ con IMG_4287, confirma retorno al nivel inicial de los tres pools tras el clip
 completo. La prueba física de duración y limpieza de esos pools queda superada;
 no es validación de todas las reservas de la app ni de sesiones largas repetidas.
 
+El propietario confirma también pausa, saltos, salida anticipada y tres ciclos
+correctos en DIAG31, con los pools regresando a cero. La siguiente prueba amplía
+solo el clip a 600 s, manteniendo 1080p/30 fps y la misma build. No se modifica
+el reproductor ni los allocators. Validación física de diez minutos pendiente.
+
+El clip de 600 s queda preparado: 1920x1080 Main/YUV420 a 30 fps, AAC-LC
+estéreo/44,1 kHz, 600,003628 s y 187.507.216 bytes. Se cambia únicamente el
+archivo del servidor LAN, manteniendo la URL y DIAG31. El smoke HTTP pasa
+apertura, decode, pausa, saltos, EOF por seek, reapertura y limpieza; la prueba
+continua de diez minutos en PS5 sigue pendiente. No se preparan variantes extra.
+
 ## BOOT-DIAG-30-HTTP: pool RefStruct de FFmpeg
 
 IMG_4285.HEIC confirma DIAG29 y `MEMORY: ENOMEM`, `MEMFAIL 17 ALIGN

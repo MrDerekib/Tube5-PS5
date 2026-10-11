@@ -11,8 +11,9 @@ pools directos para AVBuffer, superficies SDL y entradas grandes de RefStruct.
 El propietario confirma también reproducción hasta el final con salida al menú,
 avance/retroceso y reapertura en DIAG30. Percibe una ligera demora adicional
 al saltar, sin medida de latencia. Confirma pausa y tres ciclos correctos.
-La valoración específica de audio/fluidez y los contadores de memoria siguen
-pendientes en esta build.
+DIAG31 supera después cinco minutos completos con imagen/audio correctos,
+controles y tres ciclos, con los tres pools directos regresando a cero. La prueba
+de diez minutos mantiene DIAG31 y queda pendiente de confirmación en consola.
 No se modifican payloads ni firmware. HTTP es la fuente predeterminada en
 DIAG26; LOCAL sigue disponible en Ajustes.
 
@@ -52,9 +53,33 @@ tras ese cierre. La etiqueta no se ve en el recorte. El propietario confirma
 explícitamente que los cinco minutos completos terminaron bien con imagen/audio.
 IMG_4288 muestra los tres pools a cero antes de reproducir, también ALLOC/FAIL/ERR
 a cero: las reservas vivas retornan al nivel inicial tras el clip. Los registros
-previos sí eran visibles, aunque el propietario buscaba texto amarillo. Quedan
-pendientes salida durante reproducción y controles/ciclos repetidos con DIAG31;
-las pruebas equivalentes del minuto con DIAG30 ya pasaron.
+previos sí eran visibles, aunque el propietario buscaba texto amarillo. El
+propietario confirma también pausa, avance/retroceso, salida anticipada y tres
+ciclos correctos con los pools volviendo a cero en DIAG31.
+
+### Siguiente duración: diez minutos sin cambiar DIAG31
+
+```bash
+python3 tools/prepare-youtube-test.py 'https://youtu.be/qf31PkeESoU' --height 1080 --seconds 600
+```
+
+Se conserva H.264 Main/YUV420 a 30 fps, CRF 23, resolución nativa 1920x1080
+y AAC copiado. El clip privado es `resolution-1080p-600s.mp4` (límite 640 MiB).
+No se cambia eboot ni etiqueta: la consola conserva BOOT-DIAG-31-HTTP.
+La prueba física de diez minutos queda pendiente. Primero reproducción continua
+sin saltos; comprobar imagen/audio y retorno al menú con los tres pools a cero.
+
+Preparado y verificado con ffprobe: 1920x1080, H.264 Main YUV420, 30 fps,
+AAC-LC estéreo/44,1 kHz, 600,003628 s y 187.507.216 bytes. El servidor sirve
+esta variante en la misma URL LAN. Solo se prepara el siguiente clip necesario;
+no se generan tandas de resoluciones/duraciones que ya pasaron sus pruebas.
+Esta preparación usa libx264 por CPU con dos hilos; no usa la iGPU del PC.
+Comprobación local posterior: Radeon Vega/Renoir, renderD128 accesible fuera
+del sandbox, encoder h264_vaapi presente. Una prueba sintética de dos segundos
+1080p/30 con NV12/hwupload, perfil Main y nivel 4.0 termina con éxito, sin
+guardar archivos. Esto confirma codificación VAAPI disponible, no equivalencia
+de calidad/bitrate o rendimiento medido frente a libx264. No se cambia todavía
+el preparador ni el clip activo a un encoder distinto.
 
 Preparar un minuto de cada resolución desde sus pistas HD reales, sin ampliar
 el vídeo de 360p:
