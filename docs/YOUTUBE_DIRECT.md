@@ -8,7 +8,9 @@ validación de intervalos y duración real. No se envían cuentas/votos/telemetr
 La atribución CC BY-NC-SA 4.0 permanece en Ajustes/Acerca de y avisos de terceros.
 Si falla o los tiempos no coinciden, el vídeo sigue disponible sin saltos y
 con aviso. Los segmentos naranjas son visibles también con Options → SB OFF.
-Triángulo vuelve a consultar el enlace y los segmentos. Validación PS5 pendiente.
+Triángulo vuelve a consultar el enlace y los segmentos. El propietario confirma
+en PS5 Fat FW 13.20 (2026-10-11) consulta, saltos inicial/final, ON/OFF y marcas
+correctos, sin PC. Los fallos de API siguen validados solo en host.
 
 ## Prueba actual (DIAG44)
 
@@ -40,7 +42,7 @@ e integridad/guard ABI válidos. El propietario valida DIAG44 en PS5 Fat FW 13.2
 Reproducción prolongada completa y expiración/reconexión todavía pendientes.
 
 Esta primera ruta usa un solo vídeo público fijo y MP4 AVC/AAC combinado <=360p.
-SponsorBlock se consulta desde consola en DIAG45, pendiente de prueba física;
+SponsorBlock se consulta desde consola en DIAG45, validado por el propietario;
 el piloto previo de biblioteca LAN se conserva. No afirmar ausencia de anuncios
 por haber recibido el MP4. Búsqueda autónoma, más vídeos/calidades, tokens,
 expiración/reconexión, login y aceleración siguen pendientes.

@@ -36,7 +36,11 @@ Tests offline cubren JSON/tipos/rangos/solapados/duración/límites, 404 sin mar
 fallos HTTP/TLS/timeout, cuerpo excesivo, DNS bloqueado y cancelación.
 Suite host/sanitizadores correcta. Preview de player con SB OFF revisada:
 rangos naranjas visibles sobre la barra y posición blanca, sin solapar el reloj.
-Prueba física pendiente: copiar carpeta con Tube5 cerrada, nanoDNS activo,
+Validación física por reporte del propietario (2026-10-11), PS5 Fat FW 13.20:
+confirma todos los checks solicitados correctos: consulta directa, salto inicial,
+ON/OFF con marcas visibles y salto final. No se da por probada la degradación
+ante fallos de API en consola ni la reproducción prolongada completa.
+Pasos de reproducción: copiar carpeta con Tube5 cerrada, nanoDNS activo,
 Ajustes → Triángulo → X → esperar MP4 SI y SB API → X.
 Verificar marcas, salto inicial en ON, no salto en OFF, pausa/seek/reapertura.
 Para el segmento final basta seek hacia 13:30, no ver los 15 minutos completos.

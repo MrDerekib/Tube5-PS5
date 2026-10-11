@@ -21,9 +21,10 @@ que bloqueen ahora el desarrollo sobre el puente:
 - [x] Validar acceso inicial a metadatos y resolución de MP4 360p desde PS5.
 - [ ] Reproducir un vídeo YouTube sin conversión ni servicio del PC; verificar
   formatos, audio/vídeo, seek y límites de memoria sobre la fuente real.
-- [ ] Consultar SponsorBlock desde consola sin la caché obligatoria del PC.
-  DIAG45 integrado: API HTTPS con prefijo hash, fallos no bloquean reproducción;
-  salto inicial/final y marcas naranjas ON/OFF pendientes de validación PS5.
+- [x] Consultar SponsorBlock desde consola sin la caché obligatoria del PC.
+  DIAG45 validado por el propietario en PS5 (2026-10-11): API directa,
+  saltos inicial/final, ON/OFF y marcas naranjas correctos. Los fallos de API
+  no bloquean reproducción; esa degradación está probada en host, no en PS5.
 - [ ] Integrar búsqueda y selección autónomas con el mando tras demostrar esa ruta.
 
 No se promete que cambiar los DNS baste. Evaluar y documentar los impedimentos
