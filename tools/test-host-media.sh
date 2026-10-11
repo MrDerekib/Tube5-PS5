@@ -18,6 +18,9 @@ read -r -a libs <<< "$(pkg-config --libs sdl2 libavformat libavcodec libswscale 
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc tests/test_playback_progress.cpp -o build/playback-progress-test
 build/playback-progress-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
+    -Isrc tests/test_seek_selection.cpp -o build/seek-selection-test
+build/seek-selection-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined -DTUBE5_DIAGNOSTICS \
     -Isrc "${cflags[@]}" tests/test_texture_diagnostics.cpp src/texture_diagnostics.cpp \
     "${libs[@]}" -o build/texture-diagnostics-test

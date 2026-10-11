@@ -249,6 +249,11 @@ int main(int argc, char **argv)
     require(std::abs(player.position() - paused_at - 5.0) < 0.3, "forward seek");
     player.seek(-100.0);
     require(player.position() >= 0 && player.position() < 0.3, "negative seek clamps to zero");
+    player.seek(5.0);
+    player.seek_to(0.5);
+    require(player.paused(), "absolute seek preserves pause");
+    require(std::abs(player.position() - 0.5) < 0.01,
+            "absolute selection replaces a pending relative seek");
     player.toggle_pause();
     require(!player.paused(), "resume");
     for (int i = 0; i < 30; ++i)

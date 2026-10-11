@@ -36,3 +36,18 @@ TEST(Navigation, PlaybackOnlyStartsFromTheVideoCard)
     nav.apply(Command::back);
     EXPECT_EQ(nav.screen, Screen::home);
 }
+
+TEST(Navigation, SearchInputsDoNotChangeMenuFocus)
+{
+    tube5::Navigation nav;
+    for (auto command : {Command::search, Command::coarse_previous, Command::coarse_next})
+    {
+        EXPECT_FALSE(nav.apply(command));
+        EXPECT_EQ(nav.selected, 0);
+        EXPECT_EQ(nav.screen, Screen::home);
+    }
+    nav.apply(Command::next);
+    nav.apply(Command::select);
+    EXPECT_FALSE(nav.apply(Command::search));
+    EXPECT_EQ(nav.screen, Screen::settings);
+}

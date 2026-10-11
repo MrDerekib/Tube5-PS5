@@ -102,6 +102,21 @@ amarillo al pausar, avance/retroceso y salida/reapertura correctos. Confirma que
 es un indicador sin interacción directa, comportamiento previsto para DIAG32.
 La prueba funcional de esta interfaz queda superada.
 
+### Selección de destino: DIAG33
+
+Con Tube5 cerrada, copiar `dist/PPSA99999/` y comprobar BOOT-DIAG-33-HTTP.
+Se reutiliza el mismo clip de diez minutos y la misma URL: no hay descargas
+ni cambios de servidor. Triángulo abre/cancela el selector; cruceta mueve el
+marcador ±5 s y L1/R1 ±30 s. BUSCAR muestra el destino. X confirma un salto
+absoluto; círculo cancela sin salir. Fuera del selector, controles normales.
+
+Prueba: mover el destino y comprobar que no cambia la reproducción hasta X;
+cancelar y comprobar que no salta; confirmar adelante y atrás; repetir estando
+en pausa (sigue pausado y la imagen se actualiza al reanudar); salir/reabrir y
+comprobar que no queda un selector antiguo. Los pools deben volver a cero al
+cerrar. La validación física de DIAG33 queda pendiente. No hace falta volver
+a ver el clip completo.
+
 Preparar un minuto de cada resolución desde sus pistas HD reales, sin ampliar
 el vídeo de 360p:
 

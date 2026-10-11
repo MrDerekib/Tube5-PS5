@@ -464,6 +464,36 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-33-HTTP: selección de destino con mando
+
+Conserva clip, servidor, codecs y allocators. Triángulo abre un selector virtual
+desde la posición actual; cruceta mueve el destino ±5 s y L1/R1 ±30 s, limitado
+al rango del vídeo. Un marcador blanco y BUSCAR mm:ss muestran el destino.
+La reproducción mantiene su estado actual durante la selección. X confirma una
+única petición absoluta; círculo cancela sin saltar ni salir. Triángulo vuelve
+a cancelar. Fuera del selector, X/izquierda/derecha/círculo siguen como antes.
+Al finalizar o salir del reproductor se descarta el destino seleccionado.
+
+`SeekSelection` solo maneja estado de UI, sin red ni decoder. `seek_to` reemplaza
+un salto pendiente, en vez de sumar la selección al salto anterior. Conserva
+la coalescencia y el despacho existentes y limita el final a duración-0,1 s.
+En pausa cambia el destino pero no reanuda: el seek se despacha al reanudar,
+como en las builds previas. Se ignora X repetido durante 350 ms tras confirmar.
+Teclado de host: S abre/cancela, flechas ±5 s, PageUp/PageDown ±30 s,
+Enter/Espacio confirma, Escape cancela.
+
+Tests del modelo: selección, clamp, cancelación, confirmación única, valores
+inválidos y duración modificada. El smoke prueba que un destino absoluto
+sustituye un salto relativo pendiente y conserva pausa. Pasan la batería de
+host con sanitizadores y los ocho tests unitarios de navegación/renderer/assets.
+También pasa el smoke HTTP del clip 1080p de 600 s: apertura, decode, pausa,
+seek absoluto/relativo, EOF por seek, reapertura y limpieza. No sustituye la
+prueba de botones y marcador en PS5.
+Build/FSELF y guard RefStruct válidos. Prueba física del selector pendiente.
+SHA-256 eboot:
+`57a804f28a1f6e65bb5ca9041d97c5804ffd5f522dbdee5609d2c791342e7d95`.
+ELF, eboot y etiqueta preservados en `.local/boot-diag-33/`.
+
 ## BOOT-DIAG-32-HTTP: barra de progreso
 
 Preparada mientras la consola prueba diez minutos con DIAG31. No cambia el

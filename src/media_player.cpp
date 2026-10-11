@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "media_player.hpp"
+#include <cmath>
 #include "audio_reader.hpp"
 #include "codec_diagnostics.hpp"
 #include "thread_diagnostics.hpp"
@@ -279,12 +280,19 @@ void MediaPlayer::toggle_pause() noexcept
 
 void MediaPlayer::seek(double delta) noexcept
 {
-    if (!player_)
+    if (!player_ || !std::isfinite(delta))
+        return;
+    const double base = pending_seek_ >= 0.0 ? pending_seek_ : position();
+    seek_to(base + delta);
+}
+
+void MediaPlayer::seek_to(double destination) noexcept
+{
+    if (!player_ || !std::isfinite(destination) || !std::isfinite(duration()))
         return;
     ++seek_requests_;
     const bool was_paused = paused();
-    const double base = pending_seek_ >= 0.0 ? pending_seek_ : position();
-    const double target = std::clamp(base + delta, 0.0, std::max(0.0, duration() - 0.1));
+    const double target = std::clamp(destination, 0.0, std::max(0.0, duration() - 0.1));
     pending_seek_ = target;
     seek_requested_at_ = SDL_GetTicks();
     last_frame_at_ = seek_requested_at_;

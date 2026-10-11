@@ -12,6 +12,7 @@
 #include "native_refstruct_buffers.hpp"
 #include "native_framebuffer.hpp"
 #include "playback_progress.hpp"
+#include "seek_selection.hpp"
 #include "video_sync_diagnostics.hpp"
 #include "video_conversion.hpp"
 #include <array>
@@ -41,7 +42,7 @@ std::array<char, 128> frame_timing{};
 #endif
 
 void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &media, bool connected,
-           const char *error)
+           const char *error, const tube5::SeekSelection &selection)
 {
     canvas.clear(ink);
     canvas.rectangle(80, 65, 16, 98, accent);
@@ -149,6 +150,20 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         const unsigned progress =
             tube5::playback_progress_width(media.position(), media.duration(), 1220);
         canvas.rectangle(350, 885, progress, 8, media.paused() ? Color::yellow : accent);
+        if (selection.active())
+        {
+            const unsigned target =
+                tube5::playback_progress_width(selection.target(), media.duration(), 1220);
+            canvas.rectangle(350 + (target > 1216 ? 1216 : target), 882, 4, 14, Color::white);
+            if (!error[0])
+            {
+                char destination[64]{};
+                const int seconds = static_cast<int>(selection.target());
+                std::snprintf(destination, sizeof(destination), "BUSCAR %02d:%02d", seconds / 60,
+                              seconds % 60);
+                canvas.text(350, 930, destination, 2, Color::white);
+            }
+        }
 #ifdef TUBE5_DIAGNOSTICS
         char diagnostics[192]{};
 #ifdef TUBE5_REFSTRUCT_BUFFER_WRAP
@@ -224,7 +239,9 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
     }
     canvas.text(120, nav.screen == tube5::Screen::player ? 1040 : 995,
                 nav.screen == tube5::Screen::player
-                    ? "X PAUSA   IZQ/DER 5 SEG   CIRCULO VOLVER"
+                    ? (selection.active()
+                           ? "IZQ/DER 5 SEG  L1/R1 30 SEG  X CONFIRMAR  CIRCULO CANCELAR"
+                           : "X PAUSA  IZQ/DER 5 SEG  TRIANGULO BUSCAR  CIRCULO VOLVER")
                     : "CRUCETA MOVER   X ABRIR   CIRCULO VOLVER   OPTIONS AJUSTES",
                 3, muted);
 }
@@ -379,6 +396,7 @@ int main()
     tube5_boot_checkpoint("Tube5 D11: UI OK - iniciar reproductor");
     tube5::Navigation nav;
     tube5::MediaPlayer media;
+    tube5::SeekSelection selection;
     char error[256]{};
     const bool kit_ready = Kit_Init(KIT_INIT_NETWORK) == 0;
     if (!kit_ready)
@@ -401,6 +419,33 @@ int main()
                     media.cancel_open();
                 return;
             }
+            if (action == tube5::Command::search)
+            {
+                if (selection.active())
+                    selection.cancel();
+                else
+                    selection.begin(media.position(), media.duration());
+                return;
+            }
+            if (selection.active())
+            {
+                if (action == tube5::Command::previous || action == tube5::Command::next)
+                    selection.move(action == tube5::Command::previous ? -5.0 : 5.0);
+                else if (action == tube5::Command::coarse_previous ||
+                         action == tube5::Command::coarse_next)
+                    selection.move(action == tube5::Command::coarse_previous ? -30.0 : 30.0);
+                else if (action == tube5::Command::back)
+                    selection.cancel();
+                else if (action == tube5::Command::select &&
+                         static_cast<Sint32>(SDL_GetTicks() - select_ready_at) >= 0)
+                {
+                    if (const auto destination = selection.confirm(media.duration()))
+                        media.seek_to(*destination);
+                    // A queued second X must not immediately toggle pause.
+                    select_ready_at = SDL_GetTicks() + 350;
+                }
+                return;
+            }
             if (action == tube5::Command::select)
             {
                 if (static_cast<Sint32>(SDL_GetTicks() - select_ready_at) >= 0)
@@ -410,6 +455,7 @@ int main()
                 media.seek(action == tube5::Command::previous ? -5.0 : 5.0);
             else if (action == tube5::Command::back)
             {
+                selection.cancel();
                 media.close();
                 nav.apply(action);
             }
@@ -417,6 +463,7 @@ int main()
         }
         if (nav.apply(action))
         {
+            selection.cancel();
             opening_player = true;
             error[0] = '\0';
 #ifdef TUBE5_HOST
@@ -492,6 +539,15 @@ int main()
                 case SDL_CONTROLLER_BUTTON_START:
                     command(tube5::Command::settings);
                     break;
+                case SDL_CONTROLLER_BUTTON_Y:
+                    command(tube5::Command::search);
+                    break;
+                case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
+                    command(tube5::Command::coarse_previous);
+                    break;
+                case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
+                    command(tube5::Command::coarse_next);
+                    break;
                 default:
                     break;
                 }
@@ -517,6 +573,15 @@ int main()
                     break;
                 case SDLK_TAB:
                     command(tube5::Command::settings);
+                    break;
+                case SDLK_s:
+                    command(tube5::Command::search);
+                    break;
+                case SDLK_PAGEUP:
+                    command(tube5::Command::coarse_previous);
+                    break;
+                case SDLK_PAGEDOWN:
+                    command(tube5::Command::coarse_next);
                     break;
                 default:
                     break;
@@ -556,10 +621,12 @@ int main()
             media.close();
             nav.screen = tube5::Screen::home;
         }
+        if (nav.screen != tube5::Screen::player)
+            selection.cancel();
         if (output && SDL_LockSurface(output) != 0)
             fatal("UI SURFACE LOCK");
         const Uint32 paint_start = SDL_GetTicks();
-        paint(canvas, nav, media, controller != nullptr, error);
+        paint(canvas, nav, media, controller != nullptr, error, selection);
         if (output)
             SDL_UnlockSurface(output);
         else

@@ -16,7 +16,10 @@ enum class Command
     next,
     select,
     back,
-    settings
+    settings,
+    search,
+    coarse_previous,
+    coarse_next
 };
 
 struct Navigation

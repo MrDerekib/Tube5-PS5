@@ -42,6 +42,8 @@ class MediaPlayer final
     void close() noexcept;
     void toggle_pause() noexcept;
     void seek(double delta) noexcept;
+    // Replace a pending relative seek with this absolute destination.
+    void seek_to(double destination) noexcept;
     void draw(SDL_Renderer *renderer, const SDL_Rect &destination) noexcept;
     double position() const noexcept;
     double duration() const noexcept;
