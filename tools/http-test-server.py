@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """LAN-only media server: explicit clips, optional bounded catalog, HTTP byte ranges."""
 import argparse
+import importlib.util
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import re
 import threading
 import unicodedata
+import signal
 
 
 def library_entries(clip, local):
@@ -49,12 +51,6 @@ def byte_range(header, size):
 
 
 def handler_for(clip, stall_headers=False, library=None):
-    catalog = ("TUBE5\t1\n" + "".join(
-        f"{e['id']}\t{e['title']}\t{e['youtube']}\t{e['seconds']}\t{e['height']}\n"
-        for e in library)).encode("ascii") if library else None
-    routes = {"/test-clip.mp4": clip}
-    if library:
-        routes.update({f"/media/{e['id']}.mp4": e["path"] for e in library})
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -69,6 +65,13 @@ def handler_for(clip, stall_headers=False, library=None):
             self.send_clip(True)
 
         def send_clip(self, body):
+            entries = library.snapshot() if hasattr(library, "snapshot") else library
+            catalog = ("TUBE5\t1\n" + "".join(
+                f"{e['id']}\t{e['title']}\t{e['youtube']}\t{e['seconds']}\t{e['height']}\n"
+                for e in entries)).encode("ascii") if entries else None
+            routes = {"/test-clip.mp4": clip}
+            if entries:
+                routes.update({f"/media/{e['id']}.mp4": e["path"] for e in entries})
             if self.path == "/catalog.tsv" and catalog is not None:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/tab-separated-values; charset=us-ascii")
@@ -142,6 +145,9 @@ def main():
     parser.add_argument("--stall-headers", action="store_true",
                         help="Timeout/cancel test: accept requests but send no response for 30 s")
     parser.add_argument("--library", action="store_true", help="Expose bounded catalog and two explicit media entries")
+    parser.add_argument("--youtube-control", action="store_true",
+                        help="Enable local authenticated URL submission (also enables library)")
+    parser.add_argument("--control-port", type=int, default=8081)
     parser.add_argument("--clip", type=Path,
                         default=Path(__file__).resolve().parents[1] / "assets/test-clip.mp4")
     args = parser.parse_args()
@@ -149,22 +155,61 @@ def main():
     if not clip.is_file() or clip.stat().st_size == 0:
         parser.error("clip must be a nonempty file")
     local = Path(__file__).resolve().parents[1] / "assets/test-clip.mp4"
-    library = library_entries(clip, local) if args.library else None
-    server = ThreadingHTTPServer((args.bind, args.port), handler_for(clip, args.stall_headers, library))
+    library = library_entries(clip, local) if args.library or args.youtube_control else None
+    bridge = control = control_thread = None
+    if args.youtube_control:
+        spec = importlib.util.spec_from_file_location("tube5_bridge", Path(__file__).with_name("youtube-bridge.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        # Reserve the control socket before changing its private token. A second
+        # instance must not invalidate the credentials of a running service.
+        control = ThreadingHTTPServer(("127.0.0.1", args.control_port), BaseHTTPRequestHandler)
+        try:
+            bridge = module.Bridge(library)
+        except Exception:
+            control.server_close()
+            raise
+        library = bridge
+    try:
+        server = ThreadingHTTPServer((args.bind, args.port), handler_for(clip, args.stall_headers, library))
+        if bridge:
+            control.RequestHandlerClass = module.control_handler(bridge)
+            control.daemon_threads = True
+            control_thread = threading.Thread(target=control.serve_forever, daemon=True)
+            control_thread.start()
+    except OSError:
+        if bridge:
+            bridge.close()
+        if control:
+            control.server_close()
+        if 'server' in locals():
+            server.server_close()
+        raise
     server.daemon_threads = True
     print(f"Tube5 HTTP: http://{args.bind}:{server.server_port}/test-clip.mp4", flush=True)
     print("Only explicitly configured clips are exposed. Ctrl+C stops the server.", flush=True)
     if library:
-        print("Tube5 library: /catalog.tsv (2 entries)", flush=True)
+        print("Tube5 library: /catalog.tsv", flush=True)
+    if bridge:
+        print(f"YouTube control: loopback only, port {args.control_port}; use tools/add-youtube.py", flush=True)
     if args.stall_headers:
         print("FAULT TEST: connections accepted, HTTP headers withheld for 30 s. "
               "Video playback intentionally unavailable.", flush=True)
+    def stop_server(signum, frame):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, stop_server)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         server.server_close()
+        if control:
+            control.shutdown()
+            control.server_close()
+            control_thread.join()
+        if bridge:
+            bridge.close()
 
 
 if __name__ == "__main__":

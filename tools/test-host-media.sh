@@ -64,6 +64,7 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc "${cflags[@]}" tests/test_lan_catalog.cpp src/lan_catalog.cpp \
     build/native-network-host.o "${libs[@]}" "$native_network_wraps" -o build/lan-catalog-test
 build/lan-catalog-test
+python3 -m unittest discover -s tests -p test_youtube_bridge.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Isrc tests/test_native_framebuffer.cpp src/native_framebuffer.cpp -o build/native-framebuffer-test
 build/native-framebuffer-test
