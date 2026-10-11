@@ -16,6 +16,7 @@
 | [TeamNewPipe/NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) | Protocol reference for the VISIONOS visitor/player flow; independent native C++ implementation, no Java code bundled |
 | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) | Directory-style deployment and hardware validation |
 | [ItsBlurf/BFplayer](https://github.com/ItsBlurf/BFplayer) | Playback, audio-clock and presentation reference; its fork is not bundled |
+| [BlackBearReloaded/ProsperoLight](https://github.com/blackbearreloaded/ProsperoLight) | GPL-3.0-or-later VideoDec2 ABI layouts, module lifetime and query configuration reference for the bounded hardware capability probe; no Moonlight protocol dependency |
 | [mihawk-99/PS5_Vulkan](https://github.com/mihawk-99/PS5_Vulkan) | Public direct-memory definitions and CPU-cache measurements used to select the SDL working framebuffer's memory type; no driver code bundled |
 | [ArkSama/PS5-Lapy-JB-Daemon](https://github.com/ArkSama/PS5-Lapy-JB-Daemon) | Original Lapy project and owned-root design |
 | [mpereiraesaa/PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon) | Exact-title one-shot helper and cooperative elevation protocol |

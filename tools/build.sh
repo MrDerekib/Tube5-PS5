@@ -283,6 +283,21 @@ for name in app_crt app_cpp_runtime; do
 done
 
 link_inputs=("$build/obj/app_crt.o" "$build/obj/app_cpp_runtime.o" "${objects[@]}")
+extra_stubs=()
+if [[ " ${definitions[*]} " == *" TUBE5_HW_PROBE "* ]]; then
+    stub_object="$build/obj/videodec2_link_stub.o"
+    stub_library="$build/libSceVideodec2.so"
+    ninja_inputs=("$native/videodec2_link_stub.c")
+    ninja_edge CC "$stub_object" env PS5_PAYLOAD_SDK="$sdk_root" \
+        PS5_CLANG="$target_compiler" USE_CCACHE="${USE_CCACHE:-1}" \
+        sh "$root/tooling/prospero-clang18" -O2 -fPIC -c \
+        "$native/videodec2_link_stub.c" -o "$stub_object"
+    ninja_inputs=("$stub_object")
+    ninja_edge LINK "$stub_library" "$sdk_root/bin/prospero-lld" --shared \
+        -soname libSceVideodec2.prx -o "$stub_library" "$stub_object"
+    link_inputs+=("$stub_library")
+    extra_stubs+=(--stub "$stub_library")
+fi
 for archive in "${archives[@]}"; do
     [[ $archive =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\.a$ && -f $root/$archive ]] || {
         echo "invalid static archive: $archive" >&2; exit 2;
@@ -307,8 +322,9 @@ ninja_edge LINK "$build/llvm-pie.elf" "$sdk_root/bin/prospero-lld" -T "$native/p
     -e _start -o "$build/llvm-pie.elf" -L"$sdk_root/target/lib" "${link_inputs[@]}" \
     --as-needed "$sdk_root"/target/lib/*.so "$sdk_root/target/lib/libc.a"
 ninja_inputs=("$build/llvm-pie.elf" "$tool" "$sdk_root"/target/lib/*.so)
+[[ -z ${stub_library:-} ]] || ninja_inputs+=("$stub_library")
 ninja_edge CONVERT "$build/eboot.elf" "$tool" link --in "$build/llvm-pie.elf" --out "$build/eboot.elf" \
-    --stub-dir "$sdk_root/target/lib" --module-sdk "$module_sdk" \
+    --stub-dir "$sdk_root/target/lib" "${extra_stubs[@]}" --module-sdk "$module_sdk" \
     --companion-sdk "$companion_sdk" --file-name eboot.elf
 ninja_run
 if [[ " ${definitions[*]} " == *" TUBE5_REFSTRUCT_BUFFER_WRAP "* ]]; then

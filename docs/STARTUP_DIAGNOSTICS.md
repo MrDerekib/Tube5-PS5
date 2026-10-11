@@ -1,5 +1,44 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-54-HWQUERY: acceso VideoDec2, sin cambiar el player
+
+La build 53 pasa las pruebas del propietario: ciclos cortos, pausa/seeks,
+vídeo directo 1080p completo y reapertura. El log FTP sigue siendo el error
+TEXTURE de DIAG52: no hay un informe nuevo gestionado de DIAG53. No equivale
+a trazas completas de cada sesión ni valida otros formatos/firmwares.
+
+DIAG54 inicia la fase hardware con un probe opt-in TUBE5_HW_PROBE. Carga el
+módulo decimal 207 en el sandbox original y conserva la referencia del proceso;
+consulta memoria compute y H.264 High, recurso público game 1, depth 1, DPB 4,
+para máximos 1920x1088, 2560x1440 y 3840x2176. Distingue dimensiones codificadas
+y altura visible. Usa layouts con sizeof/offsetof verificados y configuraciones
+referenciadas en ProsperoLight, snapshot 91c0cf8b6bc6c9cbb2d48c8cc6994fbccaa2d61f.
+
+No crea compute queue, decoder ni frame; no llama decode, no cambia framebuffer,
+salida VideoOut, selección de codecs ni el reproductor software validado. Un
+query correcto únicamente valida esa consulta: no promete rendimiento ni 4K.
+Si falla el módulo, no consulta compute; si falla compute, no consulta modos.
+El fallo de un modo no impide consultar los siguientes. No eleva permisos ni
+sale del sandbox. AV1, VP9, HDR y GPU presentation siguen pendientes.
+Tube5 conserva applicationCategoryType 65536 (Multimedia); la referencia usa
+un título Game. Un error de recursos en este contexto no prueba ausencia de
+hardware: revisar categoría/contexto y permisos antes de cambiar el manifiesto.
+
+Guarda `/download0/tube5-hardware.log` al iniciar: etiqueta, retornos hex,
+memoria compute, frame, alineación y regiones CPU/GPU/compartida por modo.
+Es independiente del último error de reproducción. Las cuatro filas principales
+aparecen también en Ajustes. El linker usa dos declaraciones stub de
+libSceVideodec2; sus cuerpos nunca se empaquetan ni ejecutan en consola.
+
+Pruebas host: tamaños/campos ABI, configuración exacta de tres modos, retorno
+correcto, fallos de módulo/compute/modo, limpieza de informes entre consultas,
+probe desactivado sin llamadas nativas. Compilación, imports y firma verificados.
+Prueba PS5 pendiente: cerrar Tube5, instalar 54, abrir y dejar en el menú para
+recuperar hardware.log por FTP. Después vendrá un frame AVC conocido; no pedir
+otra reproducción completa para validar una mera consulta de capacidades.
+ELF exacto guardado en .local/boot-diag-54; SHA-256 eboot.bin:
+`3702873c81090c4e27f515f603f604f27d4079dd1993082c6e638ce331c367fe`.
+
 ## BOOT-DIAG-53-YUVPOOL: planos SDL fuera del heap
 
 DIAG52 completó el vídeo directo 1080p entero en consola. La reapertura falló

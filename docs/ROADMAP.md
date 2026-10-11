@@ -71,6 +71,20 @@ homebrew, códecs/perfiles soportados, propiedad de buffers y presentación;
 hacer una prueba mínima antes de comprometer 4K o cambiar el pipeline validado.
 El hardware no resuelve DNS, extracción del enlace, publicidad ni autenticación.
 
+DIAG53: propietario confirma ciclos cortos, pausa/seeks, reproducción directa
+1080p completa y reapertura sin errores. El único log FTP encontrado es el
+fallo antiguo de DIAG52; el logger registra fallos gestionados, no sesiones
+exitosas. Validación limitada a esta consola FW13.20 y al vídeo probado.
+
+Siguiente fase: DIAG54 consulta VideoDec2 (módulo decimal 207) y requisitos de
+memoria H.264 High para 1080p/1440p/2160p, manteniendo el player software.
+Un query exitoso NO valida decodificación, presentación ni rendimiento.
+Después: frame H.264 conocido, lifecycle create/decode/reset/delete, integración
+1080p con audio/reloj/seeks, presentación GPU, VP9 SDR 1440p y 2160p. Conservar
+software como alternativa. No asumir AV1 por hardware ni HDR antes de pruebas.
+Referencias: ProsperoLight y ps5-hardware-video-decoding-research de
+BlackBearReloaded; estas validaciones externas no prueban FW13.20.
+
 ### Calidad directa, no variantes preparadas en PC
 
 Prioridad acordada: formatos separados antes de ampliar la búsqueda. NewPipe
@@ -109,7 +123,8 @@ ni dar por disponible un navegador completo por existir componentes WebKit.
 - [ ] Resolver ausencia de URLs, firmas/tokens o manifiestos cuando sean
   necesarios; no presentar esos formatos como reproducibles por inventariarlos.
 - [x] Validar 480p/720p separados desde YouTube en PS5.
-- [ ] Validar 1080p desde YouTube, incluido el pool de parsing DIAG49; no extrapolar LAN.
+- [x] Validar 1080p desde YouTube con DIAG53, pools de parsing/textura,
+  duración completa, pausa/seeks y reapertura; no extrapolar a otros FW/códecs.
 - [ ] Evaluar VP9/AV1/Opus, perfiles/fps y hardware antes de habilitar 4K.
 
 DIAG46 Auto mantiene <=360p; manual solo permite MP4 combinado H.264/AAC con

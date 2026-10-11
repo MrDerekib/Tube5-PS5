@@ -17,6 +17,7 @@
 #include "lan_catalog.hpp"
 #include "preferences.hpp"
 #include "failure_log.hpp"
+#include "hardware_video_probe.hpp"
 #include "sponsor_notice.hpp"
 #include "youtube_search.hpp"
 #include "youtube_probe.hpp"
@@ -42,6 +43,9 @@ constexpr auto panel = static_cast<Color>(0xff382c21);
 constexpr auto accent = static_cast<Color>(0xff8261ff);
 constexpr auto muted = static_cast<Color>(0xffbbaea5);
 std::array<char, 48> build_label{};
+#ifdef TUBE5_HW_PROBE
+tube5::HardwareVideoReport hardware_report;
+#endif
 std::array<char, 256> network_url{};
 std::array<char, 65> console_token{};
 tube5::VideoKeyboard video_keyboard;
@@ -369,6 +373,14 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
                           preferences.stage(), preferences.error());
         canvas.text(650, 630, storage_status, 2, preference_saved ? muted : Color::yellow);
         canvas.text(120, 750, "VIDEOS: MENU PRINCIPAL - REPRODUCIR", 3, muted);
+#ifdef TUBE5_HW_PROBE
+        for (unsigned row = 0; row < 4; ++row)
+        {
+            char status[192]{};
+            tube5::hardware_video_status(hardware_report, row, status, sizeof(status));
+            canvas.text(120, 815 + row * 32, status, 2, muted);
+        }
+#endif
     }
     else if (nav.screen == tube5::Screen::about)
     {
@@ -609,6 +621,34 @@ int main()
         if (character >= 'a' && character <= 'z')
             character = static_cast<char>(character - 'a' + 'A');
     tube5::failure_log_build_label(build_label.data());
+#ifdef TUBE5_HW_PROBE
+    tube5::query_hardware_video(hardware_report);
+    char hardware_log[1024]{}, hardware_line[192]{};
+    std::size_t used = static_cast<std::size_t>(
+        std::snprintf(hardware_log, sizeof(hardware_log),
+                      "TUBE5 HARDWARE QUERY V1\nBUILD %s\nPLAYER SOFTWARE - NO DECODE TEST\n",
+                      tube5::failure_log_build_label()));
+    for (unsigned row = 0; row < 4; ++row)
+    {
+        tube5::hardware_video_status(hardware_report, row, hardware_line, sizeof(hardware_line));
+        const int length =
+            std::snprintf(hardware_log + used, sizeof(hardware_log) - used, "%s\n", hardware_line);
+        if (length > 0)
+            used += std::min<std::size_t>(length, sizeof(hardware_log) - used - 1);
+    }
+    for (unsigned i = 0; i < hardware_report.memory.size(); ++i)
+    {
+        const auto &memory = hardware_report.memory[i];
+        const int length = std::snprintf(hardware_log + used, sizeof(hardware_log) - used,
+                                         "MODE %u CPU %llu GPU %llu SHARED %llu\n", i,
+                                         static_cast<unsigned long long>(memory.cpu_bytes),
+                                         static_cast<unsigned long long>(memory.gpu_bytes),
+                                         static_cast<unsigned long long>(memory.shared_bytes));
+        if (length > 0)
+            used += std::min<std::size_t>(length, sizeof(hardware_log) - used - 1);
+    }
+    (void)tube5::write_failure_log("/download0/tube5-hardware.log", hardware_log, used);
+#endif
 #ifdef TUBE5_HOST
     ps5::demo::read_asset_text(".local/network-test-url.txt", std::span{network_url}, "");
     ps5::demo::read_asset_text(".local/bridge/console-token", std::span{console_token}, "");
