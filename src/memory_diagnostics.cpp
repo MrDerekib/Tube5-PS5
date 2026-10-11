@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "memory_diagnostics.hpp"
+#include "native_refstruct_buffers.hpp"
 #include <atomic>
 #include <cstdio>
 #include <limits>
@@ -184,13 +185,6 @@ extern "C" int __wrap_posix_memalign(void **address, std::size_t alignment, std:
 // its requestor without stack walking, TLS, logging or allocation in the hook.
 extern "C" void *__real_av_malloc(std::size_t);
 extern "C" void *__real_av_mallocz(std::size_t);
-extern "C" void *__wrap_av_malloc(std::size_t bytes)
-{
-    void *result = __real_av_malloc(bytes);
-    if (!result && bytes)
-        record_origin(true, 1, bytes, 0, __builtin_return_address(0));
-    return result;
-}
 extern "C" void *__wrap_av_mallocz(std::size_t bytes)
 {
     void *result = __real_av_mallocz(bytes);
@@ -199,4 +193,23 @@ extern "C" void *__wrap_av_mallocz(std::size_t bytes)
     return result;
 }
 #endif
+#endif
+
+#if defined(TUBE5_REFSTRUCT_BUFFER_WRAP) ||                                                        \
+    (defined(TUBE5_ALLOC_CALLER_WRAP) && defined(TUBE5_DIAGNOSTICS) && !defined(TUBE5_HOST))
+extern "C" void *__real_av_malloc(std::size_t);
+extern "C" void *__wrap_av_malloc(std::size_t bytes)
+{
+    void *caller = __builtin_return_address(0);
+#ifdef TUBE5_REFSTRUCT_BUFFER_WRAP
+    void *result = tube5::allocate_refstruct_buffer(bytes, caller);
+#else
+    void *result = __real_av_malloc(bytes);
+#endif
+#if defined(TUBE5_DIAGNOSTICS) && !defined(TUBE5_HOST)
+    if (!result && bytes)
+        record_origin(true, 1, bytes, 0, caller);
+#endif
+    return result;
+}
 #endif

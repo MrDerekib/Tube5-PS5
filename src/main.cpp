@@ -9,6 +9,7 @@
 #include "memory_diagnostics.hpp"
 #include "native_media_buffers.hpp"
 #include "native_surface_buffers.hpp"
+#include "native_refstruct_buffers.hpp"
 #include "native_framebuffer.hpp"
 #include "video_sync_diagnostics.hpp"
 #include "video_conversion.hpp"
@@ -125,6 +126,10 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         canvas.text(350, 900, status, 4, Color::white);
 #ifdef TUBE5_DIAGNOSTICS
         char diagnostics[192]{};
+#ifdef TUBE5_REFSTRUCT_BUFFER_WRAP
+        tube5::native_refstruct_buffer_status(diagnostics, sizeof(diagnostics));
+        canvas.text(800, 35, diagnostics, 2, muted);
+#endif
 #ifdef TUBE5_SURFACE_BUFFER_WRAP
         tube5::native_surface_buffer_status(diagnostics, sizeof(diagnostics));
         canvas.text(800, 65, diagnostics, 2, muted);
@@ -165,9 +170,13 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             // Keep the allocation and demux failure readable after teardown.
             // Retrying a fatal read ENOMEM no longer resets these counters.
             char failure[192]{};
+#ifdef TUBE5_REFSTRUCT_BUFFER_WRAP
+            tube5::native_refstruct_buffer_status(failure, sizeof(failure));
+            canvas.text(800, 65, failure, 2, Color::yellow);
+#endif
 #ifdef TUBE5_SURFACE_BUFFER_WRAP
             tube5::native_surface_buffer_status(failure, sizeof(failure));
-            canvas.text(800, 835, failure, 2, Color::yellow);
+            canvas.text(800, 95, failure, 2, Color::yellow);
 #endif
 #ifdef TUBE5_MEDIA_BUFFER_WRAP
             tube5::native_media_buffer_status(failure, sizeof(failure));

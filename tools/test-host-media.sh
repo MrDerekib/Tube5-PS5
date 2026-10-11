@@ -63,6 +63,12 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -Wl,--wrap=SDL_CreateRGBSurfaceFrom -o build/native-surface-buffers-test
 build/native-surface-buffers-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
+    -DTUBE5_REFSTRUCT_BUFFER_WRAP -Isrc "${cflags[@]}" tests/test_native_refstruct_buffers.cpp \
+    src/native_refstruct_buffers.cpp src/native_framebuffer.cpp "${libs[@]}" \
+    -o build/native-refstruct-buffers-test
+build/native-refstruct-buffers-test
+python3 -m unittest discover -s tests -p test_refstruct_wrap.py -v
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -DTUBE5_MEDIA_BUFFER_WRAP -Isrc "${cflags[@]}" \
     tests/test_native_media_buffers.cpp src/native_media_buffers.cpp src/native_framebuffer.cpp \
     -Wl,--wrap=av_buffer_alloc,--wrap=av_buffer_allocz,--wrap=av_buffer_create \

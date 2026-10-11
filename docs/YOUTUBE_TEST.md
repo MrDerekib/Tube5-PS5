@@ -6,8 +6,8 @@ ni una integración de catálogo/búsqueda, ni SponsorBlock. El PC necesita esta
 encendido. El propietario confirma apertura del vídeo completo con DIAG25,
 pausa, seek, salida y reapertura. No se considera validada su duración completa.
 El propietario confirma imagen y audio en 720p con DIAG27. La candidata actual
-es DIAG29, con descarte de preroll y píxeles de superficies SDL en memoria
-directa, para repetir el minuto de 1080p tras fallar la creación de textura.
+es DIAG30, con descarte de preroll y pools directos para AVBuffer, superficies
+SDL y entradas grandes de RefStruct, para repetir el minuto de 1080p.
 No se modifican payloads ni firmware. HTTP es la fuente predeterminada en
 DIAG26; LOCAL sigue disponible en Ajustes.
 
@@ -41,7 +41,7 @@ python3 tools/http-test-server.py --bind IP_DEL_PC --port 8080 \
 ```
 
 Con Tube5 completamente cerrada, copiar `dist/PPSA99999/` y verificar
-BOOT-DIAG-29-HTTP. DIAG26 tuvo audio pero ninguna imagen: falló una reserva
+BOOT-DIAG-30-HTTP. DIAG26 tuvo audio pero ninguna imagen: falló una reserva
 SDL de 3.686.400 bytes. DIAG27 usa textura STREAMING para evitar el RGB temporal
 de cada actualización, sin modificar el servidor ni la calidad del clip.
 Reproducir el minuto sin saltos y observar fluidez/audio;
@@ -52,6 +52,9 @@ anterior. Pasan el smoke local y HTTP de 1080p y la regresión HTTP de 720p;
 DIAG28 falla en PS5 al crear la superficie RGB de la textura (8.294.440 bytes).
 DIAG29 mueve esos píxeles a un pool directo separado, limitado a cuatro slots
 y 32 MiB, con liberación al soltar la última referencia SDL.
+DIAG29 supera esa etapa pero falla una reserva RefStruct de 5.234.088 bytes.
+DIAG30 añade un pool separado para esa ruta concreta de la biblioteca fijada,
+con liberación emparejada y un checker que bloquea builds si cambia su ABI.
 La validación de esta nueva build en PS5 sigue pendiente. La URL no cambia.
 La portada todavía menciona 20 s; el contador utiliza la duración real.
 

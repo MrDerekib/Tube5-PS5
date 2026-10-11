@@ -152,6 +152,10 @@ fi
 # Tube5's conversion guard is required even when diagnostic wrappers are off.
 # Keep it scoped to the root player, not the template's separate examples.
 app_wrap_symbols=${APP_WRAP_SYMBOLS:-}
+if [[ $app_source_dir == src && -f $root/src/native_refstruct_buffers.cpp ]]; then
+    definitions+=(TUBE5_REFSTRUCT_BUFFER_WRAP)
+    app_wrap_symbols+=" av_malloc av_free"
+fi
 if [[ $app_source_dir == src && -f $root/src/native_surface_buffers.cpp ]]; then
     definitions+=(TUBE5_SURFACE_BUFFER_WRAP)
     app_wrap_symbols+=" SDL_CreateRGBSurface_REAL SDL_FreeSurface_REAL"
@@ -296,6 +300,9 @@ ninja_edge CONVERT "$build/eboot.elf" "$tool" link --in "$build/llvm-pie.elf" --
     --stub-dir "$sdk_root/target/lib" --module-sdk "$module_sdk" \
     --companion-sdk "$companion_sdk" --file-name eboot.elf
 ninja_run
+if [[ " ${definitions[*]} " == *" TUBE5_REFSTRUCT_BUFFER_WRAP "* ]]; then
+    python3 "$root/tools/check-refstruct-wrap.py" "$build/llvm-pie.elf"
+fi
 
 app="$dist/$title_id"
 rm -rf -- "$app"

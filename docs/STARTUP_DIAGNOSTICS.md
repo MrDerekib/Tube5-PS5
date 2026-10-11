@@ -464,6 +464,61 @@ previos de self-update, no modificados aquí; el formato de los archivos de
 esta corrección y la sintaxis shell pasan. SHA-256 del eboot candidato:
 `6909590ba99e0e1ede2ca859e1f97ac0b78af48e4b656004112c5b8d8c6ea4d5`.
 
+## BOOT-DIAG-30-HTTP: pool RefStruct de FFmpeg
+
+IMG_4285.HEIC confirma DIAG29 y `MEMORY: ENOMEM`, `MEMFAIL 17 ALIGN
+5234088B ERR 12`, `W 3/3/3 READ 46/46 ERR 0`, `FMEM BEFORE OPEN 963 MIB`,
+`SBUF ALLOC 1 FAIL 0`, `DBUF ALLOC 16 FAIL 0`, `PLAYING AUDIO 0 VIDEO 0`,
+`FIRSTFAIL ALIGN 5234088B A64 REL 0X118B181`, `FFALLOC MALLOC 5234088B
+A0 REL 0X97C279`. La textura supera la etapa que fallaba con DIAG28.
+
+El ELF exacto de DIAG29 resuelve FIRSTFAIL a av_malloc+0x30 y FFALLOC a
+ff_refstruct_pool_get+0x98: retorno 0x9818e9, 0x99 desde el inicio de la función.
+No es una reserva AVBuffer y ampliar su umbral de 4 MiB no interceptaría esta
+ruta. Los headers nativos identifican libavcodec 61.3.100. Se contrasta el
+[código oficial de RefStruct de FFmpeg 7.0](https://github.com/FFmpeg/FFmpeg/blob/n7.0/libavcodec/refstruct.c)
+y el desensamblado: las entradas se conservan en el pool tras soltar referencias,
+y se liberan por av_free al destruir el pool, ante error de inicialización o
+al devolver referencias pendientes después de cerrar el pool. No se redimensionan.
+
+DIAG30 añade un pool directo distinto, con 32 slots de hasta 8 MiB, máximo
+256 MiB simultáneos. Solo se activa para av_malloc de 128 KiB a 8 MiB cuyo
+caller sea el retorno específico 0x99 de ff_refstruct_pool_get. No usa TLS,
+stack walking ni cambia libc; las demás llamadas conservan av_malloc original.
+Es un adaptador del ABI privado fijado, no una solución genérica para FFmpeg.
+`check-refstruct-wrap.py` verifica en cada build el único callsite envuelto,
+su retorno relativo y av_free envuelto en getter, pool_return_entry y
+refstruct_pool_uninit. Si cambia, detiene el build antes de firmar.
+
+av_free solo libera por la vía directa los punteros base que pertenecen al
+pool nuevo; otros punteros se reenvían al original. Un fallo de reserva o
+pool lleno hace fallback; un fallo de unmap/release pone el slot en cuarentena.
+La memoria de entradas disponibles sigue reservada hasta que FFmpeg destruye
+el pool, no se libera al soltar cada frame. Se conserva la inicialización y
+la gestión de referencias del RefStruct original. No se toca su header privado.
+Los tres pools nuevos tienen un máximo conjunto de 416 MiB, separado de UI,
+VideoOut, metadatos y demás reservas; no representa consumo real ni RAM disponible.
+
+`RBUF vivos/32 KIB ALLOC total FAIL total ERR código` muestra reservas de
+RefStruct; con limpieza correcta vuelve a cero al cerrar. Se muestra también
+tras un fallo, y SBUF se mueve fuera del texto de portada para hacerlo legible.
+Los tests usan syscalls simuladas: tamaño real del fallo, alineación, caller
+distinto que conserva allocator, límites, fallback, limpieza, reutilización,
+pool lleno y cuarentena. El checker rechaza cambios del callsite y las rutas
+de liberación. No valida todavía RefStruct real en PS5.
+
+La batería completa de host pasa con ASan/UBSan/LSan. El smoke HTTP del
+minuto de 1080p pasa apertura, decode, pausa, seek, EOF, reapertura y limpieza.
+Ese smoke usa el allocator de FFmpeg del host; el pool directo nuevo se prueba
+por separado con syscalls simuladas y el ABI se comprueba en el ELF nativo.
+
+Build/FSELF válidos y comprobación del ABI aprobada. Servidor/MP4 de 1080p
+sin cambios. Cerrar Tube5, copiar dist/PPSA99999, comprobar BOOT-DIAG-30-HTTP
+y abrir una vez. Si falla, capturar RBUF/SBUF/DBUF/FIRSTFAIL/FFALLOC/MEMFAIL,
+sin insistir. Validación física pendiente.
+SHA-256 eboot:
+`e5cdbd9eb036047d97ec6017b25e09806baf4ea191c2d4c306802b1dea29f105`.
+
 ## BOOT-DIAG-29-HTTP: píxeles de superficies SDL en memoria directa
 
 El ensayo de 1080p vuelve al menú durante la creación de textura. La captura
