@@ -9,7 +9,8 @@ SponsorBlock.
 > Estado actual: vídeo local y HTTP LAN, con diez minutos continuos de 1080p
 > y controles validados en PS5 Fat FW 13.20. El PC prepara y sirve el contenido
 > de YouTube; no hay streaming directo, bloqueo de anuncios ni SponsorBlock.
-> La biblioteca LAN de DIAG34 funciona en consola. 4K no validado.
+> Biblioteca LAN y corrección de títulos de DIAG35 validadas en consola.
+> 4K no validado.
 
 ## Prueba actual: BOOT-DIAG-35-LIBRARY
 

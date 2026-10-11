@@ -8,7 +8,9 @@ ASCII a-z a sus glifos A-Z; una prueba de píxeles compara el título mixto
 completo con su equivalente mayúsculo. El servidor declara 360p para el clip
 sintético (verificado con ffprobe) y la descripción ya no muestra «ID LOCAL».
 Una altura desconocida se describe como tal, no como 0p. No cambia el player.
-Build nativa con integridad y guard ABI correctos; validación visual pendiente.
+Build nativa con integridad y guard ABI correctos. El propietario confirma en
+consola que ambos títulos se leen correctamente y que la reproducción y las
+pruebas de controles siguen funcionando, sin regresiones observadas.
 SHA-256: `ed7ad45721c3b32156aa1b8e4c034af4697350c39ac80f5089160f8ea2a26221`.
 
 ## BOOT-DIAG-34-LIBRARY: catálogo LAN acotado

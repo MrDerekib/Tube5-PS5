@@ -45,8 +45,9 @@ las dibuja con los glifos mayúsculos, sin modificar el ID ni los metadatos.
 `ffprobe` verifica 360p en el clip sintético y el servidor corrige su altura.
 La descripción usa «CLIP DE PRUEBA» y omite el falso «ID LOCAL»; una altura
 ausente se muestra como resolución desconocida, nunca como 0p.
-Copiar la build `BOOT-DIAG-35-LIBRARY` y comprobar ambos textos. La corrección
-visual de DIAG35 queda pendiente de confirmación en consola.
+El propietario confirma en `BOOT-DIAG-35-LIBRARY` que ambos títulos se leen
+correctamente y que la reproducción y las pruebas siguen funcionando.
+La corrección visual queda validada en su PS5, sin regresiones observadas.
 
 ## Pruebas de resolución: DIAG26/DIAG27/DIAG28
 
