@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "audio_reader.hpp"
+#include "native_video_codec.hpp"
+#include <atomic>
 #ifdef TUBE5_AUDIO_WRAP
 #include "audio_reader_abi.hpp"
 #include <SDL.h>
@@ -24,14 +26,26 @@ namespace
 // This reference belongs exclusively to the audio callback. Upstream close
 // frees current after SDL_CloseAudioDevice has joined that callback.
 AVFrame *retained = nullptr;
+std::atomic<bool> seek_hold{false};
+std::atomic<unsigned> seek_generation{0};
 } // namespace
 namespace tube5
 {
 void reset_audio_reader() noexcept
 {
+    seek_hold = false;
     if (retained)
         av_frame_unref(retained);
     retained = nullptr;
+}
+void hold_audio_reader(unsigned generation) noexcept
+{
+    seek_generation = generation;
+    seek_hold = true;
+}
+void resume_audio_reader() noexcept
+{
+    seek_hold = false;
 }
 } // namespace tube5
 extern "C" int __wrap_Kit_GetAudioDecoderData(Kit_Decoder *decoder, std::size_t queued_bytes,
@@ -63,6 +77,20 @@ extern "C" int __wrap_Kit_GetAudioDecoderData(Kit_Decoder *decoder, std::size_t 
     // Bound work in the real-time callback even after a large seek.
     for (unsigned attempts = 0; attempts != 128; ++attempts)
     {
+        if (seek_hold.load())
+        {
+            if (tube5::native_codec_audio_reset_generation() != seek_generation.load())
+                return 0;
+            av_frame_unref(frame);
+            if (!Kit_ReadPacketBuffer(queue, frame, 0))
+                return 0;
+            // The producer may have completed reset while we acquired the
+            // queue. Retain that new packet; never time/drop it with old video.
+            if (tube5::native_codec_audio_reset_generation() != seek_generation.load())
+                return 0;
+            av_frame_unref(frame);
+            continue;
+        }
         if (!frame->crop_bottom)
         {
             av_frame_unref(frame);
@@ -119,6 +147,12 @@ extern "C" int __wrap_Kit_GetAudioDecoderData(Kit_Decoder *decoder, std::size_t 
 #else
 namespace tube5
 {
+void hold_audio_reader(unsigned) noexcept
+{
+}
+void resume_audio_reader() noexcept
+{
+}
 void reset_audio_reader() noexcept
 {
 }

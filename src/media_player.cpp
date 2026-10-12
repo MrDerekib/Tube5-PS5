@@ -35,6 +35,28 @@ bool MediaPlayer::fail(const char *stage, const char *detail) noexcept
     save_failure_report(stage, failure_position, failure_frames);
     return false;
 }
+void MediaPlayer::save_audio_seek_report(const char *stage) noexcept
+{
+#ifdef TUBE5_DIAGNOSTICS
+    char report[640]{};
+    const int length =
+        std::snprintf(report, sizeof(report),
+                      "TUBE5 AUDIO SEEK V1\nBUILD %s\nSTAGE %s TARGET MS %.0f HOLD %u VIDEO RESET "
+                      "%u AUDIO RESET %u\n"
+                      "CALLBACKS %u PCM BYTES %zu DELTA %zu UNDERRUNS %u ERROR %d\n",
+                      failure_log_build_label(), stage, audio_seek_target_ * 1000.0,
+                      audio_seek_gate_.waiting() ? 1u : 0u, native_codec_reset_generation(),
+                      native_codec_audio_reset_generation(), audio_callbacks_.load(),
+                      audio_bytes_.load(), audio_bytes_.load() - audio_seek_bytes_before_,
+                      audio_underruns_.load(), audio_error_.load());
+    if (length > 0)
+        (void)write_failure_log("/download0/tube5-audio-seek.log", report,
+                                std::min<std::size_t>(length, sizeof(report) - 1));
+#else
+    (void)stage;
+#endif
+}
+
 void MediaPlayer::save_failure_report(const char *stage, double position, unsigned frames) noexcept
 {
 #ifdef TUBE5_DIAGNOSTICS
@@ -338,7 +360,7 @@ void MediaPlayer::audio_callback(void *userdata, Uint8 *stream, int length) noex
         }
         // Keep consuming PCM to initialize the primary clock, without letting
         // the sponsored opening (or its seek preroll) reach the speakers.
-        if (self->initial_seek_muted_.load())
+        if (self->initial_seek_muted_.load() || self->audio_seek_gate_.waiting())
             SDL_memset(stream, 0, static_cast<std::size_t>(length));
     }
 }
@@ -392,6 +414,9 @@ void MediaPlayer::close() noexcept
     initial_seek_target_ = -1.0;
     initial_seek_muted_ = false;
     audio_started_ = false;
+    audio_seek_gate_.clear();
+    audio_seek_report_at_ = 0;
+    audio_seek_bytes_before_ = 0;
     seek_dispatched_at_ = 0;
     network_ = false;
     youtube_ = false;
@@ -475,10 +500,22 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
     {
         SDL_PauseAudioDevice(audio_, 1);
         reset_audio_reader();
+        if (audio_player_ && native_codec_active())
+        {
+            audio_seek_gate_.begin(native_codec_reset_generation(),
+                                   native_codec_audio_reset_generation());
+            hold_audio_reader(native_codec_audio_reset_generation());
+            audio_seek_target_ = pending_seek_;
+            audio_seek_bytes_before_ = audio_bytes_.load();
+            audio_seek_report_at_ = 0;
+            save_audio_seek_report("WAIT RESET AND VIDEO");
+        }
         const int video_seek = Kit_PlayerSeek(player_, pending_seek_);
         const int audio_seek = audio_player_ ? Kit_PlayerSeek(audio_player_, pending_seek_) : 0;
         if (video_seek != 0 || audio_seek != 0)
         {
+            audio_seek_gate_.clear();
+            resume_audio_reader();
             std::snprintf(error_, sizeof(error_), "SEEK: %s", Kit_GetError());
             initial_seek_target_ = -1.0;
             initial_seek_muted_ = false;
@@ -514,6 +551,14 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
             {
                 frame_area_ = area;
                 ++frames_uploaded_;
+                if (audio_seek_gate_.presented(native_codec_reset_generation(),
+                                               native_codec_audio_reset_generation()))
+                {
+                    resume_audio_reader();
+                    audio_seek_bytes_before_ = audio_bytes_.load();
+                    audio_seek_report_at_ = now;
+                    save_audio_seek_report("VIDEO READY");
+                }
                 if (initial_seek_target_ >= 0.0 && pending_seek_ < 0.0 &&
                     Kit_GetPlayerPosition(player_) >= initial_seek_target_)
                 {
@@ -527,6 +572,11 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
             }
             Kit_UnlockPlayerVideoRawFrame(player_);
         }
+    }
+    if (audio_seek_report_at_ && now - audio_seek_report_at_ >= 1000)
+    {
+        save_audio_seek_report("POST SEEK");
+        audio_seek_report_at_ = 0;
     }
     SDL_Rect target = destination;
     // Letterbox instead of stretching non-16:9 content.
@@ -602,13 +652,14 @@ void MediaPlayer::diagnostic_status(char *text, std::size_t capacity) const noex
     if (player_)
         Kit_GetPlayerVideoBufferState(player_, &frames, &frame_capacity, &packets,
                                       &packet_capacity);
-    std::snprintf(text, capacity,
-                  "%s FR %u BUF %u/%u PKT %u/%u SEEK %u/%u RAW %u/%u RC%d S%d AUD %u/%zu U%u E%d",
-                  native_codec_active() ? "HW" : "SW", frames_uploaded_, frames, frame_capacity,
-                  packets, packet_capacity, seek_dispatches_, seek_requests_, raw_successes_,
-                  raw_attempts_, raw_result_, player_ ? Kit_GetPlayerState(player_) : KIT_CLOSED,
-                  audio_callbacks_.load(), audio_bytes_.load(), audio_underruns_.load(),
-                  audio_error_.load());
+    std::snprintf(
+        text, capacity,
+        "%s FR %u BUF %u/%u PKT %u/%u SEEK %u/%u RAW %u/%u RC%d S%d AUD %u/%zu U%u E%d H%u",
+        native_codec_active() ? "HW" : "SW", frames_uploaded_, frames, frame_capacity, packets,
+        packet_capacity, seek_dispatches_, seek_requests_, raw_successes_, raw_attempts_,
+        raw_result_, player_ ? Kit_GetPlayerState(player_) : KIT_CLOSED, audio_callbacks_.load(),
+        audio_bytes_.load(), audio_underruns_.load(), audio_error_.load(),
+        audio_seek_gate_.waiting() ? 1u : 0u);
 }
 
 double MediaPlayer::position() const noexcept

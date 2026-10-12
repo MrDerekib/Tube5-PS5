@@ -21,6 +21,16 @@ static_assert(offsetof(DecoderPrefix, stream) == offsetof(Kit_Decoder, stream));
 static_assert(offsetof(DecoderPrefix, userdata) == offsetof(Kit_Decoder, userdata));
 static_assert(sizeof(DecoderPrefix) == offsetof(Kit_Decoder, dec_input));
 static double clock_seconds = 0;
+#ifdef TUBE5_HW_PLAYER
+static unsigned audio_reset = 0;
+namespace tube5
+{
+unsigned native_codec_audio_reset_generation() noexcept
+{
+    return audio_reset;
+}
+} // namespace tube5
+#endif
 extern "C" double __wrap_Kit_GetTimerElapsed(const Kit_Timer *)
 {
     return clock_seconds;
@@ -118,6 +128,23 @@ int main()
     assert(__wrap_Kit_GetAudioDecoderData(&decoder, 0, pcm.data(), 3) == 0); // frame alignment
     assert(__wrap_Kit_GetAudioDecoderData(&decoder, 0, pcm.data(), 4096) == 4096);
     tube5::reset_audio_reader();
+#ifdef TUBE5_HW_PLAYER
+    // A blocked producer must be able to drain old PCM and reach its reset.
+    clock_seconds = 100;
+    enqueue(1024, 48000 * 100, 51);
+    tube5::hold_audio_reader(audio_reset);
+    assert(__wrap_Kit_GetAudioDecoderData(&decoder, 0, pcm.data(), 4096) == 0);
+    assert(Kit_GetPacketBufferLength(queue) == 0);
+    ++audio_reset;
+    enqueue(1024, 48000 * 10, 52); // Backwards seek: new PCM vs the old 100s clock.
+    assert(__wrap_Kit_GetAudioDecoderData(&decoder, 0, pcm.data(), 4096) == 0);
+    assert(Kit_GetPacketBufferLength(queue) == 1); // Must not discard post-reset PCM.
+    tube5::resume_audio_reader();
+    clock_seconds = 10;
+    assert(__wrap_Kit_GetAudioDecoderData(&decoder, 0, pcm.data(), 4096) == 4096);
+    assert(pcm[0] == 52);
+    tube5::reset_audio_reader();
+#endif
     av_frame_free(&audio.current);
     Kit_FreePacketBuffer(&queue);
     Kit_CloseTimer(&decoder.sync_timer);

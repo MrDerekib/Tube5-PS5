@@ -174,11 +174,14 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
 build/memory-diagnostics-test
 python3 -m unittest discover -s tests -p test_allocation_caller.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
-    -DTUBE5_AUDIO_WRAP -Isrc -I"$source_root/include" "${cflags[@]}" \
+    -DTUBE5_AUDIO_WRAP -DTUBE5_HW_PLAYER -Isrc -I"$source_root/include" "${cflags[@]}" \
     tests/test_audio_reader.cpp src/audio_reader.cpp \
     build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" \
     -Wl,--wrap=Kit_GetTimerElapsed -o build/audio-reader-test
 build/audio-reader-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
+    -Isrc tests/test_audio_seek_gate.cpp -o build/audio-seek-gate-test
+build/audio-seek-gate-test
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -DTUBE5_AUDIO_WRAP -DTUBE5_HOST -DTUBE5_DIAGNOSTICS -DTUBE5_PIPELINE_WRAP -DTUBE5_CONVERSION_WRAP -DTUBE5_NETWORK_WRAP -Isrc -I"$source_root/include" "${cflags[@]}" "${curl_cflags[@]}" tests/media_smoke.cpp src/audio_reader.cpp src/media_player.cpp src/codec_diagnostics.cpp src/thread_diagnostics.cpp src/boot_diagnostics.cpp src/pipeline_diagnostics.cpp src/memory_diagnostics.cpp src/video_sync_diagnostics.cpp src/video_conversion.cpp src/network_source.cpp \
     src/failure_log.cpp src/youtube_probe.cpp "${probe_sources[@]}" "${player_sources[@]}" src/youtube_formats.cpp src/youtube_stream.cpp src/verified_https.cpp src/sponsor_api.cpp src/lan_catalog.cpp build/native-network-host.o build/host-kitchensink/libSDL_kitchensink_static.a "${libs[@]}" "${curl_libs[@]}" "$native_network_wraps" "$player_clock_wraps" \

@@ -107,7 +107,11 @@ control con el mismo H.264 validado de DIAG59 en el reproductor real y corrige
 AUD duplicados en el filtrado. DIAG62 validada en FW13.20 para ese control:
 150 frames enviados/recibidos/entregados, EOF y cleanup correctos, cero errores,
 imagen confirmada por el propietario. Sigue pendiente vídeo directo de YouTube
-con este backend y sus controles. No habilita 1440p/4K.
+con este backend y sus controles. El propietario confirma después reproducción
+y pausa de YouTube 1080p; log de 8100 frames/37 resets sin error nativo.
+Queda pérdida ocasional de audio tras seek, especialmente hacia atrás. DIAG63
+añade barrera de resets/primer frame y protección PCM, con pruebas enfocadas
+correctas y validación de consola pendiente. No habilita 1440p/4K.
 Después: integración
 1080p con audio/reloj/seeks, presentación GPU, VP9 SDR 1440p y 2160p. Conservar
 software como alternativa. No asumir AV1 por hardware ni HDR antes de pruebas.

@@ -22,6 +22,8 @@ namespace
 std::atomic<bool> allow_open{false};
 std::atomic<AVCodecContext *> owner{nullptr};
 std::atomic<int> fatal{0};
+std::atomic<unsigned> reset_generation{0};
+std::atomic<unsigned> audio_reset_generation{0};
 SDL_mutex *mutex = nullptr;
 AVBSFContext *bsf = nullptr;
 AVPacket *input = nullptr, *filtered = nullptr;
@@ -201,6 +203,14 @@ bool native_codec_active() noexcept
 {
     return owner.load() != nullptr;
 }
+unsigned native_codec_reset_generation() noexcept
+{
+    return reset_generation.load();
+}
+unsigned native_codec_audio_reset_generation() noexcept
+{
+    return audio_reset_generation.load();
+}
 int native_codec_error() noexcept
 {
     return owner.load() ? fatal.load() : 0;
@@ -332,10 +342,14 @@ extern "C" void __wrap_avcodec_flush_buffers(AVCodecContext *context)
                 failure("RESET", code);
             av_bsf_flush(bsf);
             clear_filter_state();
+            if (!code)
+                ++reset_generation;
             snapshot("RESET");
         }
     }
     __real_avcodec_flush_buffers(context);
+    if (tube5::native_codec_active() && context && context->codec_type == AVMEDIA_TYPE_AUDIO)
+        ++audio_reset_generation;
 }
 extern "C" void __wrap_avcodec_free_context(AVCodecContext **context)
 {

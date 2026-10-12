@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "audio_seek_gate.hpp"
 #include <SDL.h>
 #include <kitchensink2/kitchensink.h>
 #include <atomic>
@@ -108,6 +109,7 @@ class MediaPlayer final
     static int open_source_worker(void *userdata) noexcept;
     bool complete_open(SDL_Renderer *renderer) noexcept;
     void save_failure_report(const char *stage, double position, unsigned frames) noexcept;
+    void save_audio_seek_report(const char *stage) noexcept;
     char failure_log_status_[80]{};
     SDL_Thread *opening_thread_ = nullptr;
     std::atomic<bool> opening_done_{false};
@@ -150,6 +152,10 @@ class MediaPlayer final
     double initial_seek_target_ = -1.0;
     std::atomic<bool> initial_seek_muted_{false};
     bool audio_started_ = false;
+    AudioSeekGate audio_seek_gate_;
+    Uint32 audio_seek_report_at_ = 0;
+    std::size_t audio_seek_bytes_before_ = 0;
+    double audio_seek_target_ = 0;
     Uint32 seek_requested_at_ = 0;
     Uint32 seek_dispatched_at_ = 0;
     char error_[256]{};

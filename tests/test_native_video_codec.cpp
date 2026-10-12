@@ -182,6 +182,7 @@ int main(int argc, char **argv)
             assert(avformat_seek_file(source, video, INT64_MIN, 0, INT64_MAX, 0) >= 0);
             avcodec_flush_buffers(ctx);
             assert(status.resets == 1);
+            assert(tube5::native_codec_reset_generation() == 1);
         }
     }
     avcodec_free_context(&ctx);

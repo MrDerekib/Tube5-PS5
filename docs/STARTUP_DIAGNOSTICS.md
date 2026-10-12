@@ -1,5 +1,27 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-63-HWAUDIOSEEK: resincronización del audio separado
+
+DIAG62 reproduce vídeo directo de YouTube a 1080p según el propietario;
+reproducción/pausa correctas, pero algunos seeks pierden audio, especialmente
+al retroceder. El log confirma 8100 imágenes entregadas, 37 resets, sin error
+nativo. No se ha confirmado aún la causa del silencio en hardware.
+
+El seek de Kitchensink es asíncrono. DIAG63 añade una barrera para streams
+separados con hardware: el audio permanece silenciado hasta que ambos
+decoders hayan procesado reset y se presente un frame nuevo con su reloj.
+Durante la espera se descarta PCM anterior sin compararlo con timestamps para
+liberar un productor bloqueado en una cola llena; tras el reset de audio se
+preserva PCM nuevo hasta que vídeo esté preparado. Muxed/local y software
+mantienen su comportamiento anterior. No cambia extracción, red ni codec.
+
+`/download0/tube5-audio-seek.log` registra destino, hold, generaciones de reset
+y muestras PCM después del seek; `H1` en contadores indica espera y `H0` libre.
+Verificación enfocada ASan/UBSan: barrera con ambos órdenes de reset y frames
+viejos, lector PCM simulando 100s→10s (libera antiguo/preserva nuevo), reset del
+adaptador nativo con el control 150 frames, y build nativa correcta. Consola
+pendiente: mismo vídeo 1080p, varios retrocesos con unos segundos entre ellos.
+
 ## BOOT-DIAG-62-HWCONTROL: mismo vídeo validado, reproductor real
 
 DIAG61 volvió a fallar con -55, `POOL FULL`: seis envíos, cero imágenes,
