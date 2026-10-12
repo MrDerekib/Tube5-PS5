@@ -61,7 +61,7 @@ VideoDec2 entregó 1920×1088, pitch 2048, y terminó con `CLEANUP 0` y
 `QUARANTINED 0`. Esto valida un frame y la presentación GPU; no mide todavía
 rendimiento ni valida reproducción continua, seek o ownership sin copias.
 
-DIAG67 (`bash tools/build-gpu-clip.sh`) reproduce el fixture propio
+La prueba continua (iniciada en DIAG67) reproduce el fixture propio
 `hw-bclip.t5hc`: 150 frames, 1080p30, 5 segundos y B-frames. Compila los shaders
 una vez, reserva dos texturas y actualiza sus planos con `glTexSubImage2D`.
 Mantiene cada frame nativo hasta terminar dibujo y swap con `glFinish`, y libera
@@ -85,6 +85,43 @@ iniciado antes del primer frame. Máximos de llamadas upload/draw/swap:
 todavía rendimiento sostenido de 30 fps; el contador SLOW del decoder incluye
 esperas de pacing en el callback y tampoco mide coste CPU puro. El siguiente
 paso es medir el tramo continuo tras el primer frame y refinar upload/pacing.
+
+DIAG68 separó arranque y reproducción continua y agrupó dibujo/swap con una
+espera final. Los 150 frames y las diez muestras RGB pasaron, pero el tramo
+continuo tardó 5.648.655 µs (unos 26,4 fps): intervalos p50/p95/máximo
+37.519/41.062/44.898 µs y trabajo gráfico sin pacing/oracle
+37.206/37.742/39.466 µs. Hubo 143 retrasos mayores de un frame. El retraso
+persistía tras el arranque.
+
+DIAG69 intentó usar el NV12 como un texture buffer `R8`, pero la comprobación
+de tamaño devolvió `-19` antes de crear el decoder o presentar un frame. El
+`SIGSYS` posterior se produjo al volver de `main()` y llamar a `exit()`;
+el backtrace `0x4001b3` coincide con esa llamada del CRT. La recuperación con
+DIAG66 permitió leer el informe persistente. Una aplicación distinta abierta
+causó además `Device busy` en ShadowMount, resuelto al cerrarla.
+
+DIAG70 (`bash tools/build-gpu-clip.sh`) empaqueta NV12 en texels `RGBA32UI`
+de 16 bytes. El shader extrae Y/U/V mediante índices y operaciones enteras;
+no se realiza conversión ni swizzle por píxel en CPU. La reserva se divide en
+hasta ocho texture buffers si lo exige el límite consultado. En esta consola,
+`GL_MAX_TEXTURE_BUFFER_SIZE` es 1.048.576 texels, hay 16 unidades de textura
+y basta un bloque de 6.684.672 bytes. El mismo límite en `R8` explicaba el
+rechazo de DIAG69. Sigue habiendo copia CPU del NV12 a un buffer GL, por lo que
+no es una ruta sin copias. Los errores propios de preparación conservan ahora
+el proceso abierto para inspeccionar logs, en lugar de retornar de `main()`.
+
+DIAG70 validada en FW13.20: 150 enviados/decodificados/dibujados, 150 CRC
+correctos, diez muestras RGB correctas, cero errores de orden, `GL ERROR 0`,
+`CLEANUP 0` y `QUARANTINED 0`. El tramo entre primer y último frame fue
+4.966.807 µs (149 intervalos, aproximadamente 30 fps), con cero retrasos
+mayores de un frame. Intervalos p50/p95/máximo: 33.335/33.390/33.868 µs.
+Trabajo gráfico sin pacing ni oracle p50/p95/máximo: 4.214/6.446/6.571 µs;
+medianas de llamadas upload/draw/swap+finish: 403/3.369/468 µs. El arranque
+costó 68.204 µs. La reducción frente al trabajo mediano de DIAG68 es del 89 %
+en tiempo transcurrido, no una medición de consumo CPU o energía. El contexto
+permanece abierto; un ciclo no valida ausencia de crecimiento entre reaperturas.
+El siguiente paso es integrar el presenter en el reproductor con un único
+propietario de VideoOut, audio, pausa y seek a 1080p.
 
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
