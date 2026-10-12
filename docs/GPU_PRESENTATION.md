@@ -721,6 +721,24 @@ ignora el CRC repetido; la llamada ya tiene ABI probado en AVC pero su resultado
 VP9 queda por verificar. Mismo clip/configuración, no nuevas fixtures ni player.
 Prueba focal host del probe y canarios con ASan/UBSan; build/firma verificadas.
 
+Resultado DIAG98: mismo punto (90 CRC visibles), output con byte 11 = 1,
+offered/returned 0/0, accepted 1. GetPictureInfo devolvió -2.128.805.631,
+valid cero, PTS/DTS/tag UINT64_MAX y canarios intactos; no proporciona metadata
+VP9 utilizable en esta prueba. CRC recibido es el del visible 89, no el 90.
+Hay una entrada hidden posterior al visible 90 en vuelo. Esto apoya ensayar
+clasificación por superficie oculta, no asumir que el siguiente output sigue
+siempre FIFO de todos los AUs. Logs privados `diag98-*`; cleanup cero.
+
+DIAG99 (`BOOT-DIAG-99-VP9-HIDDEN-ORDER`) mantiene fixture y configuración.
+Cuando byte 11 marca hidden, correlaciona con una **única** entrada hidden en
+vuelo aunque haya visibles anteriores pendientes. Sin hidden o con varios,
+falla explícitamente por ambigüedad; no inventa tags. Las imágenes visibles
+mantienen FIFO y CRC obligatorio; la omisión de hidden aún exige el oráculo
+CRC del clip. No es todavía una ruta de YouTube/streaming ni una garantía de
+semántica universal del flag. Host focal ASan/UBSan añade hidden que adelanta
+a un visible pendiente y conserva casos de materialización, omisión, corrupción,
+retención insegura y drain. Build/firma correctas, staging pendiente de cierre.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

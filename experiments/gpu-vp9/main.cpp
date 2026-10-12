@@ -46,7 +46,7 @@ int show(const tube5::VideoOutput &frame, void *) noexcept
 } // namespace
 int main()
 {
-    tube5::failure_log_build_label("BOOT-DIAG-98-VP9-NATIVE-TAGS");
+    tube5::failure_log_build_label("BOOT-DIAG-99-VP9-HIDDEN-ORDER");
     int result = sceSysmoduleLoadModule(207);
     if (!result)
     {
@@ -110,7 +110,7 @@ int main()
     char report[2560]{};
     const int n = std::snprintf(
         report, sizeof(report),
-        "TUBE5 VP9 HIDDEN NATIVE TAG DIAGNOSTIC\nBUILD BOOT-DIAG-98-VP9-NATIVE-TAGS\nRESULT %d CLEANUP %d GPU %s\n"
+        "TUBE5 VP9 HIDDEN SURFACE ORDER PROBE\nBUILD BOOT-DIAG-99-VP9-HIDDEN-ORDER\nRESULT %d CLEANUP %d GPU %s\n"
         "SOURCE VP9 PROFILE 0 3840x2160 TARGET 1920x1080 FPS 60\n"
         "SHOWN %u CRC MATCHES %u ELAPSED BETWEEN FLIPS US %llu LATE %u\n"
         "PRESENT WORK P50/P95/MAX US %llu/%llu/%llu\n"

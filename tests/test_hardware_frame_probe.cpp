@@ -33,6 +33,7 @@ bool no_accepted_frames = false;
 bool vp9_hidden_fixture = false;
 bool missing_hidden_output = false;
 bool retain_missing_hidden = false;
+bool reorder_hidden_output = false;
 struct Pending
 {
     tube5::VideoFrame frame{};
@@ -93,6 +94,10 @@ void b_picture(tube5::VideoOutput *output, const tube5::VideoFrame *fallback = n
     for (const auto &packet : pending)
         if (packet.used)
             oldest = std::min(oldest, packet.tag);
+    if (reorder_hidden_output)
+        for (const auto &packet : pending)
+            if (packet.used && packet.input[0] == 0x84)
+                oldest = packet.tag;
     for (auto &packet : pending)
         if (packet.used && (vp9_hidden_fixture ? packet.tag == oldest
                             : packet.pts == static_cast<std::uint64_t>(wanted) * 1000000 /
@@ -467,9 +472,10 @@ int main(int argc, char **argv)
                         crc = (crc >> 1) ^ ((crc & 1u) ? UINT32_C(0xedb88320) : 0);
                 }
             payload[1] = index;
-            for (auto value : {vp9_hidden_fixture ? 206u : 101u, index, index, crc ^ UINT32_MAX})
+            const bool hidden_packet = vp9_hidden_fixture && index == 1;
+            for (auto value : {hidden_packet ? 206u : 101u, index, index, crc ^ UINT32_MAX})
                 write32(fd, value);
-            if (vp9_hidden_fixture)
+            if (hidden_packet)
             {
                 unsigned char hidden[101]{};
                 hidden[0] = 0x84;
@@ -477,7 +483,7 @@ int main(int argc, char **argv)
                 assert(write(fd, hidden, sizeof(hidden)) == sizeof(hidden));
             }
             assert(write(fd, payload, sizeof(payload)) == sizeof(payload));
-            if (vp9_hidden_fixture)
+            if (hidden_packet)
             {
                 const unsigned char suffix[]{0xc1, 101, 101, 0xc1};
                 assert(write(fd, suffix, sizeof(suffix)) == sizeof(suffix));
@@ -509,9 +515,9 @@ int main(int argc, char **argv)
             assert(tube5::hardware_clip_status().drain_calls == 3);
             if (vp9_hidden_fixture)
             {
-                assert(tube5::hardware_clip_status().hidden_frames == count);
-                assert(tube5::hardware_clip_status().superframes == count);
-                assert(tube5::hardware_clip_status().coded_frames == count * 2);
+                assert(tube5::hardware_clip_status().hidden_frames == 1);
+                assert(tube5::hardware_clip_status().superframes == 1);
+                assert(tube5::hardware_clip_status().coded_frames == count + 1);
             }
         }
 #ifdef TUBE5_HW_TIMING
@@ -524,12 +530,13 @@ int main(int argc, char **argv)
         assert(!tube5::hardware_clip_close());
         no_resources();
         if (vp9_hidden_fixture)
-            for (unsigned scenario : {0u, 1u, 2u})
+            for (unsigned scenario : {0u, 1u, 2u, 3u})
             {
                 reset_b_mock();
                 corrupt_pixels = scenario == 0;
-                missing_hidden_output = scenario != 0;
+                missing_hidden_output = scenario == 1 || scenario == 2;
                 retain_missing_hidden = scenario == 2;
+                reorder_hidden_output = scenario == 3;
                 assert(!tube5::hardware_clip_begin(asset, log));
                 unsigned delivered = 0;
                 int rc = 0;
@@ -539,12 +546,12 @@ int main(int argc, char **argv)
                     if (rc == 1)
                         break;
                 }
-                if (scenario == 1)
+                if (scenario == 1 || scenario == 3)
                 {
                     if (rc != 1 || delivered != count)
                         std::fprintf(stderr, "hidden omitted rc=%d delivered=%u\n", rc, delivered);
                     assert(rc == 1 && delivered == count);
-                    assert(tube5::hardware_clip_status().hidden_no_output == count);
+                    assert(tube5::hardware_clip_status().hidden_no_output == (scenario == 1 ? 1u : 0u));
                     assert(tube5::hardware_clip_status().crc_matches == count);
                 }
                 else

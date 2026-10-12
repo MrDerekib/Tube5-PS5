@@ -907,6 +907,22 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
                 oldest = i;
         if (oldest == clip.slots)
             return fail("PIPELINE FIFO EMPTY", -EINVAL);
+        if (clip.compound_vp9 && output.padding)
+        {
+            // Hidden surfaces can arrive before an older visible output. Without
+            // usable native metadata, only a unique hidden pending AU is unambiguous.
+            unsigned hidden = clip.slots;
+            for (unsigned i = 0; i < clip.slots; ++i)
+                if (clip.input_tag[i] && !clip.input_displayable[i])
+                {
+                    if (hidden != clip.slots)
+                        return fail("HIDDEN OUTPUT AMBIGUOUS", -EINVAL);
+                    hidden = i;
+                }
+            if (hidden == clip.slots)
+                return fail("HIDDEN OUTPUT WITHOUT INPUT", -EINVAL);
+            oldest = hidden;
+        }
         if (clip.compound_vp9 && !clip.input_displayable[oldest] && !output.padding)
         {
             unsigned visible = clip.slots;
