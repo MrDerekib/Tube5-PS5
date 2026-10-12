@@ -45,6 +45,7 @@ struct Pending
 std::array<Pending, 8> pending;
 tube5::VideoPictureInfo last_picture{};
 unsigned b_submitted = 0, b_next = 0;
+unsigned prime_after = 4;
 void reset_b_mock()
 {
     pending = {};
@@ -338,7 +339,7 @@ extern "C" int sceVideodec2Decode(void *handle, tube5::VideoInput *input, tube5:
                                    !retain_missing_hidden) ? 0 : 1;
         if (!frame->accepted)
             packet.frame.buffer = nullptr;
-        if (++b_submitted >= 4)
+        if (++b_submitted >= prime_after)
             b_picture(output, frame);
         return 0;
     }
@@ -376,6 +377,65 @@ extern "C" int sceVideodec2GetPictureInfo(const tube5::VideoOutput *output,
 }
 int main(int argc, char **argv)
 {
+    if (argc == 2 && std::strcmp(argv[1], "--vp9-seek-priming") == 0)
+    {
+        vp9_mode = vp9_4k = vp9_pipeline = b_mode = vp9_hidden_fixture = true;
+        no_accepted_frames = missing_hidden_output = true;
+        prime_after = 6;
+        assert(!tube5::hardware_stream_begin(tube5::HardwareFrameMode::vp9_2160, true));
+        assert(tube5::hardware_stream_status().input_slots == 6);
+        assert(tube5::hardware_stream_status().slots == 4);
+        bool input_allocation = false;
+        for (const auto &buffer : buffers)
+            input_allocation |= buffer.bytes == 6 * 1024 * 1024;
+        assert(input_allocation);
+        tube5::VideoOutput output{};
+        tube5::VideoPictureInfo info{};
+        unsigned char bytes[101]{};
+        for (unsigned cycle = 0; cycle < 2; ++cycle)
+        {
+            assert(!tube5::hardware_stream_reset());
+            reset_b_mock();
+            unsigned delivered = 0;
+            const auto collect = [&]()
+            {
+                const int rc = tube5::hardware_stream_receive(output, info);
+                if (!rc)
+                {
+                    assert(delivered < 7);
+                    assert(info.pts == static_cast<std::uint64_t>(delivered) * 1000000 / 60);
+                    assert(*static_cast<unsigned char *>(output.buffer) == 16 + delivered);
+                    ++delivered;
+                    tube5::hardware_stream_release();
+                }
+                else
+                    assert(rc == 1 || rc == 2);
+                return rc;
+            };
+            for (unsigned au = 0; au < 8; ++au)
+            {
+                const unsigned index = au ? au == 1 ? 1 : au - 1 : 0;
+                bytes[0] = au == 1 ? 0x84 : 0x86;
+                bytes[1] = index;
+                assert(!tube5::hardware_stream_send(bytes, sizeof(bytes),
+                           static_cast<std::uint64_t>(index) * 1000000 / 60, index, au != 1));
+                if (au < 5)
+                    assert(tube5::hardware_stream_receive(output, info) == 2);
+                else
+                    collect();
+            }
+            assert(tube5::hardware_stream_status().pending_peak == 6);
+            assert(!tube5::hardware_stream_send(nullptr, 0, 0, 0));
+            unsigned drains = 0;
+            while (collect() != 1)
+                assert(++drains <= 6);
+            assert(delivered == 7 && !tube5::hardware_stream_status().error);
+        }
+        assert(!tube5::hardware_stream_close());
+        no_resources();
+        std::puts("VP9 seek priming six retained AUs/four surfaces, hidden omission, reset, PTS and drain passed");
+        return 0;
+    }
     if (argc == 2 && std::strcmp(argv[1], "--vp9-async-hidden-stream") == 0)
     {
         vp9_mode = vp9_4k = vp9_pipeline = b_mode = vp9_hidden_fixture = true;

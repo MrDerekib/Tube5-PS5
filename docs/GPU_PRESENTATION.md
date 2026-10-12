@@ -828,6 +828,30 @@ seis underruns y error cero. Tiempo medio de llamada decode 723 µs y copia
 Logs privados `diag101-*`. Pendiente misma build: pausa, seek/barra y reentrada;
 todavía no YouTube 4K60 ni show-existing en consola.
 
+DIAG101 seek: propietario informa crash al +5. Logs accesibles muestran aborto
+controlado del decoder por `POOL FULL` (-55), cleanup cero, no ENOMEM, seek 1/1.
+78 uploads, playback 1,474 s, target 6,306 s. Última llamada sin output ni frame
+aceptado, offered cero; quedaron cuatro inputs pendientes sin salida. Solo un
+frame de preroll omitido. No afirmar crash OS a partir de esos logs. La priming
+tras seek puede necesitar más AUs comprimidos que superficies cuando hay hidden.
+Logs privados `diag101-seek-*`.
+
+DIAG102 (`BOOT-DIAG-102-VP9-AU-POOL`) separa tamaños del pool: stream asíncrono
+VP9 mantiene cuatro superficies pero conserva seis slots AU/metadata. Añade
+2 MiB comprimidos, no dos superficies 4K; el límite total sigue 512 MiB y los
+queries/bounds preceden cualquier asignación. FIFO/flags correlacionan seis
+inputs contra cuatro superficies. Reset preserva ambos límites; ninguna AU
+pendiente se sobrescribe. Errores distinguen INPUT/FRAME POOL FULL y el log
+expone INPUT SLOTS. Las otras rutas mantienen sus tamaños anteriores.
+
+Host focal ASan/UBSan `--vp9-seek-priming`: cinco llamadas sin output, primera
+salida al sexto AU, input retenido sin superficie aceptada, hidden omitido,
+PTS/drain/reset y dos ciclos. Verifica asignación real de seis MiB para inputs,
+cuatro superficies y pico pendiente seis. Stream hidden materializado/omitido/
+adelantado también pasa con límites separados. Build/firma verificadas;
+solo executable/etiqueta nuevos, mismo clip de 12 segundos. Staging pendiente
+de cierre confirmado; siguiente prueba +5 y reentrada en consola.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

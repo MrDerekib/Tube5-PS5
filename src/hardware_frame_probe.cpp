@@ -94,6 +94,7 @@ struct Stream
     bool vp9 = false, pipeline = false;
     unsigned width = 1920, height = 1080;
     unsigned slots = 1;
+    unsigned input_slots = 1;
     unsigned sync_input = 0;
     unsigned drain_attempts = 0;
     bool displayable = true;
@@ -262,8 +263,11 @@ int cleanup()
 }
 template <class Recorder>
 int prepare_decoder(Recorder record, unsigned depth = 1, unsigned slots = 1,
-                    const tube5::VideoDecoderConfig *requested = nullptr)
+                    const tube5::VideoDecoderConfig *requested = nullptr,
+                    unsigned input_slots = 0)
 {
+    if (!input_slots)
+        input_slots = slots;
     auto &r = resources;
     tube5::VideoComputeMemory compute{};
     compute.size = sizeof(compute);
@@ -336,9 +340,9 @@ int prepare_decoder(Recorder record, unsigned depth = 1, unsigned slots = 1,
         !memory.alignment || memory.alignment > page ||
         (memory.alignment & (memory.alignment - 1)) ||
         r.cpu_bytes + gpu_bytes + shared_bytes + frame_bytes * slots + r.compute.bytes +
-                mib * slots >
+                mib * input_slots >
             (vp9_4k ? 512 : 256) * mib ||
-        !slots || slots > 6)
+        !slots || slots > 6 || input_slots > 6)
         return -EINVAL;
     code = sceKernelMapNamedFlexibleMemory(&r.cpu, r.cpu_bytes, 3, 0, "Tube5HwCpu");
     record("CPU MEMORY", code);
@@ -367,7 +371,7 @@ int prepare_decoder(Recorder record, unsigned depth = 1, unsigned slots = 1,
     if (code || !r.decoder)
         return code ? code : -EINVAL;
     clip.frame_stride = frame_bytes;
-    code = allocate(r.input, mib * slots, 0x32);
+    code = allocate(r.input, mib * input_slots, 0x32);
     if (!code)
         code = allocate(r.frame, frame_bytes * slots, 0x33);
     record("FRAME MEMORY", code);
@@ -1234,15 +1238,15 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
         if (stream.pipeline)
         {
             Vp9PendingOutput pending[6]{};
-            for (unsigned i = 0; i < stream.slots; ++i)
+            for (unsigned i = 0; i < stream.input_slots; ++i)
                 pending[i] = {stream.input[i].tag, stream.input[i].displayable,
                               stream.input[i].retained};
-            const auto choice = select_vp9_output({pending, stream.slots}, output.padding);
+            const auto choice = select_vp9_output({pending, stream.input_slots}, output.padding);
             stream_status.policy_error = static_cast<unsigned>(choice.error);
             if (choice.error != Vp9OutputError::none)
                 return stream_failure("VP9 OUTPUT FLAG POLICY", -EINVAL);
             oldest = choice.input;
-            for (unsigned i = 0; i < stream.slots; ++i)
+            for (unsigned i = 0; i < stream.input_slots; ++i)
                 if (choice.retire_mask & (1u << i))
                 {
                     stream.input[i] = {};
@@ -1264,9 +1268,9 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
         info.before != UINT64_C(0xc0dec0dec0dec0de) || info.after != UINT64_C(0xc0dec0dec0dec0de))
         return stream_failure("PICTURE INFO", code ? code : -EINVAL);
     unsigned input = 0;
-    while (input < stream.slots && stream.input[input].tag != info.picture.attached)
+    while (input < stream.input_slots && stream.input[input].tag != info.picture.attached)
         ++input;
-    if (input == stream.slots || !info.picture.attached || stream.input[input].pts != info.picture.pts ||
+    if (input == stream.input_slots || !info.picture.attached || stream.input[input].pts != info.picture.pts ||
         stream.input[input].dts != info.picture.dts)
         return stream_failure("PICTURE TAG", -EINVAL);
     const bool displayable = stream.input[input].displayable;
@@ -1320,11 +1324,13 @@ int hardware_stream_reset() noexcept
     const auto vp9 = stream.vp9;
     const auto pipeline = stream.pipeline;
     const auto slots = stream.slots;
+    const auto input_slots = stream.input_slots;
     const auto width = stream.width, height = stream.height;
     stream = {};
     stream.vp9 = vp9;
     stream.pipeline = pipeline;
     stream.slots = slots;
+    stream.input_slots = input_slots;
     stream.width = width;
     stream.height = height;
     stream.next_tag = next_tag;
@@ -1350,12 +1356,14 @@ int hardware_stream_begin(HardwareFrameMode mode, bool vp9_pipeline) noexcept
     if (vp9_pipeline && mode != HardwareFrameMode::vp9_2160)
         return -EINVAL;
     stream.slots = stream.pipeline ? 4 : stream.vp9 ? 1 : 6;
+    stream.input_slots = stream.pipeline ? 6 : stream.slots;
     stream.width = mode == HardwareFrameMode::vp9_2160 ? 3840 : stream.vp9 ? 2560 : 1920;
     stream.height = mode == HardwareFrameMode::vp9_2160 ? 2160 : stream.vp9 ? 1440 : 1080;
     stream_status = {};
     stream_status.active = true;
     stream_status.depth = stream.pipeline || !stream.vp9 ? 3 : 1;
     stream_status.slots = stream.slots;
+    stream_status.input_slots = stream.input_slots;
     const auto record = [](const char *stage, int code)
     {
         stream_status.stage = stage;
@@ -1368,7 +1376,7 @@ int hardware_stream_begin(HardwareFrameMode mode, bool vp9_pipeline) noexcept
     requested.width = stream.width;
     requested.height = stream.height;
     int code = prepare_decoder(record, stream_status.depth, stream.slots,
-                               stream.vp9 ? &requested : nullptr);
+                               stream.vp9 ? &requested : nullptr, stream.input_slots);
     if (!code)
         code = hardware_stream_reset();
     if (code)
@@ -1401,12 +1409,13 @@ int hardware_stream_send(const std::uint8_t *data, std::size_t bytes, std::uint6
     if (!bytes || bytes >= mib)
         return stream_failure("AU SIZE", -EINVAL);
     unsigned input = 0, offered = 0;
-    while (input < stream.slots && stream.input[input].tag)
+    while (input < stream.input_slots && stream.input[input].tag)
         ++input;
     while (offered < stream.slots && stream.frame_used[offered])
         ++offered;
-    if (input == stream.slots || offered == stream.slots)
-        return stream_failure("POOL FULL", -ENOBUFS);
+    if (input == stream.input_slots || offered == stream.slots)
+        return stream_failure(input == stream.input_slots ? "INPUT POOL FULL" : "FRAME POOL FULL",
+                              -ENOBUFS);
     auto *packet = static_cast<unsigned char *>(resources.input.data) + input * mib;
     std::memcpy(packet, data, bytes);
     stream_status.last_au_bytes = bytes;
