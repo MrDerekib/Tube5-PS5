@@ -145,7 +145,7 @@ bool YouTubeProbe::begin(ProbeMode mode, std::string_view input, unsigned height
     result_ = {};
     pending_ = {};
     result_.mode = pending_.mode = mode;
-    if (!youtube_input_id(input, pending_.video_id) || height > 1440)
+    if (!youtube_input_id(input, pending_.video_id) || height > 2160)
     {
         stage_ = ProbeStage::failed;
         std::snprintf(result_.error.data(), result_.error.size(), "ID/URL O CALIDAD NO VALIDA");

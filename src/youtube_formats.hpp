@@ -32,7 +32,7 @@ struct YouTubeFormats
 bool youtube_media_host(std::string_view url, std::array<char, 256> &host) noexcept;
 // Auto chooses <=360p. Explicit height may select combined AVC/AAC <=1080p;
 // Explicit height can select separate H.264 <=1080p/30fps + default AAC.
-// 1440p is VP9 Profile 0 <=30fps at 2560x1440 + default AAC only.
+// 1440p/2160p are VP9 Profile 0 SDR <=30fps at 2560x1440/3840x2160 + AAC only.
 bool parse_youtube_formats(std::string_view json, YouTubeFormats &out,
                            unsigned requested_height = 0) noexcept;
 } // namespace tube5

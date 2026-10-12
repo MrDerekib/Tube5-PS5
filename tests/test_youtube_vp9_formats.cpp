@@ -21,6 +21,26 @@ int main()
            formats.selected_vp9 && formats.selected_webm && formats.selected_fps == 30);
     assert(tube5::parse_youtube_formats(fixture("vp09.00.50.08", "mp4"), formats, 1440));
     assert(formats.source[0] && formats.selected_vp9 && !formats.selected_webm);
+    for (const auto *codec : {"vp9", "vp09.00.51.08"})
+    {
+        assert(tube5::parse_youtube_formats(fixture(codec, "webm", 30, 2160, 3840), formats, 2160));
+        assert(formats.source[0] && formats.audio_source[0] && formats.selected_height == 2160 &&
+               formats.selected_vp9 && formats.selected_webm);
+    }
+    for (const auto *codec :
+         {"vp9.2", "vp09.02.51.10", "vp09.00.51.10", "vp09.00.52.08",
+          "vp09.00.51.08.01.09.16.09.00", "vp09.00.51.08.01.09.18.09.00", "av01.0"})
+    {
+        assert(tube5::parse_youtube_formats(fixture(codec, "webm", 30, 2160, 3840), formats, 2160));
+        assert(!formats.source[0]);
+    }
+    for (const auto &json :
+         {fixture("vp9", "webm", 60, 2160, 3840), fixture("vp9", "webm", 30, 2160, 2560),
+          fixture("vp9", "webm", 30, 4320, 7680)})
+    {
+        assert(tube5::parse_youtube_formats(json, formats, 2160));
+        assert(!formats.source[0]);
+    }
     for (const auto *codec : {"vp9.2", "vp09.02.50.10", "vp09.00.50.10", "vp09.00.51.08",
                               "vp09.00.50.08evil", "av01.0"})
     {

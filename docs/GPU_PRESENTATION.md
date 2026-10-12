@@ -400,6 +400,32 @@ nativo continúa pendiente, junto a YouTube 4K/AAC separado, sesiones largas,
 salida HDMI 4K y 60 fps. Los logs privados se conservan en
 `.local/console-logs/diag86-*`. DIAG84 funcional permanece respaldada.
 
+## YouTube directo VP9 4K/30 con AAC separado, DIAG87
+
+El selector habilita 2160p únicamente a 3840×2160, VP9 Profile 0 de 8 bits,
+hasta 30 fps y nivel 5.1 cuando el codec lo declara. Los descriptores PQ/HLG
+extendidos, Profile 2, 10 bits, AV1, 60 fps y dimensiones incompatibles quedan
+excluidos; Auto continúa en 360p. El test enfocado del selector comprueba
+estas restricciones y la pareja con AAC. No cambia el transporte validado
+MP4/WebM ni la ruta de decode probada en DIAG86.
+
+El propietario confirmó funcionamiento general en YouTube 4K y mayor latencia
+ocasional de seek/timeline que en calidades menores. La sesión registrada
+cerró con 7.945 entradas, 7.361 imágenes recibidas, 6.190 entregadas, 1.171
+descartadas como preroll, 584 ocultos y 21 resets. Errores de adaptador,
+decoder y cleanup: cero. El último informe post-seek disponible muestra
+resets vídeo/audio 19/19, `HOLD 0`, 192.512 bytes PCM adicionales y error cero;
+es anterior a los dos últimos resets del informe de vídeo. Los 872 underruns
+en 5.638 callbacks incluyen esperas de seek y no miden cortes audibles.
+Subida GPU máxima del proceso: 1.456 µs; la composición máxima incluye inicio.
+
+No hubo EOF en la sesión registrada; no se afirma reproducción hasta el final.
+Los logs no separan la latencia por seek en red, decode de referencias/preroll,
+colas y presentación. La mayor carga 4K es una explicación posible, no un
+diagnóstico confirmado del retraso. Logs privados rescatados en
+`.local/console-logs/diag87-*`. Pendientes sesiones largas, medición del seek,
+show-existing-frame, salida HDMI 4K, 60 fps y HDR.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

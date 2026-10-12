@@ -331,8 +331,8 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             std::snprintf(
                 label, sizeof(label), "%uP - %s", quality.height,
                 quality.playable
-                    ? (quality.height == 1440 ? "LISTA: VP9 + AAC" : "LISTA: MP4 H.264 + AAC")
-                : quality.candidate ? (quality.height == 1440 ? "CONSULTAR: VP9 + AUDIO SEPARADO"
+                    ? (quality.height >= 1440 ? "LISTA: VP9 + AAC" : "LISTA: MP4 H.264 + AAC")
+                : quality.candidate ? (quality.height >= 1440 ? "CONSULTAR: VP9 + AUDIO SEPARADO"
                                                               : "CONSULTAR: H.264 + AUDIO SEPARADO")
                 : quality.separate  ? "NO COMPATIBLE: CODEC/FPS/URL"
                                     : "NO COMPATIBLE CON LA RUTA ACTUAL");
