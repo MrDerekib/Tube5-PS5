@@ -26,7 +26,9 @@ extracción, SponsorBlock y lógica de seek permanecen en el player existente.
    No hay shaders, comandos, submissions ni modificación de VideoOut.
    DIAG64 no pudo cargar los módulos por dlopen en FW13.20. DIAG65 usa la
    ruta de imports enlazados del título para init/defaults y un query driver,
-   sin distribuir módulos del sistema; prueba en consola pendiente.
+   sin distribuir módulos del sistema. DIAG65 validada en FW13.20: init 0,
+   defaults presentes, query driver 32 dwords, cero submissions. Todavía no
+   demuestra ninguna imagen renderizada ni ahorro de CPU.
 2. Presentar un frame NV12 propio por GPU y comprobar color, stride/crop 1088→1080,
    target tiled, finalización y limpieza. Una imagen correcta no valida vídeo.
 3. Clip corto 1080p: sincronizar consumo GPU con el decoder y el reloj, luego

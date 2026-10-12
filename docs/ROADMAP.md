@@ -119,7 +119,9 @@ antes de subir resolución. DIAG64 añade un probe AGC de acceso/inicialización
 sin submissions y mantiene el reproductor sin cambios. En consola falla la
 carga dinámica de ambos módulos, sin llegar a init: no prueba incompatibilidad.
 DIAG65 prepara imports enlazados de AGC/driver, init y query mínimo sin draw;
-build correcta, consola pendiente.
+build correcta. DIAG65 validada en FW13.20: init 0, defaults presentes y
+query driver 32 dwords, cero submissions. Siguiente: un frame NV12 propio
+presentado por GPU a 1080p; rendering y eficiencia aún no validados.
 Plan acotado y ownership: [presentación GPU](GPU_PRESENTATION.md).
 Después: VP9 SDR 1440p y 2160p. Conservar
 software como alternativa. No asumir AV1 por hardware ni HDR antes de pruebas.

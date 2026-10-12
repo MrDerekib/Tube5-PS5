@@ -14,7 +14,10 @@ dwords sin generar ese paquete ni enviar comandos GPU. Cero submissions;
 player sin cambios. Mismo log `tube5-gpu.log`; basta abrir al menú.
 Pruebas enfocadas de host bajo ASan/UBSan: éxito, init fallido, defaults
 nulos y tamaños de driver inválidos. Build nativa e imports Agc/AgcDriver
-correctos. Consola pendiente.
+correctos. Validación FW13.20: el propietario llega al menú y el log DIAG65
+indica ACCESS READY, init 0, defaults presentes, driver wait packet 32 dwords,
+máscaras de imports 3/2 y cero submissions. Confirma acceso/inicialización por
+imports nativos; no confirma shaders, rendering, coherencia ni rendimiento.
 
 ## BOOT-DIAG-64-GPUACCESS: acceso AGC sin rendering
 
