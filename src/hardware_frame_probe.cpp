@@ -7,6 +7,7 @@ tube5::HardwareStreamStatus stream_status;
 } // namespace
 #ifdef TUBE5_HW_FRAME
 #include "failure_log.hpp"
+#include "vp9_packet.hpp"
 #include <algorithm>
 #include <cerrno>
 #include <cstdio>
@@ -58,7 +59,7 @@ struct Resources
 Resources resources; // Deliberately no destructor: failed hardware teardown is quarantined.
 struct Clip
 {
-    bool vp9 = false;
+    bool vp9 = false, compound_vp9 = false;
     unsigned width = 1920, height = 1080;
     int descriptor = -1;
     std::uint32_t offsets[300]{}, sizes[300]{};
@@ -104,6 +105,8 @@ void clip_snapshot()
         "LUMA FIRST %u LAST %u\nCLEANUP %08X QUARANTINED %u\n"
         "NO OUTPUT %u DRAIN %u METADATA %u CRC MATCH %u INPUT REORDERS %u ORDER ERR %u\n"
         "PTS %llu DTS %llu ATTACHED %llu CRC LAST %08X EXPECTED %08X\n"
+        "VP9 CODED %u HIDDEN %u SUPERFRAMES %u EXISTING %u\n"
+        "VP9 HIDDEN NO OUTPUT %u LAST VALID %u ACCEPTED %u PICTURES %u\n"
         "FLEX BEFORE %llu RC %08X AFTER %llu RC %08X\n",
         tube5::failure_log_build_label(),
         clip.vp9    ? "1440P VP9 PROFILE 0 VISIBLE FRAMES"
@@ -120,6 +123,8 @@ void clip_snapshot()
         s.drain_calls, s.metadata, s.crc_matches, s.input_reorders, s.order_errors,
         static_cast<unsigned long long>(s.last_pts), static_cast<unsigned long long>(s.last_dts),
         static_cast<unsigned long long>(s.last_attached), clip.last_crc, clip.expected_crc,
+        s.coded_frames, s.hidden_frames, s.superframes, s.existing_frames, s.hidden_no_output,
+        s.last_valid, s.last_accepted, s.last_output_pictures,
         static_cast<unsigned long long>(clip.flexible_before),
         static_cast<unsigned>(clip.before_rc), static_cast<unsigned long long>(clip.flexible_after),
         static_cast<unsigned>(clip.after_rc));
@@ -591,10 +596,12 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
     clip_status.frames = little32(header + 20);
     const auto version = little32(header + 4);
     clip_status.bframes = version == 2;
-    clip.vp9 = version == 3;
+    clip.vp9 = version == 3 || version == 4;
+    clip.compound_vp9 = version == 4;
     clip.width = clip.vp9 ? 2560 : 1920;
     clip.height = clip.vp9 ? 1440 : 1080;
-    if (std::memcmp(header, "T5HC", 4) || (version != 1 && version != 2 && version != 3) ||
+    if (std::memcmp(header, "T5HC", 4) ||
+        (version != 1 && version != 2 && version != 3 && version != 4) ||
         little32(header + 8) != clip.width || little32(header + 12) != clip.height ||
         clip_status.fps != 30 || !clip_status.frames || clip_status.frames > 300 ||
         little32(header + 24) != (clip.vp9              ? 2u
@@ -852,7 +859,62 @@ int hardware_clip_step(HardwareFrameConsumer consumer, void *context) noexcept
     if (index % 30 == 0)
         clip_snapshot();
     const auto decode_start = sceKernelGetProcessTime();
-    int code = sceVideodec2Decode(r.decoder, &input, &frame, &output);
+    int code = 0;
+    if (clip.vp9)
+    {
+        Vp9Packet packet{};
+        if (!split_vp9_packet(static_cast<const std::uint8_t *>(r.input.data), clip.sizes[index],
+                              packet))
+            return fail("VP9 PACKET INDEX", -EINVAL);
+        unsigned visible = 0;
+        for (unsigned i = 0; i < packet.count; ++i)
+            visible += packet.parts[i].displayable;
+        if (visible != 1 || !packet.parts[packet.count - 1].displayable ||
+            (!clip.compound_vp9 && packet.count != 1))
+            return fail("VP9 FIXTURE PACKET LAYOUT", -EINVAL);
+        s.superframes += packet.count > 1;
+        for (unsigned i = 0; i < packet.count; ++i)
+        {
+            const auto &part = packet.parts[i];
+            input.au = const_cast<std::uint8_t *>(part.data);
+            input.bytes = part.bytes;
+            frame = {sizeof(VideoFrame), r.frame.data, r.frame.bytes, 0, 0};
+            output = {};
+            output.size = sizeof(output);
+            code = sceVideodec2Decode(r.decoder, &input, &frame, &output);
+            ++s.coded_frames;
+            s.last_valid = output.valid;
+            s.last_accepted = frame.accepted;
+            s.last_output_pictures = output.pictures;
+            s.existing_frames += part.existing;
+            if (code || output.error)
+                return fail(part.displayable ? "VP9 VISIBLE DECODE" : "VP9 HIDDEN DECODE",
+                            code ? code : -EIO);
+            if (!part.displayable && !output.valid)
+            {
+                // A hidden reference need not produce a presentation image. Never
+                // reuse a surface retained by the driver in this single-slot test.
+                if (frame.accepted)
+                    return fail("VP9 HIDDEN SURFACE RETAINED", -EINVAL);
+                ++s.hidden_frames;
+                ++s.hidden_no_output;
+                continue;
+            }
+            const auto required =
+                static_cast<std::uint64_t>(output.pitch_bytes) * output.height * 3 / 2;
+            if (!output.valid || output.buffer != r.frame.data || output.pictures != 1 ||
+                output.codec != 0x00245bfdu || output.format != 0 || output.width != clip.width ||
+                output.height != clip.height || output.pitch_bytes < clip.width ||
+                output.pitch_bytes > 4096 || (output.pitch_bytes & 1u) ||
+                output.bytes > r.frame.bytes || required > output.bytes)
+                return fail("VP9 SYNC OUTPUT LAYOUT", -EINVAL);
+            if (!part.displayable)
+                ++s.hidden_frames; // Decode references, but never upload or advance the
+                                   // presentation clock.
+        }
+    }
+    else
+        code = sceVideodec2Decode(r.decoder, &input, &frame, &output);
     ++s.submitted;
     if (code || output.error)
         return fail("DECODE", code ? code : -EIO);

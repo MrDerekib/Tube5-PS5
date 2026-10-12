@@ -68,6 +68,8 @@ struct HardwareClipStatus
     std::uint64_t work_max_us = 0;
     unsigned no_output = 0, drain_calls = 0, metadata = 0, crc_matches = 0;
     unsigned input_reorders = 0, order_errors = 0;
+    unsigned coded_frames = 0, hidden_frames = 0, superframes = 0, existing_frames = 0;
+    unsigned hidden_no_output = 0, last_valid = 0, last_accepted = 0, last_output_pictures = 0;
     std::uint64_t last_pts = 0, last_dts = 0, last_attached = 0;
     bool bframes = false;
 };

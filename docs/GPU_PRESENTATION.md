@@ -236,6 +236,40 @@ ausencia de fugas. Los informes específicos son `tube5-vp9-clip.log` y
 pendientes VP9 con cuadros ocultos/superframes, integración YouTube/audio,
 seek y 4K. DIAG76 queda respaldada junto a la baseline funcional DIAG73.
 
+## VP9 1440p: cuadros ocultos y superframes, DIAG79
+
+El generador `tools/prepare-vp9-clip.py --altref` crea solo la nueva fixture
+T5HC versión 4: 90 imágenes visibles, 6 cuadros ocultos y 6 superframes.
+Para activar alt-ref en libvpx se usa codificación de dos pasadas, con sus
+estadísticas en un directorio temporal. No contiene show-existing-frame.
+`src/vp9_packet.hpp` valida los índices, tamaños y Profile 0 antes de exponer
+las partes; su test enfocado comprueba casos malformados y los 90 paquetes
+reales de la fixture. El decode software proporciona un CRC de luminancia
+por imagen visible. El hardware recibe las partes del superframe por separado,
+en orden; los cuadros ocultos no se suben a GPU ni avanzan el reloj visible.
+
+DIAG78 se detuvo tras la primera imagen al exigir salida válida para el
+primer cuadro oculto. DIAG79 acepta una salida ausente de un cuadro oculto
+solo cuando el driver no retiene la superficie ofrecida (`accepted == 0`),
+sin flush intermedio ni reutilización de una superficie retenida.
+El cierre conserva ahora la etapa del error de decode en lugar de sustituirla
+por `DISPLAY`.
+
+En FW 13.20, DIAG79 procesó 96 cuadros codificados, mostró 90 imágenes y
+confirmó los 90 CRC; 6 ocultos y 6 superframes, `RESULT 0`, `CLEANUP 0`,
+sin cuarentena. Un oculto no produjo salida y no retuvo la superficie;
+los otros cinco produjeron imágenes válidas descartadas. Entre 89 intervalos
+transcurrieron 2.969.425 µs, aproximadamente 30 fps de media. Intervalos
+p50/p95/máximo: 33.263/45.157/53.647 µs; no demuestra cadencia perfectamente
+uniforme. Trabajo de presentación p50/p95/máximo, sin primer frame:
+1.914/1.969/2.058 µs. La memoria flexible final volvió a quedar 1 MiB por
+debajo de la inicial con el contexto GPU abierto.
+
+Informes: `tube5-vp9-altref.log` y `tube5-vp9-altref-decoder.log` en
+`/download0/`. La salida continúa escalada a 1080p; siguen pendientes
+show-existing-frame en consola, YouTube/audio/seek y estabilidad prolongada.
+Estos resultados no habilitan aún todos los formatos VP9 en el player real.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
