@@ -26,7 +26,16 @@ esperas de VideoOut. El tiempo total permite observar si se alcanza la cadencia.
 Tests sanitizados: 150 AUs con salida diferida, un único reset, EOF, cancelación,
 reapertura, error de consumer y puntero de salida inválido. Preparación compartida
 con el probe de un frame conserva las comprobaciones y cuarentena de teardown.
-Prueba real PS5 pendiente; después faltan B frames, audio, seeks y streams.
+PS5 FW13.20: propietario confirma el clip visible y una segunda reproducción
+tras cerrar/abrir Tube5. El log recuperado de la segunda sesión confirma
+150 submitted/decoded/composed y 149 cambios de luma; 0 errores y SLOW 0.
+Tiempo total 5090788 us; máximos decode 15461, conversión 9732, copia 5983,
+trabajo combinado 30876 us (presupuesto 33333 us/frame). Cleanup retorna cero,
+sin cuarentena; flexible cae de 1008730112 a 1007681536 bytes, el mismo coste
+inicial de 1 MiB observado en DIAG55/56. No acredita sesiones largas ni B frames.
+Snapshot en .local/boot-diag-58/ps5-hardware-clip.log. Después faltan B frames,
+audio, seeks y streams. Los logs download0 solo son accesibles por FTP mientras
+el sandbox está montado: al cerrar la app queda el contenedor download0.dat.
 ELF exacto y artefactos en .local/boot-diag-58; SHA-256 eboot.bin:
 `677669487f539e287286340d43e3b4278d865d1cd4c704fa6eb89e7ce63d80a6`.
 
