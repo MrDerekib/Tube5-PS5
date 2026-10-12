@@ -270,6 +270,52 @@ Informes: `tube5-vp9-altref.log` y `tube5-vp9-altref-decoder.log` en
 show-existing-frame en consola, YouTube/audio/seek y estabilidad prolongada.
 Estos resultados no habilitan aún todos los formatos VP9 en el player real.
 
+## VP9 1440p: reproductor integrado y seek, DIAG83
+
+`tools/prepare-vp9-player.py` remuxa los 90 paquetes de la fixture DIAG79
+cuatro veces, con timestamps continuos y AAC: control local de 12 segundos,
+sin recodificar vídeo. Se comparan los hashes de los 360 paquetes comprimidos
+contra cuatro repeticiones de la fuente. En la build de control, `LOCAL`
+abre `hw-vp9-player.mp4`; HTTP sigue siendo el valor predeterminado del menú.
+El selector YouTube todavía no habilita 1440p.
+
+El adaptador nativo conserva la ruta H.264 1080p y añade VP9 Profile 0
+2560×1440. `vp9_superframe_split` entrega las partes; se decodifican con
+profundidad 1 y los ocultos se descartan antes de la cola del reproductor.
+Los timestamps VP9 se asocian a la entrada síncrona, sin consultar metadatos
+H.264 ni permitir salida demorada/superficies retenidas sin imagen. Los
+frames NV12 propios conservan el pitch y sus dimensiones originales hasta
+la subida GPU; la presentación sigue siendo 1080p.
+
+DIAG80/81 entregaron 15 frames antes de rechazar el segundo oculto por el
+byte 11 de `VideoOutput`, denominado `padding` en nuestro layout, que el
+driver establece a 1 en esa salida válida. DIAG82 deja de exigir cero para
+ese byte en VP9, sin relajar formato, dimensiones, capacidad ni propiedad
+del buffer. El test enfocado cubre ocultos con y sin salida, ese byte,
+timestamps, reset, EOF, cierre y rechazo de una superficie inválida.
+
+El propietario confirmó reproducción con DIAG82, pero el seek mostraba
+vídeo previo durante 1–2 segundos. DIAG83 conserva la última imagen mientras
+se completa el reset y descarta VP9 anterior al destino antes de entregarlo
+a Kitchensink. `native_seek_gate.hpp` separa esta puerta del filtro existente
+`seek_preroll.hpp`; su test cubre generaciones antiguas, saltos hacia delante
+y atrás, sustitución del destino y cancelación. El audio combinado se silencia
+durante la espera, sin impedir el drenaje de PCM/actualización del reloj.
+
+DIAG83 en consola: el usuario confirmó mejor seek. La última sesión registró
+1.486 entradas, 1.387 imágenes recibidas, 1.147 entregadas y 240 descartadas
+como preroll; 17 resets, 99 ocultos y EOF. Errores del adaptador/decoder y
+cleanup: cero. El informe de audio posterior al último seek muestra target
+3.468 ms, `HOLD 0`, resets vídeo/audio 15/15 y 122.880 bytes PCM adicionales,
+con `ERROR 0`. Sus 316 underruns en 1.609 callbacks incluyen silencios de
+seek y no demuestran ausencia de cortes audibles. El máximo de subida GPU
+del proceso fue 708 µs; el máximo de composición incluye el arranque.
+La comparación de color integrada figura como `ERRORS -1` (no medida para
+esta sesión/resolución), no como un nuevo CRC de los frames integrados.
+
+Pendiente YouTube VP9 1440p con AAC separado y sesiones largas. Esta prueba
+no valida aún show-existing-frame, 4K, 60 fps ni salida HDMI 1440p.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

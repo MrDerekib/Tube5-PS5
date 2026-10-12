@@ -25,6 +25,7 @@ int operation = 0, fail_operation = 0, delete_error = 0;
 bool clip_motion = false;
 unsigned decode_calls = 0, reset_calls = 0, last_luma = 16;
 bool b_mode = false, corrupt_metadata = false, wrong_order = false, corrupt_pixels = false;
+bool vp9_mode = false, retain_hidden = false;
 struct Pending
 {
     tube5::VideoFrame frame{};
@@ -62,10 +63,10 @@ void picture(tube5::VideoFrame *frame, tube5::VideoOutput *output)
     frame->accepted = 1;
     output->valid = 1;
     output->pictures = 1;
-    output->codec = 1;
-    output->width = 1920;
-    output->height = 1088;
-    output->pitch = output->pitch_bytes = 2048;
+    output->codec = vp9_mode ? 0x00245bfd : 1;
+    output->width = vp9_mode ? 2560 : 1920;
+    output->height = vp9_mode ? 1440 : 1088;
+    output->pitch = output->pitch_bytes = vp9_mode ? 2560 : 2048;
     output->buffer = invalid ? nullptr : frame->buffer;
     output->bytes = frame->bytes;
 }
@@ -224,12 +225,14 @@ extern "C" int sceVideodec2QueryDecoderMemoryInfo(const tube5::VideoDecoderConfi
                                                   tube5::VideoDecoderMemory *memory)
 {
     assert(queue && config->queue == reinterpret_cast<std::uintptr_t>(&queue) &&
-           config->width == 1920 && config->height == 1088 && config->depth == (b_mode ? 3u : 1u) &&
-           config->dpb == 4 && config->codec == 1 && config->profile == 100 && memory->size == 72);
+           config->width == (vp9_mode ? 2560 : 1920) &&
+           config->height == (vp9_mode ? 1440 : 1088) && config->depth == (b_mode ? 3u : 1u) &&
+           config->dpb == 4 && config->codec == (vp9_mode ? 0x00245bfdu : 1u) &&
+           config->profile == (vp9_mode ? 0u : 100u) && memory->size == 72);
     if (const int code = next())
         return code;
     memory->cpu_bytes = memory->gpu_bytes = memory->shared_bytes = 0x4000;
-    memory->frame_bytes = 3346432;
+    memory->frame_bytes = vp9_mode ? 5668864 : 3346432;
     memory->alignment = 256;
     return 0;
 }
@@ -260,6 +263,19 @@ extern "C" int sceVideodec2Reset(void *handle)
 extern "C" int sceVideodec2Decode(void *handle, tube5::VideoInput *input, tube5::VideoFrame *frame,
                                   tube5::VideoOutput *output)
 {
+    if (vp9_mode)
+    {
+        assert(handle == &decoder && decoder && input->attached && input->bytes == 101);
+        if (*static_cast<unsigned char *>(input->au) == 0x84)
+            frame->accepted = retain_hidden ? 1 : 0;
+        else
+        {
+            picture(frame, output);
+            if (*static_cast<unsigned char *>(input->au) == 0x85)
+                output->padding = 1; // Observed on a valid VP9 hidden surface.
+        }
+        return 0;
+    }
     if (b_mode)
     {
         assert(handle == &decoder && decoder && input->attached == b_submitted + 1 &&
@@ -306,8 +322,52 @@ extern "C" int sceVideodec2GetPictureInfo(const tube5::VideoOutput *output,
         info->attached = 0;
     return 0;
 }
-int main()
+int main(int argc, char **argv)
 {
+    if (argc == 2 && std::strcmp(argv[1], "--vp9") == 0)
+    {
+        vp9_mode = true;
+        assert(!tube5::hardware_stream_begin(tube5::HardwareFrameMode::vp9_1440));
+        unsigned char bytes[101]{};
+        tube5::VideoOutput output{};
+        tube5::VideoPictureInfo info{};
+        bytes[0] = 0x84;
+        assert(!tube5::hardware_stream_send(bytes, sizeof(bytes), 100, 80, false));
+        assert(tube5::hardware_stream_receive(output, info) == 2);
+        bytes[0] = 0x85;
+        assert(!tube5::hardware_stream_send(bytes, sizeof(bytes), 100, 80, false));
+        assert(tube5::hardware_stream_receive(output, info) == 2);
+        bytes[0] = 0x86;
+        assert(!tube5::hardware_stream_send(bytes, sizeof(bytes), 100, 80));
+        assert(!tube5::hardware_stream_receive(output, info));
+        assert(output.width == 2560 && output.height == 1440 && info.pts == 100 && info.dts == 80);
+        assert(tube5::hardware_stream_send(bytes, sizeof(bytes), 200, 180) == 2);
+        tube5::hardware_stream_release();
+        assert(tube5::hardware_stream_status().hidden == 2);
+        assert(!tube5::hardware_stream_reset());
+        assert(!tube5::hardware_stream_send(bytes, sizeof(bytes), 200, 180));
+        assert(!tube5::hardware_stream_receive(output, info) && info.pts == 200);
+        tube5::hardware_stream_release();
+        assert(!tube5::hardware_stream_send(nullptr, 0, 0, 0));
+        assert(tube5::hardware_stream_receive(output, info) == 1);
+        assert(!tube5::hardware_stream_close());
+        no_resources();
+        assert(!tube5::hardware_stream_begin(tube5::HardwareFrameMode::vp9_1440));
+        bytes[0] = 0x84;
+        retain_hidden = true;
+        assert(tube5::hardware_stream_send(bytes, sizeof(bytes), 0, 0, false) == -EINVAL);
+        assert(!tube5::hardware_stream_close());
+        no_resources();
+        retain_hidden = false;
+        invalid = true;
+        assert(!tube5::hardware_stream_begin(tube5::HardwareFrameMode::vp9_1440));
+        bytes[0] = 0x86;
+        assert(tube5::hardware_stream_send(bytes, sizeof(bytes), 0, 0) == -EINVAL);
+        assert(!tube5::hardware_stream_close());
+        no_resources();
+        std::puts("VP9 stream ownership, hidden outputs, timestamps, reset and cleanup passed");
+        return 0;
+    }
     char directory[] = "/tmp/tube5-hwframe-XXXXXX";
     assert(mkdtemp(directory));
     char log[200]{};

@@ -80,6 +80,9 @@ struct Clip
 Clip clip;
 struct Stream
 {
+    bool vp9 = false;
+    unsigned sync_input = 0;
+    bool displayable = true;
     bool frame_used[6]{};
     struct Input
     {
@@ -1000,6 +1003,10 @@ static int stream_failure(const char *stage, int code)
 }
 static int stream_output(unsigned offered, const VideoFrame &frame, const VideoOutput &output)
 {
+    stream_status.last_output = output;
+    stream_status.last_offered = offered;
+    stream_status.last_frame_accepted = frame.accepted;
+    stream_status.frame_capacity = clip.frame_stride;
     if (frame.accepted)
     {
         ++stream_status.accepted;
@@ -1010,17 +1017,30 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
     if (!output.valid)
     {
         ++stream_status.no_output;
+        if (stream.vp9)
+        {
+            if (stream.displayable || frame.accepted)
+                return stream_failure("VP9 SYNC NO OUTPUT", -EINVAL);
+            stream.input[stream.sync_input] = {};
+            ++stream_status.hidden;
+        }
         return 0;
     }
     unsigned returned = 0;
     while (returned < 6 && output.buffer != static_cast<unsigned char *>(resources.frame.data) +
                                                 returned * clip.frame_stride)
         ++returned;
+    stream_status.last_returned = returned;
     const auto bytes = static_cast<std::uint64_t>(output.pitch_bytes) * output.height * 3 / 2;
     if (returned == 6 || (!stream.frame_used[returned] && returned != offered) ||
-        output.codec != 1 || output.pictures != 1 || output.format != 0 || output.padding ||
-        output.width != 1920 || output.height < 1080 || output.height > 1088 ||
-        (output.height & 1u) || output.pitch_bytes < 1920 || output.pitch_bytes > 4096 ||
+        output.codec != (stream.vp9 ? 0x00245bfdu : 1u) || output.pictures != 1 ||
+        // VP9 hidden pictures legitimately set byte 11 to 1 on FW 13.20.
+        // It is not a layout/error field; keep all actual surface bounds checks.
+        output.format != 0 || (!stream.vp9 && output.padding) ||
+        output.width != (stream.vp9 ? 2560u : 1920u) ||
+        output.height < (stream.vp9 ? 1440u : 1080u) ||
+        output.height > (stream.vp9 ? 1440u : 1088u) || (output.height & 1u) ||
+        output.pitch_bytes < output.width || output.pitch_bytes > 4096 ||
         (output.pitch_bytes & 1u) || output.bytes > clip.frame_stride || bytes > output.bytes)
         return stream_failure("OUTPUT LAYOUT", -EINVAL);
     struct Guarded
@@ -1031,7 +1051,18 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
     } info;
     info.picture.size = sizeof(info.picture);
     info.picture.pts = info.picture.dts = info.picture.attached = UINT64_MAX;
-    const int code = sceVideodec2GetPictureInfo(&output, &info.picture, nullptr);
+    int code = 0;
+    if (stream.vp9)
+    {
+        // Depth-one VP9 is synchronous; preserve the submitted packet's metadata.
+        const auto &submitted = stream.input[stream.sync_input];
+        info.picture.valid = 1;
+        info.picture.pts = submitted.pts;
+        info.picture.dts = submitted.dts;
+        info.picture.attached = submitted.tag;
+    }
+    else
+        code = sceVideodec2GetPictureInfo(&output, &info.picture, nullptr);
     if (code || info.picture.valid != 1 || info.picture.size != sizeof(info.picture) ||
         info.before != UINT64_C(0xc0dec0dec0dec0de) || info.after != UINT64_C(0xc0dec0dec0dec0de))
         return stream_failure("PICTURE INFO", code ? code : -EINVAL);
@@ -1042,6 +1073,12 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
         stream.input[input].dts != info.picture.dts)
         return stream_failure("PICTURE TAG", -EINVAL);
     stream.input[input] = {};
+    if (stream.vp9 && !stream.displayable)
+    {
+        stream.frame_used[returned] = false;
+        ++stream_status.hidden;
+        return 0;
+    }
     stream.frame_used[returned] = true;
     stream.returned = returned;
     stream.output = output;
@@ -1080,22 +1117,26 @@ int hardware_stream_reset() noexcept
     if (code)
         return stream_failure("RESET", code);
     const auto next_tag = stream.next_tag;
+    const auto vp9 = stream.vp9;
     stream = {};
+    stream.vp9 = vp9;
     stream.next_tag = next_tag;
     ++stream_status.resets;
     stream_status.stage = "READY";
     return 0;
 #endif
 }
-int hardware_stream_begin() noexcept
+int hardware_stream_begin(HardwareFrameMode mode) noexcept
 {
 #ifndef TUBE5_HW_FRAME
+    (void)mode;
     return -1;
 #else
     if (stream_status.active || clip_status.active || resources.quarantined || resources.decoder ||
         resources.queue)
         return -EBUSY;
     stream = {};
+    stream.vp9 = mode == HardwareFrameMode::vp9_1440;
     stream_status = {};
     stream_status.active = true;
     const auto record = [](const char *stage, int code)
@@ -1103,7 +1144,14 @@ int hardware_stream_begin() noexcept
         stream_status.stage = stage;
         stream_status.error = code;
     };
-    int code = prepare_decoder(record, 3, 6);
+    VideoDecoderConfig requested{};
+    requested.codec = 0x00245bfd;
+    requested.profile = 0;
+    requested.level = 50;
+    requested.width = 2560;
+    requested.height = 1440;
+    int code = prepare_decoder(record, stream.vp9 ? 1 : 3, stream.vp9 ? 1 : 6,
+                               stream.vp9 ? &requested : nullptr);
     if (!code)
         code = hardware_stream_reset();
     if (code)
@@ -1112,13 +1160,14 @@ int hardware_stream_begin() noexcept
 #endif
 }
 int hardware_stream_send(const std::uint8_t *data, std::size_t bytes, std::uint64_t pts,
-                         std::uint64_t dts) noexcept
+                         std::uint64_t dts, bool displayable) noexcept
 {
 #ifndef TUBE5_HW_FRAME
     (void)data;
     (void)bytes;
     (void)pts;
     (void)dts;
+    (void)displayable;
     return -1;
 #else
     if (!stream_status.active || stream_status.error)
@@ -1152,6 +1201,8 @@ int hardware_stream_send(const std::uint8_t *data, std::size_t bytes, std::uint6
             stream_status.last_nal_mask |= 1u << (data[i + 3] & 31u);
     const auto tag = stream.next_tag++;
     stream.input[input] = {tag, pts, dts};
+    stream.sync_input = input;
+    stream.displayable = displayable;
     VideoInput au{sizeof(VideoInput), packet, bytes, pts, dts, tag};
     VideoFrame frame{sizeof(VideoFrame),
                      static_cast<unsigned char *>(resources.frame.data) +

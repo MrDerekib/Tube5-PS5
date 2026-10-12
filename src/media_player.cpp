@@ -310,7 +310,12 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
     width_ = info.video_format.width;
     height_ = info.video_format.height;
     frame_area_ = SDL_Rect{0, 0, width_, height_};
-    if (width_ <= 0 || height_ <= 0 || width_ > 1920 || height_ > 1080)
+    if (width_ <= 0 || height_ <= 0 ||
+#ifdef TUBE5_GPU_PLAYER
+        width_ > 2560 || height_ > 1440)
+#else
+        width_ > 1920 || height_ > 1080)
+#endif
         return fail("VIDEO", "unsupported test frame size");
     memory_set_stage("TEXTURE_CREATE");
 #ifndef TUBE5_GPU_PLAYER
@@ -524,11 +529,13 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
     {
         SDL_PauseAudioDevice(audio_, 1);
         reset_audio_reader();
-        if (audio_player_ && native_codec_active())
+        const bool vp9_seek = native_codec_prepare_seek(pending_seek_);
+        if ((audio_player_ || vp9_seek) && native_codec_active())
         {
             audio_seek_gate_.begin(native_codec_reset_generation(),
                                    native_codec_audio_reset_generation());
-            hold_audio_reader(native_codec_audio_reset_generation());
+            if (audio_player_)
+                hold_audio_reader(native_codec_audio_reset_generation());
             audio_seek_target_ = pending_seek_;
             audio_seek_bytes_before_ = audio_bytes_.load();
             audio_seek_report_at_ = 0;
@@ -538,6 +545,7 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
         const int audio_seek = audio_player_ ? Kit_PlayerSeek(audio_player_, pending_seek_) : 0;
         if (video_seek != 0 || audio_seek != 0)
         {
+            native_codec_cancel_seek();
             audio_seek_gate_.clear();
             resume_audio_reader();
             std::snprintf(error_, sizeof(error_), "SEEK: %s", Kit_GetError());
@@ -574,6 +582,11 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
             if (!valid)
                 std::snprintf(error_, sizeof(error_), "VIDEO FRAME: invalid YUV layout");
 #ifdef TUBE5_GPU_PLAYER
+            else if (native_codec_seek_waiting() ||
+                     !audio_seek_gate_.video_reset_ready(native_codec_reset_generation()))
+            {
+                // Drain old output while retaining the last GPU image on screen.
+            }
             else if (!gpu_upload_nv12(data, pitch, area.w, area.h,
                                       native_codec_color_space() == 1 ||
                                           (native_codec_color_space() == 2 && height_ >= 720),

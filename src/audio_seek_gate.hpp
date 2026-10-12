@@ -25,6 +25,10 @@ class AudioSeekGate
     {
         return waiting_.load();
     }
+    bool video_reset_ready(unsigned generation) const noexcept
+    {
+        return !waiting() || generation != generation_;
+    }
     bool presented(unsigned generation, unsigned audio_generation) noexcept
     {
         if (!waiting() || generation == generation_ || audio_generation == audio_generation_)

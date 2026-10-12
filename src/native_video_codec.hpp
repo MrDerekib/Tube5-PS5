@@ -14,6 +14,9 @@ int native_codec_send(AVCodecContext *context, const AVPacket *packet) noexcept;
 int native_codec_receive(AVCodecContext *context, AVFrame *frame) noexcept;
 int native_codec_error() noexcept;
 bool native_codec_active() noexcept;
+bool native_codec_prepare_seek(double seconds) noexcept;
+bool native_codec_seek_waiting() noexcept;
+void native_codec_cancel_seek() noexcept;
 int native_codec_color_space() noexcept;
 bool native_codec_full_range() noexcept;
 unsigned native_codec_reset_generation() noexcept;
@@ -36,6 +39,17 @@ inline int native_codec_error() noexcept
 inline bool native_codec_active() noexcept
 {
     return false;
+}
+inline bool native_codec_prepare_seek(double) noexcept
+{
+    return false;
+}
+inline bool native_codec_seek_waiting() noexcept
+{
+    return false;
+}
+inline void native_codec_cancel_seek() noexcept
+{
 }
 inline int native_codec_color_space() noexcept
 {

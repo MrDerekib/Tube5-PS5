@@ -84,14 +84,18 @@ struct HardwareStreamStatus
     bool active = false;
     unsigned submitted = 0, received = 0, resets = 0;
     unsigned accepted = 0, no_output = 0, last_nal_mask = 0;
+    unsigned hidden = 0;
+    VideoOutput last_output{};
+    unsigned last_offered = 0, last_returned = 0, last_frame_accepted = 0;
+    std::size_t frame_capacity = 0;
     std::size_t last_au_bytes = 0;
     std::uint64_t last_input_pts = 0, last_input_dts = 0;
     int error = 0, cleanup_error = 0;
     const char *stage = "IDLE";
 };
-int hardware_stream_begin() noexcept;
+int hardware_stream_begin(HardwareFrameMode mode = HardwareFrameMode::avc1080) noexcept;
 int hardware_stream_send(const std::uint8_t *data, std::size_t bytes, std::uint64_t pts,
-                         std::uint64_t dts) noexcept;
+                         std::uint64_t dts, bool displayable = true) noexcept;
 int hardware_stream_receive(VideoOutput &output, VideoPictureInfo &picture) noexcept;
 void hardware_stream_release() noexcept;
 int hardware_stream_reset() noexcept;
