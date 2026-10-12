@@ -102,6 +102,19 @@ correcto, fallos de módulo/compute/modo, limpieza de informes entre consultas,
 probe desactivado sin llamadas nativas. Compilación, imports y firma verificados.
 Prueba PS5 completada: módulo, compute y los tres modos devuelven cero en
 FW13.20. Informe conservado en .local/boot-diag-54/ps5-hardware-query.log.
+
+## BOOT-DIAG-57-HWPREVIEW: mostrar el frame hardware
+
+La build convierte la salida NV12 (formato 0 de VideoDec2) de un IDR sintético
+1080p a RGBA y la copia a una textura SDL; la muestra cinco segundos en el
+área de vídeo al abrir Tube5.
+Después continúa al menú. El decoder se destruye tras copiar la imagen. El log
+`/download0/tube5-hardware-display.log` distingue decode, formato, conversión y
+cleanup. La presentación depende de la interpretación NV12 (pitch y superficie
+confirmados por las consultas y la API de referencia); la inspección visual en
+FW13.20 es la comprobación pendiente. La ruta de reproducción no cambia.
+Build preparada: eboot.bin SHA-256
+`34e646d29cbd1cd4e57bebdcf425356d49a6aa26e362518ba1e81f66e4f0dd9a`.
 ELF exacto guardado en .local/boot-diag-54; SHA-256 eboot.bin:
 `3702873c81090c4e27f515f603f604f27d4079dd1993082c6e638ce331c367fe`.
 

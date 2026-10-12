@@ -19,14 +19,18 @@
 #include "failure_log.hpp"
 #include "hardware_video_probe.hpp"
 #include "hardware_frame_probe.hpp"
+#include "nv12_rgba.hpp"
 #include "sponsor_notice.hpp"
 #include "youtube_search.hpp"
 #include "youtube_probe.hpp"
 #include "video_sync_diagnostics.hpp"
 #include "video_conversion.hpp"
 #include <array>
+#include <algorithm>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <cstdint>
 #include <memory>
 
 #ifndef TUBE5_HOST
@@ -46,6 +50,36 @@ constexpr auto muted = static_cast<Color>(0xffbbaea5);
 std::array<char, 48> build_label{};
 #ifdef TUBE5_HW_PROBE
 tube5::HardwareVideoReport hardware_report;
+#endif
+#ifdef TUBE5_HW_FRAME
+struct HardwarePreview
+{
+    SDL_Texture *texture = nullptr;
+};
+
+int capture_hardware_nv12(const tube5::VideoOutput &frame, void *context) noexcept
+{
+    auto *preview = static_cast<HardwarePreview *>(context);
+    if (!preview || !preview->texture || frame.format != 0 || !frame.buffer ||
+        frame.width != 1920 || frame.height < 1080 || frame.height > 1088 ||
+        frame.pitch_bytes < frame.width || (frame.pitch_bytes & 1u))
+        return -EINVAL;
+    void *locked = nullptr;
+    int rgba_pitch = 0;
+    if (SDL_LockTexture(preview->texture, nullptr, &locked, &rgba_pitch) != 0 || !locked ||
+        rgba_pitch < 1920 * 4)
+    {
+        if (locked)
+            SDL_UnlockTexture(preview->texture);
+        return -ENOMEM;
+    }
+    const bool converted = tube5::nv12_to_rgba(
+        static_cast<const std::uint8_t *>(frame.buffer), frame.bytes, 1920, 1080, frame.height,
+        frame.pitch_bytes, static_cast<std::uint8_t *>(locked),
+        static_cast<std::size_t>(rgba_pitch));
+    SDL_UnlockTexture(preview->texture);
+    return converted ? 0 : -EINVAL;
+}
 #endif
 std::array<char, 256> network_url{};
 std::array<char, 65> console_token{};
@@ -764,6 +798,28 @@ int main()
         canvas_pixels = pixels.get();
     }
     Canvas canvas{canvas_pixels, true};
+#ifndef TUBE5_HOST
+#ifdef TUBE5_HW_FRAME
+    HardwarePreview hardware_preview;
+    Uint64 hardware_preview_until = 0;
+    if (hardware_report.module == 0 && hardware_report.compute == 0 &&
+        hardware_report.query[0] == 0)
+    {
+        hardware_preview.texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
+                                                     SDL_TEXTUREACCESS_STREAMING, 1920, 1080);
+        if (hardware_preview.texture &&
+            tube5::hardware_frame_probe("/app0/assets/hw-frame.h264",
+                                        "/download0/tube5-hardware-display.log",
+                                        capture_hardware_nv12, &hardware_preview) == 0)
+            hardware_preview_until = SDL_GetTicks64() + 5000;
+        else if (hardware_preview.texture)
+        {
+            SDL_DestroyTexture(hardware_preview.texture);
+            hardware_preview.texture = nullptr;
+        }
+    }
+#endif
+#endif
     SDL_GameController *controller = nullptr;
     const auto connect = [&]()
     {
@@ -1558,6 +1614,27 @@ int main()
             if (!media.opening() && media.error()[0])
                 std::snprintf(error, sizeof(error), "%s", media.error());
         }
+#ifndef TUBE5_HOST
+#ifdef TUBE5_HW_FRAME
+        if (hardware_preview.texture)
+        {
+            if (hardware_preview_until && SDL_GetTicks64() < hardware_preview_until)
+            {
+                const SDL_Rect preview_area{350, 260, 1220, 686};
+                if (SDL_RenderCopy(renderer, hardware_preview.texture, nullptr, &preview_area) != 0)
+                {
+                    SDL_DestroyTexture(hardware_preview.texture);
+                    hardware_preview.texture = nullptr;
+                }
+            }
+            else
+            {
+                SDL_DestroyTexture(hardware_preview.texture);
+                hardware_preview.texture = nullptr;
+            }
+        }
+#endif
+#endif
         const Uint32 video_end = SDL_GetTicks();
         SDL_RenderPresent(renderer);
 #ifdef TUBE5_HOST

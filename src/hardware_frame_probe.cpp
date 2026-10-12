@@ -120,21 +120,23 @@ int cleanup()
 #endif
 namespace tube5
 {
-int hardware_frame_probe(const char *asset, const char *log) noexcept
+int hardware_frame_probe(const char *asset, const char *log, HardwareFrameConsumer consumer,
+                         void *consumer_context) noexcept
 {
 #ifndef TUBE5_HW_FRAME
     (void)asset;
     (void)log;
+    (void)consumer;
+    (void)consumer_context;
     return -1;
 #else
     auto &r = resources;
     if (r.quarantined)
         return -EBUSY;
     char report[3072]{};
-    std::size_t used = static_cast<std::size_t>(
-        std::snprintf(report, sizeof(report),
-                      "TUBE5 HARDWARE FRAME V1\nBUILD %s\n1080P AVC IDR - NO DISPLAY TEST\n",
-                      failure_log_build_label()));
+    std::size_t used = static_cast<std::size_t>(std::snprintf(
+        report, sizeof(report), "TUBE5 HARDWARE FRAME V1\nBUILD %s\n1080P AVC IDR - %s\n",
+        failure_log_build_label(), consumer ? "DISPLAY CONSUMER" : "NO DISPLAY TEST"));
     const auto record = [&](const char *stage, int code)
     {
         const int count = std::snprintf(report + used, sizeof(report) - used, "%s %08X\n", stage,
@@ -300,7 +302,15 @@ int hardware_frame_probe(const char *asset, const char *log) noexcept
         if (sample_length > 0)
             used += std::min<std::size_t>(sample_length, sizeof(report) - used - 1);
         record("CHANGED LUMA SAMPLES", static_cast<int>(changed));
-        return changed ? 0 : -EIO;
+        if (changed)
+        {
+            const int consumed = consumer ? consumer(output, consumer_context) : 0;
+            record("FRAME CONSUMER", consumed);
+            if (consumed)
+                return consumed;
+            return 0;
+        }
+        return -EIO;
     };
     record("BEGIN", 0);
     std::size_t flexible_before = 0, flexible_after = 0;
@@ -335,36 +345,35 @@ int hardware_frame_cycles(const char *asset, const char *directory) noexcept
     if (!asset || !directory)
         return -EINVAL;
     char summary[2048]{}, summary_path[512]{}, cycle_path[512]{};
-    int length = std::snprintf(summary_path, sizeof(summary_path),
-                               "%s/tube5-hardware-cycles.log", directory);
+    int length = std::snprintf(summary_path, sizeof(summary_path), "%s/tube5-hardware-cycles.log",
+                               directory);
     if (length < 0 || static_cast<std::size_t>(length) >= sizeof(summary_path))
         return -EINVAL;
-    std::size_t used = static_cast<std::size_t>(std::snprintf(
-        summary, sizeof(summary), "TUBE5 HARDWARE CYCLES V1\nBUILD %s\nCYCLES 8 - NO DISPLAY TEST\n",
-        failure_log_build_label()));
+    std::size_t used = static_cast<std::size_t>(
+        std::snprintf(summary, sizeof(summary),
+                      "TUBE5 HARDWARE CYCLES V1\nBUILD %s\nCYCLES 8 - NO DISPLAY TEST\n",
+                      failure_log_build_label()));
     for (unsigned cycle = 1; cycle <= 8; ++cycle)
     {
-        length = std::snprintf(cycle_path, sizeof(cycle_path),
-                               "%s/tube5-hardware-cycle-%u.log", directory, cycle);
+        length = std::snprintf(cycle_path, sizeof(cycle_path), "%s/tube5-hardware-cycle-%u.log",
+                               directory, cycle);
         if (length < 0 || static_cast<std::size_t>(length) >= sizeof(cycle_path))
             return -EINVAL;
         std::size_t before = 0, after = 0;
         const int before_code = sceKernelAvailableFlexibleMemorySize(&before);
-        length = std::snprintf(summary + used, sizeof(summary) - used,
-                               "CYCLE %u BEGIN FLEX %llu RC %08X\n", cycle,
-                               static_cast<unsigned long long>(before),
-                               static_cast<unsigned>(before_code));
+        length = std::snprintf(
+            summary + used, sizeof(summary) - used, "CYCLE %u BEGIN FLEX %llu RC %08X\n", cycle,
+            static_cast<unsigned long long>(before), static_cast<unsigned>(before_code));
         if (length > 0)
             used += std::min<std::size_t>(length, sizeof(summary) - used - 1);
         if (const int saved = write_failure_log(summary_path, summary, used))
             return saved; // Do not start hardware work without a progress snapshot.
         const int result = hardware_frame_probe(asset, cycle_path);
         const int after_code = sceKernelAvailableFlexibleMemorySize(&after);
-        length = std::snprintf(summary + used, sizeof(summary) - used,
-                               "CYCLE %u RESULT %08X FLEX %llu RC %08X\n", cycle,
-                               static_cast<unsigned>(result),
-                               static_cast<unsigned long long>(after),
-                               static_cast<unsigned>(after_code));
+        length = std::snprintf(
+            summary + used, sizeof(summary) - used, "CYCLE %u RESULT %08X FLEX %llu RC %08X\n",
+            cycle, static_cast<unsigned>(result), static_cast<unsigned long long>(after),
+            static_cast<unsigned>(after_code));
         if (length > 0)
             used += std::min<std::size_t>(length, sizeof(summary) - used - 1);
         const int saved = write_failure_log(summary_path, summary, used);

@@ -157,6 +157,9 @@ clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
     -DTUBE5_HW_FRAME -Isrc tests/test_hardware_frame_probe.cpp src/hardware_frame_probe.cpp \
     src/failure_log.cpp -o build/hardware-frame-probe-test
 build/hardware-frame-probe-test
+clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \
+    -Isrc tests/test_nv12_rgba.cpp src/nv12_rgba.cpp -o build/nv12-rgba-test
+build/nv12-rgba-test
 python3 -m unittest discover -s tests -p test_parser_wrap.py -v
 python3 -m unittest discover -s tests -p test_refstruct_wrap.py -v
 clang++ -std=c++20 -Wall -Wextra -Werror -g -fsanitize=address,undefined \

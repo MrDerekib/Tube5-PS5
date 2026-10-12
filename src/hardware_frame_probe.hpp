@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "hardware_video_probe.hpp"
+#include <cstdint>
 namespace tube5
 {
 struct VideoComputeConfig
@@ -35,8 +36,12 @@ struct VideoOutput
 static_assert(sizeof(VideoComputeConfig) == 16 && sizeof(VideoInput) == 48);
 static_assert(sizeof(VideoFrame) == 32 && sizeof(VideoOutput) == 56);
 static_assert(offsetof(VideoOutput, buffer) == 32);
-// One deterministic AU, no player or display change. Never retry quarantined resources.
-int hardware_frame_probe(const char *asset, const char *log) noexcept;
+using HardwareFrameConsumer = int (*)(const VideoOutput &, void *) noexcept;
+// One deterministic AU. Optional consumer runs before decoder resources are released.
+// Never retry quarantined resources.
+int hardware_frame_probe(const char *asset, const char *log,
+                         HardwareFrameConsumer consumer = nullptr,
+                         void *consumer_context = nullptr) noexcept;
 // Eight bounded cycles, stop on the first error, with separate per-cycle reports.
 int hardware_frame_cycles(const char *asset, const char *directory) noexcept;
 } // namespace tube5

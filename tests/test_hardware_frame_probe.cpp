@@ -50,6 +50,13 @@ void picture(tube5::VideoFrame *frame, tube5::VideoOutput *output)
     output->buffer = invalid ? nullptr : frame->buffer;
     output->bytes = frame->bytes;
 }
+int consume(const tube5::VideoOutput &output, void *context) noexcept
+{
+    assert(output.valid == 1 && output.format == 0 && output.width == 1920 &&
+           output.height == 1088 && output.pitch_bytes == 2048 && output.buffer);
+    ++*static_cast<unsigned *>(context);
+    return 0;
+}
 } // namespace
 extern "C" std::size_t sceKernelGetDirectMemorySize()
 {
@@ -239,6 +246,11 @@ int main()
         assert(!tube5::hardware_frame_probe(asset, log));
         no_resources();
     }
+    unsigned consumed = 0;
+    operation = 0;
+    assert(!tube5::hardware_frame_probe(asset, log, consume, &consumed));
+    assert(consumed == 1);
+    no_resources();
     for (int i = 1; i <= 17; ++i)
     {
         operation = 0;
@@ -296,7 +308,8 @@ int main()
     char batch_path[200]{};
     for (unsigned i = 1; i <= 8; ++i)
     {
-        std::snprintf(batch_path, sizeof(batch_path), "%s/tube5-hardware-cycle-%u.log", directory, i);
+        std::snprintf(batch_path, sizeof(batch_path), "%s/tube5-hardware-cycle-%u.log", directory,
+                      i);
         assert(unlink(batch_path) == 0);
     }
     std::snprintf(batch_path, sizeof(batch_path), "%s/tube5-hardware-cycles.log", directory);
