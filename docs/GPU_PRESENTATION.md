@@ -685,6 +685,27 @@ oculta ausente. Build/firma correctas. Fixture y ejecutable transferidos; el
 propietario confirmó app cerrada para activar, con DIAG95 respaldada.
 La prueba arranca sola y conserva logs `tube5-vp9-depth3*.log`, build distinta.
 
+Resultado DIAG96: un frame visible/CRC correcto, seis AUs enviadas, tres llamadas
+sin output, fallo `PICTURE CRC`, cleanup cero. Se emparejó la salida `B26F359C`
+con el visible 1 (`ADBADC4A`), pero el CRC corresponde exactamente al visible 2
+en la fixture. FIFO de todos los AUs suprimió antes una imagen como hidden.
+Evidencia coherente con el primer hidden sin superficie, no una corrupción
+aleatoria del decoder. No se valida el pipeline de hidden. Logs `diag96-*`.
+
+DIAG97 (`BOOT-DIAG-97-VP9-HIDDEN-CRC`) mantiene la misma fixture y configuración.
+Calcula CRC antes de asignar metadata: con hidden pendiente y output sin el
+indicador de hidden observado, exige CRC del siguiente visible para retirar
+el prefijo de hidden sin salida. No retira superficies aún retenidas: ese caso
+falla explícitamente. Hidden materializado exige el indicador observado y se
+suprime; cada visible conserva su CRC y orden. Cuenta hidden materializados y
+omitidos. Esto es un **oráculo de diagnóstico para la fixture conocida**, no
+una solución de streaming: no habilita hidden asíncrono del player/YouTube ni
+asume que byte 11 tenga semántica universal sin validación adicional.
+
+Host ASan/UBSan focal: hidden materializado, omitido con visible siguiente,
+rechazo de corrupción y de hidden omitido con superficie aún retenida; buffers,
+FIFO/CRC, drain y cleanup. Build/firma correctas; staging preparado para cierre.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

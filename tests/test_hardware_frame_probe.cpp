@@ -32,6 +32,7 @@ bool vp9_pipeline = false;
 bool no_accepted_frames = false;
 bool vp9_hidden_fixture = false;
 bool missing_hidden_output = false;
+bool retain_missing_hidden = false;
 struct Pending
 {
     tube5::VideoFrame frame{};
@@ -103,6 +104,7 @@ void b_picture(tube5::VideoOutput *output, const tube5::VideoFrame *fallback = n
             {
                 packet.used = false;
                 ++b_next;
+                b_picture(output, fallback); // Driver emits only the following visible AU.
                 return;
             }
             if (!packet.frame.buffer)
@@ -326,8 +328,10 @@ extern "C" int sceVideodec2Decode(void *handle, tube5::VideoInput *input, tube5:
         packet = {*frame, input->pts, input->dts, input->attached, true};
         packet.input = static_cast<const unsigned char *>(input->au);
         packet.input_value = packet.input[1];
-        frame->accepted = no_accepted_frames ? 0 : 1;
-        if (no_accepted_frames)
+        frame->accepted = no_accepted_frames ||
+                                  (missing_hidden_output && packet.input[0] == 0x84 &&
+                                   !retain_missing_hidden) ? 0 : 1;
+        if (!frame->accepted)
             packet.frame.buffer = nullptr;
         if (++b_submitted >= 4)
             b_picture(output, frame);
@@ -520,17 +524,31 @@ int main(int argc, char **argv)
         assert(!tube5::hardware_clip_close());
         no_resources();
         if (vp9_hidden_fixture)
-            for (bool absent : {false, true})
+            for (unsigned scenario : {0u, 1u, 2u})
             {
                 reset_b_mock();
-                corrupt_pixels = !absent;
-                missing_hidden_output = absent;
+                corrupt_pixels = scenario == 0;
+                missing_hidden_output = scenario != 0;
+                retain_missing_hidden = scenario == 2;
                 assert(!tube5::hardware_clip_begin(asset, log));
                 unsigned delivered = 0;
                 int rc = 0;
                 for (unsigned i = 0; i < count * 2 + 12 && rc >= 0; ++i)
+                {
                     rc = tube5::hardware_clip_step(consume4k, &delivered);
-                assert(absent ? rc == -ENOBUFS || rc == -EILSEQ : rc == -EILSEQ);
+                    if (rc == 1)
+                        break;
+                }
+                if (scenario == 1)
+                {
+                    if (rc != 1 || delivered != count)
+                        std::fprintf(stderr, "hidden omitted rc=%d delivered=%u\n", rc, delivered);
+                    assert(rc == 1 && delivered == count);
+                    assert(tube5::hardware_clip_status().hidden_no_output == count);
+                    assert(tube5::hardware_clip_status().crc_matches == count);
+                }
+                else
+                    assert(scenario == 2 ? rc == -ENOBUFS || rc == -EINVAL : rc == -EILSEQ);
                 assert(!tube5::hardware_clip_close());
                 no_resources();
             }

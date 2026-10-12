@@ -69,6 +69,8 @@ struct Clip
     unsigned input_tag[6]{};
     unsigned input_packet[6]{};
     bool input_displayable[6]{};
+    bool input_retained[6]{};
+    unsigned hidden_materialized = 0;
     unsigned part_index = 0, next_coded_tag = 1;
     std::size_t frame_stride = 0;
     char log[256]{};
@@ -121,6 +123,7 @@ void clip_snapshot()
         "PTS %llu DTS %llu ATTACHED %llu CRC LAST %08X EXPECTED %08X\n"
         "VP9 CODED %u HIDDEN %u SUPERFRAMES %u EXISTING %u\n"
         "VP9 HIDDEN NO OUTPUT %u LAST VALID %u ACCEPTED %u PICTURES %u\n"
+        "PIPELINE HIDDEN MATERIALIZED %u OMITTED %u - CRC GUIDED PROBE ONLY\n"
         "MEMORY REQUIRED CPU %llu GPU %llu SHARED %llu FRAME %llu\n"
         "FLEX BEFORE %llu RC %08X AFTER %llu RC %08X\n",
         tube5::failure_log_build_label(),
@@ -141,6 +144,7 @@ void clip_snapshot()
         static_cast<unsigned long long>(s.last_attached), clip.last_crc, clip.expected_crc,
         s.coded_frames, s.hidden_frames, s.superframes, s.existing_frames, s.hidden_no_output,
         s.last_valid, s.last_accepted, s.last_output_pictures,
+        clip.hidden_materialized, s.hidden_no_output,
         static_cast<unsigned long long>(s.required_cpu),
         static_cast<unsigned long long>(s.required_gpu),
         static_cast<unsigned long long>(s.required_shared),
@@ -733,6 +737,7 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     VideoOutput output{};
     output.size = sizeof(output);
     int code = 0;
+    unsigned submitted_slot = clip.slots;
     std::uint64_t decode_start = 0;
     if (s.submitted < s.frames)
     {
@@ -778,6 +783,8 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
         clip.input_tag[input_slot] = tag;
         clip.input_packet[input_slot] = index;
         clip.input_displayable[input_slot] = displayable;
+        clip.input_retained[input_slot] = false;
+        submitted_slot = input_slot;
         VideoInput input{sizeof(VideoInput),
                          const_cast<std::uint8_t *>(au_data),
                          au_bytes,
@@ -811,7 +818,11 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     s.last_output_pictures = output.pictures;
     s.decode_max_us = std::max(s.decode_max_us, decode_us);
     if (frame.accepted)
+    {
         clip.frame_used[offered] = true;
+        if (submitted_slot < clip.slots)
+            clip.input_retained[submitted_slot] = true;
+    }
     if (code || output.error)
         return fail(clip.stage, code ? code : -EIO);
     if (!output.valid)
@@ -835,6 +846,22 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
         (output.height & 1u) || output.pitch_bytes < clip.width || output.pitch_bytes > 4096 ||
         (output.pitch_bytes & 1u) || output.bytes > clip.frame_stride || required > output.bytes)
         return fail("OUTPUT B", -EINVAL);
+    unsigned sum = 0;
+    std::uint32_t crc = UINT32_MAX;
+    const auto crc_start = sceKernelGetProcessTime();
+    for (unsigned y = 0; y < clip.height; y += 31)
+        for (unsigned x = 0; x < clip.width; x += 31)
+        {
+            const unsigned value =
+                static_cast<unsigned char *>(output.buffer)[y * output.pitch_bytes + x];
+            sum += value;
+            crc ^= value;
+            for (unsigned bit = 0; bit < 8; ++bit)
+                crc = (crc >> 1) ^ ((crc & 1u) ? UINT32_C(0xedb88320) : 0);
+        }
+    crc ^= UINT32_MAX;
+    s.last_crc_us = sceKernelGetProcessTime() - crc_start;
+    clip.last_crc = crc;
     struct GuardedInfo
     {
         std::uint64_t before = UINT64_C(0xc0dec0dec0dec0de);
@@ -852,8 +879,28 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
                 oldest = i;
         if (oldest == clip.slots)
             return fail("PIPELINE FIFO EMPTY", -EINVAL);
-        // This probe tests the hypothesis that each coded AU has a FIFO surface.
-        // Hidden outputs are suppressed; visible software CRC detects misassociation.
+        if (clip.compound_vp9 && !clip.input_displayable[oldest] && !output.padding)
+        {
+            unsigned visible = clip.slots;
+            for (unsigned i = 0; i < clip.slots; ++i)
+                if (clip.input_tag[i] && clip.input_displayable[i] &&
+                    (visible == clip.slots || clip.input_tag[i] < clip.input_tag[visible]))
+                    visible = i;
+            if (visible == clip.slots || crc != clip.crc[clip.input_packet[visible]])
+                return fail("HIDDEN OMITTED CRC PROOF", -EILSEQ);
+            // Only this fixture's CRC proves completion of the later visible AU.
+            // Never infer that a retained hidden surface may be reused.
+            for (unsigned i = 0; i < clip.slots; ++i)
+                if (clip.input_tag[i] && clip.input_tag[i] < clip.input_tag[visible])
+                {
+                    if (clip.input_displayable[i] || clip.input_retained[i])
+                        return fail("HIDDEN OMITTED RETAINED", -EINVAL);
+                    clip.input_tag[i] = 0;
+                    ++s.hidden_no_output;
+                }
+            oldest = visible;
+        }
+        // Diagnostic CRC-guided mapping is not a general stream implementation.
         const unsigned index = clip.input_packet[oldest];
         picture.info.valid = 1;
         picture.info.attached = clip.input_tag[oldest];
@@ -884,6 +931,9 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
         return fail("PICTURE TAG", -EINVAL);
     if (clip.vp9 && !clip.input_displayable[input_slot])
     {
+        if (!output.padding)
+            return fail("HIDDEN SURFACE FLAG", -EINVAL);
+        ++clip.hidden_materialized;
         clip.frame_used[returned] = false;
         clip.input_tag[input_slot] = 0;
         clip.stage = "PIPELINE HIDDEN SUPPRESSED";
@@ -895,22 +945,6 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
         ++s.order_errors;
         return fail("PRESENTATION ORDER", -EINVAL);
     }
-    unsigned sum = 0;
-    std::uint32_t crc = UINT32_MAX;
-    const auto crc_start = sceKernelGetProcessTime();
-    for (unsigned y = 0; y < clip.height; y += 31)
-        for (unsigned x = 0; x < clip.width; x += 31)
-        {
-            const unsigned value =
-                static_cast<unsigned char *>(output.buffer)[y * output.pitch_bytes + x];
-            sum += value;
-            crc ^= value;
-            for (unsigned bit = 0; bit < 8; ++bit)
-                crc = (crc >> 1) ^ ((crc & 1u) ? UINT32_C(0xedb88320) : 0);
-        }
-    crc ^= UINT32_MAX;
-    s.last_crc_us = sceKernelGetProcessTime() - crc_start;
-    clip.last_crc = crc;
     clip.expected_crc = clip.crc[packet];
     if (crc != clip.crc[packet])
         return fail("PICTURE CRC", -EILSEQ);
