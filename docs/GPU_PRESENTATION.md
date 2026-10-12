@@ -579,6 +579,27 @@ cleanup pasa con cuatro slots, ASan/UBSan. Compilación/firma verificadas;
 pendiente de activación y prueba en consola. Reutiliza los logs `depth3` con
 etiqueta de build nueva.
 
+Resultado DIAG93 en consola: el propietario confirmó reproducción del clip.
+180 entradas, 180 imágenes compuestas, 180 CRC correctos, 179 imágenes cambiadas;
+error, cleanup y errores de orden cero. Priming sin output en dos llamadas y
+dos llamadas de drain completan el clip. 179 intervalos de presentación en
+2.987.279 µs (~59,92 fps), p50/p95/máximo 16.696/20.192/24.227 µs.
+La prueba acotada alcanza la cadencia media objetivo, con jitter; no demuestra
+todavía reproducción sostenida con audio/YouTube, hidden frames o seek.
+
+Envío/recepción al decoder medio 1.153 µs (p95 4.246), consumidor medio 2.880 µs,
+step medio 4.413 µs y espera de pacing media 12.287 µs, excluyendo primera imagen.
+El tiempo de llamada corto refleja trabajo en vuelo, no latencia real de decode.
+La primera llamada máxima fue 28.861 µs; no inferir capacidad máxima de fps de
+los promedios de llamadas. Memoria flexible antes 908.066.816, después
+907.018.240 (delta 1 MiB); cleanup nativo correcto, diferencia sin atribución
+confirmada y sin prueba de ciclos todavía. Logs privados `diag93-*`.
+
+Siguiente paso: portar la gestión asíncrona al stream del player con FIFO de
+metadatos, flags de hidden/existing, buffers retenidos, drenaje y reset de seek.
+No basta cambiar la profundidad del stream síncrono; mantener presupuesto y
+validar los casos de no-output y audio antes de habilitar formatos YouTube 60 fps.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
