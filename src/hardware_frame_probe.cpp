@@ -614,21 +614,22 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
     struct stat metadata{};
     unsigned char header[28]{};
     if (clip.descriptor < 0 || fstat(clip.descriptor, &metadata) || !S_ISREG(metadata.st_mode) ||
-        metadata.st_size < 28 || metadata.st_size > static_cast<off_t>(16 * mib) ||
+        metadata.st_size < 28 || metadata.st_size > static_cast<off_t>(32 * mib) ||
         read_exact(clip.descriptor, header, sizeof(header)))
         return fail(-EINVAL);
     clip_status.fps = little32(header + 16);
     clip_status.frames = little32(header + 20);
     const auto version = little32(header + 4);
     clip_status.bframes = version == 2;
-    clip.vp9 = version == 3 || version == 4 || version == 5;
+    clip.vp9 = version >= 3 && version <= 6;
     clip.compound_vp9 = version == 4;
-    clip.width = version == 5 ? 3840 : clip.vp9 ? 2560 : 1920;
-    clip.height = version == 5 ? 2160 : clip.vp9 ? 1440 : 1080;
-    if (std::memcmp(header, "T5HC", 4) ||
-        (version != 1 && version != 2 && version != 3 && version != 4 && version != 5) ||
+    clip.width = version >= 5 ? 3840 : clip.vp9 ? 2560 : 1920;
+    clip.height = version >= 5 ? 2160 : clip.vp9 ? 1440 : 1080;
+    if (std::memcmp(header, "T5HC", 4) || (version < 1 || version > 6) ||
+        (version != 6 && metadata.st_size > static_cast<off_t>(16 * mib)) ||
         little32(header + 8) != clip.width || little32(header + 12) != clip.height ||
-        clip_status.fps != 30 || !clip_status.frames || clip_status.frames > 300 ||
+        clip_status.fps != (version == 6 ? 60u : 30u) || !clip_status.frames ||
+        clip_status.frames > 300 ||
         little32(header + 24) != (clip.vp9              ? 2u
                                   : clip_status.bframes ? 1u
                                                         : 0u))

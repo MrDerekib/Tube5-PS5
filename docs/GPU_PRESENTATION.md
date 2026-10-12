@@ -426,6 +426,37 @@ diagnóstico confirmado del retraso. Logs privados rescatados en
 `.local/console-logs/diag87-*`. Pendientes sesiones largas, medición del seek,
 show-existing-frame, salida HDMI 4K, 60 fps y HDR.
 
+## VP9 4K/60: integridad correcta, cadencia insuficiente, DIAG88
+
+`tools/prepare-vp9-clip.py --4k --fps 60` genera únicamente la nueva secuencia
+de 180 imágenes visibles, 3 segundos de contenido, sin ocultos/superframes.
+T5HC versión 6 exige 60 fps y permite hasta 32 MiB por fixture; versiones
+anteriores mantienen 30 fps y 16 MiB. El test enfocado con sanitizers valida
+el nuevo esquema, CRC/cleanup y rechazo de una cabecera v6 con fps incorrecto.
+
+En FW 13.20, el propietario vio el clip. Los 180 frames se decodificaron y
+presentaron con 180 CRC correctos, 179 cambios, errores y cleanup cero.
+Los 179 intervalos entre flips tardaron 3.587.037 µs: aproximadamente
+49,9 fps reales, NO 60 fps sostenidos. Intervalos p50/p95/máximo:
+18.803/23.132/44.587 µs. Trabajo de presentación sin primer frame
+p50/p95/máximo: 2.647/2.824/3.701 µs. Decode máximo 34.787 µs; el log no
+contiene percentiles de decode, lectura o checksum. `SLOW` no es una medida
+independiente: suma el tiempo del consumer y el de presentación que ese mismo
+consumer ya incluye. La cadencia real entre flips es el criterio de esta prueba.
+
+La prueba es secuencial (lectura, decode, CRC, subida, presentación); el
+reproductor real usa un worker de decode separado del render. No se atribuye
+todavía el déficit a un límite del decoder hardware. Hay que medir las fases
+antes de decidir optimizaciones o dar por validados 60 fps. Los requisitos de
+memoria coinciden con DIAG85. Logs privados: `.local/console-logs/diag88-*`.
+
+Candidato de YouTube verificado solo por metadatos, sin descargar vídeo:
+`LXb3EKWsInQ` (Costa Rica, duración 314 s). El 2026-10-12 ofrecía 3840×2160
+a 60 fps SDR VP9: itag 315 WebM `vp9` e itag 628 MP4 `vp09.00.51.08`.
+También HDR10 Profile 2 de 10 bits: itag 337 WebM e itag 642 MP4.
+La disponibilidad en nuestro cliente de consola y la reproducción siguen
+pendientes. El selector Tube5 aún excluye 60 fps y HDR.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

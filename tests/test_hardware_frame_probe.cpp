@@ -330,9 +330,11 @@ extern "C" int sceVideodec2GetPictureInfo(const tube5::VideoOutput *output,
 }
 int main(int argc, char **argv)
 {
-    if (argc == 2 && std::strcmp(argv[1], "--vp9-4k") == 0)
+    if (argc == 2 &&
+        (std::strcmp(argv[1], "--vp9-4k") == 0 || std::strcmp(argv[1], "--vp9-4k60") == 0))
     {
         vp9_mode = vp9_4k = true;
+        const bool sixty = std::strcmp(argv[1], "--vp9-4k60") == 0;
         char folder[] = "/tmp/tube5-vp9-4k-XXXXXX";
         assert(mkdtemp(folder));
         char asset[200]{}, log[200]{};
@@ -340,7 +342,7 @@ int main(int argc, char **argv)
         std::snprintf(log, sizeof(log), "%s/decoder.log", folder);
         const int fd = open(asset, O_CREAT | O_WRONLY | O_EXCL, 0600);
         assert(fd >= 0 && write(fd, "T5HC", 4) == 4);
-        for (auto value : {5u, 3840u, 2160u, 30u, 2u, 2u})
+        for (auto value : {sixty ? 6u : 5u, 3840u, 2160u, sixty ? 60u : 30u, 2u, 2u})
             write32(fd, value);
         std::uint32_t crc = UINT32_MAX;
         for (unsigned y = 0; y < 2160; y += 31)
@@ -360,6 +362,7 @@ int main(int argc, char **argv)
         }
         close(fd);
         assert(!tube5::hardware_clip_begin(asset, log));
+        assert(tube5::hardware_clip_status().fps == (sixty ? 60u : 30u));
         unsigned shown = 0;
         const auto consume4k = [](const tube5::VideoOutput &output, void *context) noexcept
         {
@@ -375,6 +378,15 @@ int main(int argc, char **argv)
         assert(shown == 2 && tube5::hardware_clip_status().crc_matches == 2);
         assert(!tube5::hardware_clip_close());
         no_resources();
+        if (sixty)
+        {
+            const int wrong = open(asset, O_WRONLY);
+            const unsigned char fps30[]{30, 0, 0, 0};
+            assert(wrong >= 0 && pwrite(wrong, fps30, 4, 16) == 4);
+            close(wrong);
+            assert(tube5::hardware_clip_begin(asset, log) == -EINVAL);
+            no_resources();
+        }
         unlink(asset);
         unlink(log);
         rmdir(folder);

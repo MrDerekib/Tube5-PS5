@@ -13,12 +13,12 @@ namespace
 {
 std::uint32_t *background = nullptr;
 std::uint64_t epoch = 0, previous = 0, last_work = 0;
-std::uint64_t work[90]{}, intervals[90]{};
+std::uint64_t work[180]{}, intervals[180]{};
 unsigned shown = 0, late = 0;
 int show(const tube5::VideoOutput &frame, void *) noexcept
 {
     if (!frame.buffer || frame.width != 3840 || frame.height != 2160 || frame.format != 0 ||
-        frame.pitch_bytes < 3840 || frame.pitch_bytes > 4096 || shown >= 90)
+        frame.pitch_bytes < 3840 || frame.pitch_bytes > 4096 || shown >= 180)
         return -22;
     auto *y = static_cast<unsigned char *>(frame.buffer);
     unsigned char *planes[2] = {y, y + static_cast<std::size_t>(frame.pitch_bytes) * frame.height};
@@ -45,7 +45,7 @@ int show(const tube5::VideoOutput &frame, void *) noexcept
 } // namespace
 int main()
 {
-    tube5::failure_log_build_label("BOOT-DIAG-85-VP9-4K");
+    tube5::failure_log_build_label("BOOT-DIAG-88-VP9-4K60");
     int result = sceSysmoduleLoadModule(207);
     if (!result)
     {
@@ -58,14 +58,14 @@ int main()
     if (!result)
     {
         (void)sceSystemServiceHideSplashScreen();
-        result = tube5::hardware_clip_begin("/app0/assets/hw-vp9-4k.t5hc",
-                                            "/download0/tube5-vp9-4k-decoder.log");
+        result = tube5::hardware_clip_begin("/app0/assets/hw-vp9-4k60.t5hc",
+                                            "/download0/tube5-vp9-4k60-decoder.log");
     }
     while (!result)
     {
         if (shown)
         {
-            const auto target = epoch + shown * UINT64_C(1000000) / 30;
+            const auto target = epoch + shown * UINT64_C(1000000) / 60;
             const auto now = sceKernelGetProcessTime();
             if (now < target)
                 sceKernelUsleep(static_cast<unsigned>(target - now));
@@ -90,8 +90,8 @@ int main()
     char report[640]{};
     const int n = std::snprintf(
         report, sizeof(report),
-        "TUBE5 VP9 CLIP V3\nBUILD BOOT-DIAG-85-VP9-4K\nRESULT %d CLEANUP %d GPU %s\n"
-        "SOURCE VP9 PROFILE 0 3840x2160 TARGET 1920x1080 FPS 30\n"
+        "TUBE5 VP9 CLIP V4\nBUILD BOOT-DIAG-88-VP9-4K60\nRESULT %d CLEANUP %d GPU %s\n"
+        "SOURCE VP9 PROFILE 0 3840x2160 TARGET 1920x1080 FPS 60\n"
         "SHOWN %u CRC MATCHES %u ELAPSED BETWEEN FLIPS US %llu LATE %u\n"
         "PRESENT WORK P50/P95/MAX US %llu/%llu/%llu\n"
         "FLIP INTERVAL P50/P95/MAX US %llu/%llu/%llu\n"
@@ -107,7 +107,7 @@ int main()
         static_cast<unsigned long long>(shown > 1 ? intervals[shown - 2] : 0), status.coded_frames,
         status.hidden_frames, status.superframes, status.existing_frames);
     if (n > 0)
-        (void)tube5::write_failure_log("/download0/tube5-vp9-4k.log", report,
+        (void)tube5::write_failure_log("/download0/tube5-vp9-4k60.log", report,
                                        std::min<std::size_t>(n, sizeof(report) - 1));
     for (;;)
         sceKernelUsleep(16000);
