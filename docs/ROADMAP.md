@@ -95,6 +95,8 @@ DIAG58 validada en FW13.20: 150 frames 1080p/30 (IDR/P) con un único decoder,
 30.876 ms por frame, SLOW 0 y cleanup correcto. Propietario confirma reapertura.
 Presentación CPU/SDL. B frames, audio y seeks siguen pendientes para el backend
 hardware; no extrapolar estos cinco segundos a sesiones largas o formatos mayores.
+DIAG59 preparada: fixture con 95 B frames, metadatos PTS/DTS/tag, slots retenidos,
+drain final y comprobación de imagen/orden contra software. Validación PS5 pendiente.
 Después: integración
 1080p con audio/reloj/seeks, presentación GPU, VP9 SDR 1440p y 2160p. Conservar
 software como alternativa. No asumir AV1 por hardware ni HDR antes de pruebas.

@@ -36,6 +36,7 @@ extern "C"
     int sceVideodec2Reset(void *);
     int sceVideodec2Decode(void *, tube5::VideoInput *, tube5::VideoFrame *, tube5::VideoOutput *);
     int sceVideodec2Flush(void *, tube5::VideoFrame *, tube5::VideoOutput *);
+    int sceVideodec2GetPictureInfo(const tube5::VideoOutput *, tube5::VideoPictureInfo *, void *);
 }
 namespace
 {
@@ -58,6 +59,10 @@ struct Clip
 {
     int descriptor = -1;
     std::uint32_t offsets[300]{}, sizes[300]{};
+    std::uint32_t pts_index[300]{}, crc[300]{};
+    bool frame_used[6]{};
+    unsigned input_tag[6]{};
+    std::size_t frame_stride = 0;
     char log[256]{};
     const char *stage = "IDLE";
     const char *failure_stage = "NONE";
@@ -66,6 +71,7 @@ struct Clip
     std::size_t flexible_before = 0, flexible_after = 0;
     int before_rc = 0, after_rc = 0;
     unsigned first_sum = 0, last_sum = 0;
+    std::uint32_t last_crc = 0, expected_crc = 0;
 };
 Clip clip;
 void clip_snapshot()
@@ -74,13 +80,15 @@ void clip_snapshot()
     char report[1800]{};
     const int length = std::snprintf(
         report, sizeof(report),
-        "TUBE5 HARDWARE CLIP V1\nBUILD %s\n1080P AVC HIGH IP - CPU SDL DISPLAY\n"
+        "TUBE5 HARDWARE CLIP V1\nBUILD %s\n1080P AVC HIGH %s - CPU SDL DISPLAY\n"
         "STAGE %s FAILURE %s ERROR %08X ACTIVE %u CANCELLED %u\n"
         "FRAMES %u FPS %u SUBMITTED %u DECODED %u COMPOSED %u CHANGED %u SLOW %u\n"
         "DECODE MAX US %llu CONVERT MAX US %llu COPY MAX US %llu WORK MAX US %llu ELAPSED US %llu\n"
         "LUMA FIRST %u LAST %u\nCLEANUP %08X QUARANTINED %u\n"
+        "NO OUTPUT %u DRAIN %u METADATA %u CRC MATCH %u INPUT REORDERS %u ORDER ERR %u\n"
+        "PTS %llu DTS %llu ATTACHED %llu CRC LAST %08X EXPECTED %08X\n"
         "FLEX BEFORE %llu RC %08X AFTER %llu RC %08X\n",
-        tube5::failure_log_build_label(), clip.stage, clip.failure_stage,
+        tube5::failure_log_build_label(), s.bframes ? "IPB" : "IP", clip.stage, clip.failure_stage,
         static_cast<unsigned>(s.error), s.active ? 1u : 0u, s.cancelled ? 1u : 0u, s.frames, s.fps,
         s.submitted, s.decoded, s.presented, s.changed_frames, s.slow_frames,
         static_cast<unsigned long long>(s.decode_max_us),
@@ -88,7 +96,10 @@ void clip_snapshot()
         static_cast<unsigned long long>(s.copy_max_us),
         static_cast<unsigned long long>(s.work_max_us),
         static_cast<unsigned long long>(s.elapsed_us), clip.first_sum, clip.last_sum,
-        static_cast<unsigned>(s.cleanup_error), resources.quarantined ? 1u : 0u,
+        static_cast<unsigned>(s.cleanup_error), resources.quarantined ? 1u : 0u, s.no_output,
+        s.drain_calls, s.metadata, s.crc_matches, s.input_reorders, s.order_errors,
+        static_cast<unsigned long long>(s.last_pts), static_cast<unsigned long long>(s.last_dts),
+        static_cast<unsigned long long>(s.last_attached), clip.last_crc, clip.expected_crc,
         static_cast<unsigned long long>(clip.flexible_before),
         static_cast<unsigned>(clip.before_rc), static_cast<unsigned long long>(clip.flexible_after),
         static_cast<unsigned>(clip.after_rc));
@@ -184,7 +195,8 @@ int cleanup()
     }
     return 0;
 }
-template <class Recorder> int prepare_decoder(Recorder record)
+template <class Recorder>
+int prepare_decoder(Recorder record, unsigned depth = 1, unsigned slots = 1)
 {
     auto &r = resources;
     tube5::VideoComputeMemory compute{};
@@ -216,7 +228,7 @@ template <class Recorder> int prepare_decoder(Recorder record)
     config.width = 1920;
     config.height = 1088;
     config.dpb = 4;
-    config.depth = 1;
+    config.depth = depth;
     config.queue = reinterpret_cast<std::uintptr_t>(r.queue);
     config.affinity = 0x3f;
     config.priority = 700;
@@ -234,7 +246,10 @@ template <class Recorder> int prepare_decoder(Recorder record)
     if (!r.cpu_bytes || !gpu_bytes || (memory.shared_bytes && !shared_bytes) || !frame_bytes ||
         !memory.alignment || memory.alignment > page ||
         (memory.alignment & (memory.alignment - 1)) ||
-        r.cpu_bytes + gpu_bytes + shared_bytes + frame_bytes + r.compute.bytes + mib > 256 * mib)
+        r.cpu_bytes + gpu_bytes + shared_bytes + frame_bytes * slots + r.compute.bytes +
+                mib * slots >
+            256 * mib ||
+        !slots || slots > 6)
         return -EINVAL;
     code = sceKernelMapNamedFlexibleMemory(&r.cpu, r.cpu_bytes, 3, 0, "Tube5HwCpu");
     record("CPU MEMORY", code);
@@ -262,9 +277,10 @@ template <class Recorder> int prepare_decoder(Recorder record)
         r.quarantined = true;
     if (code || !r.decoder)
         return code ? code : -EINVAL;
-    code = allocate(r.input, mib, 0x32);
+    clip.frame_stride = frame_bytes;
+    code = allocate(r.input, mib * slots, 0x32);
     if (!code)
-        code = allocate(r.frame, frame_bytes, 0x33);
+        code = allocate(r.frame, frame_bytes * slots, 0x33);
     record("FRAME MEMORY", code);
     return code;
 }
@@ -525,20 +541,32 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
         return fail(-EINVAL);
     clip_status.fps = little32(header + 16);
     clip_status.frames = little32(header + 20);
-    if (std::memcmp(header, "T5HC", 4) || little32(header + 4) != 1 ||
+    const auto version = little32(header + 4);
+    clip_status.bframes = version == 2;
+    if (std::memcmp(header, "T5HC", 4) || (version != 1 && version != 2) ||
         little32(header + 8) != 1920 || little32(header + 12) != 1080 || clip_status.fps != 30 ||
-        !clip_status.frames || clip_status.frames > 300 || little32(header + 24))
+        !clip_status.frames || clip_status.frames > 300 ||
+        little32(header + 24) != (clip_status.bframes ? 1u : 0u))
         return fail(-EINVAL);
     std::uint64_t offset = sizeof(header);
+    bool seen_pts[300]{};
     for (unsigned i = 0; i < clip_status.frames; ++i)
     {
-        unsigned char size[4]{};
-        if (offset + 4 > static_cast<std::uint64_t>(metadata.st_size) ||
+        unsigned char entry[16]{};
+        const unsigned entry_bytes = clip_status.bframes ? 16 : 4;
+        if (offset + entry_bytes > static_cast<std::uint64_t>(metadata.st_size) ||
             ::lseek(clip.descriptor, static_cast<off_t>(offset), SEEK_SET) < 0 ||
-            read_exact(clip.descriptor, size, sizeof(size)))
+            read_exact(clip.descriptor, entry, entry_bytes))
             return fail(-EINVAL);
-        offset += 4;
-        clip.sizes[i] = little32(size);
+        offset += entry_bytes;
+        clip.sizes[i] = little32(entry);
+        clip.pts_index[i] = clip_status.bframes ? little32(entry + 4) : i;
+        clip.crc[i] = clip_status.bframes ? little32(entry + 12) : 0;
+        if (clip.pts_index[i] >= clip_status.frames || seen_pts[clip.pts_index[i]] ||
+            (clip_status.bframes && little32(entry + 8) != i))
+            return fail(-EINVAL);
+        seen_pts[clip.pts_index[i]] = true;
+        clip_status.input_reorders += clip.pts_index[i] != i;
         clip.offsets[i] = static_cast<std::uint32_t>(offset);
         if (!clip.sizes[i] || clip.sizes[i] >= mib ||
             offset + clip.sizes[i] > static_cast<std::uint64_t>(metadata.st_size))
@@ -553,7 +581,7 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
         clip_status.error = code;
         clip_snapshot();
     };
-    int code = prepare_decoder(record);
+    int code = prepare_decoder(record, clip_status.bframes ? 3 : 1, clip_status.bframes ? 6 : 1);
     if (code)
         return fail(code);
     code = sceVideodec2Reset(resources.decoder);
@@ -565,6 +593,163 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
     return 0;
 #endif
 }
+#ifdef TUBE5_HW_FRAME
+static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) noexcept
+{
+    auto &s = clip_status;
+    auto &r = resources;
+    const auto fail = [](const char *stage, int code)
+    {
+        clip.stage = clip.failure_stage = stage;
+        clip_status.error = code;
+        clip_snapshot();
+        return code;
+    };
+    if (s.decoded == s.frames)
+        return s.submitted == s.frames ? 1 : fail("EARLY EOF", -EINVAL);
+    if (!clip.started)
+        clip.started = sceKernelGetProcessTime();
+    unsigned offered = 0;
+    while (offered < 6 && clip.frame_used[offered])
+        ++offered;
+    if (offered == 6)
+        return fail("FRAME POOL", -ENOBUFS);
+    auto *offered_buffer = static_cast<unsigned char *>(r.frame.data) + offered * clip.frame_stride;
+    VideoFrame frame{sizeof(VideoFrame), offered_buffer, clip.frame_stride, 0, 0};
+    VideoOutput output{};
+    output.size = sizeof(output);
+    int code = 0;
+    std::uint64_t decode_start = 0;
+    if (s.submitted < s.frames)
+    {
+        unsigned input_slot = 0;
+        while (input_slot < 6 && clip.input_tag[input_slot])
+            ++input_slot;
+        if (input_slot == 6)
+            return fail("INPUT POOL", -ENOBUFS);
+        const unsigned index = s.submitted;
+        auto *data = static_cast<unsigned char *>(r.input.data) + input_slot * mib;
+        if (::lseek(clip.descriptor, clip.offsets[index], SEEK_SET) < 0 ||
+            read_exact(clip.descriptor, data, clip.sizes[index]))
+            return fail("READ", -EIO);
+        clip.input_tag[input_slot] = index + 1;
+        VideoInput input{sizeof(VideoInput),
+                         data,
+                         clip.sizes[index],
+                         static_cast<std::uint64_t>(clip.pts_index[index]) * 1000000 / s.fps,
+                         static_cast<std::uint64_t>(index) * 1000000 / s.fps,
+                         index + 1};
+        clip.stage = "DECODE B";
+        if (index % 30 == 0)
+            clip_snapshot();
+        decode_start = sceKernelGetProcessTime();
+        code = sceVideodec2Decode(r.decoder, &input, &frame, &output);
+        ++s.submitted;
+    }
+    else
+    {
+        if (s.drain_calls >= 12)
+            return fail("DRAIN LIMIT", -EIO);
+        clip.stage = "DRAIN B";
+        ++s.drain_calls;
+        decode_start = sceKernelGetProcessTime();
+        code = sceVideodec2Flush(r.decoder, &frame, &output);
+    }
+    const auto decode_us = sceKernelGetProcessTime() - decode_start;
+    s.decode_max_us = std::max(s.decode_max_us, decode_us);
+    if (frame.accepted)
+        clip.frame_used[offered] = true;
+    if (code || output.error)
+        return fail(clip.stage, code ? code : -EIO);
+    if (!output.valid)
+    {
+        ++s.no_output;
+        s.elapsed_us = sceKernelGetProcessTime() - clip.started;
+        clip_snapshot();
+        return 2; // Priming/reordering: continue input without flushing the stream.
+    }
+    unsigned returned = 0;
+    while (returned < 6 && output.buffer != static_cast<unsigned char *>(r.frame.data) +
+                                                returned * clip.frame_stride)
+        ++returned;
+    const auto required = static_cast<std::uint64_t>(output.pitch_bytes) * output.height * 3 / 2;
+    if (returned == 6 || (!clip.frame_used[returned] && returned != offered) ||
+        output.pictures != 1 || output.codec != 1 || output.format != 0 || output.padding ||
+        output.width != 1920 || output.height < 1080 || output.height > 1088 ||
+        (output.height & 1u) || output.pitch_bytes < 1920 || output.pitch_bytes > 4096 ||
+        (output.pitch_bytes & 1u) || output.bytes > clip.frame_stride || required > output.bytes)
+        return fail("OUTPUT B", -EINVAL);
+    struct GuardedInfo
+    {
+        std::uint64_t before = UINT64_C(0xc0dec0dec0dec0de);
+        VideoPictureInfo info{};
+        std::uint64_t after = UINT64_C(0xc0dec0dec0dec0de);
+    } picture;
+    picture.info.size = sizeof(picture.info);
+    picture.info.pts = picture.info.dts = picture.info.attached = UINT64_MAX;
+    code = sceVideodec2GetPictureInfo(&output, &picture.info, nullptr);
+    s.last_pts = picture.info.pts;
+    s.last_dts = picture.info.dts;
+    s.last_attached = picture.info.attached;
+    if (code || picture.before != UINT64_C(0xc0dec0dec0dec0de) ||
+        picture.after != UINT64_C(0xc0dec0dec0dec0de) || picture.info.valid != 1 ||
+        picture.info.size != sizeof(picture.info) || !picture.info.attached ||
+        picture.info.attached > s.submitted)
+        return fail("PICTURE INFO", code ? code : -EINVAL);
+    ++s.metadata;
+    const unsigned packet = static_cast<unsigned>(picture.info.attached - 1);
+    unsigned input_slot = 0;
+    while (input_slot < 6 && clip.input_tag[input_slot] != picture.info.attached)
+        ++input_slot;
+    if (input_slot == 6 ||
+        picture.info.pts != static_cast<std::uint64_t>(clip.pts_index[packet]) * 1000000 / s.fps ||
+        picture.info.dts != static_cast<std::uint64_t>(packet) * 1000000 / s.fps)
+        return fail("PICTURE TAG", -EINVAL);
+    if (clip.pts_index[packet] != s.decoded)
+    {
+        ++s.order_errors;
+        return fail("PRESENTATION ORDER", -EINVAL);
+    }
+    unsigned sum = 0;
+    std::uint32_t crc = UINT32_MAX;
+    for (unsigned y = 0; y < 1080; y += 31)
+        for (unsigned x = 0; x < 1920; x += 31)
+        {
+            const unsigned value =
+                static_cast<unsigned char *>(output.buffer)[y * output.pitch_bytes + x];
+            sum += value;
+            crc ^= value;
+            for (unsigned bit = 0; bit < 8; ++bit)
+                crc = (crc >> 1) ^ ((crc & 1u) ? UINT32_C(0xedb88320) : 0);
+        }
+    crc ^= UINT32_MAX;
+    clip.last_crc = crc;
+    clip.expected_crc = clip.crc[packet];
+    if (crc != clip.crc[packet])
+        return fail("PICTURE CRC", -EILSEQ);
+    ++s.crc_matches;
+    if (!s.decoded)
+        clip.first_sum = sum;
+    else if (sum != clip.last_sum)
+        ++s.changed_frames;
+    clip.last_sum = sum;
+    ++s.decoded;
+    const auto convert_start = sceKernelGetProcessTime();
+    code = consumer(output, context);
+    const auto convert_us = sceKernelGetProcessTime() - convert_start;
+    s.convert_max_us = std::max(s.convert_max_us, convert_us);
+    clip.last_work_us = decode_us + convert_us;
+    if (code)
+        return fail("CONSUMER B", code);
+    clip.frame_used[returned] = false;
+    clip.input_tag[input_slot] = 0;
+    s.elapsed_us = sceKernelGetProcessTime() - clip.started;
+    clip.stage = "B FRAME COPIED";
+    if (s.decoded % 30 == 0 || s.decoded == s.frames)
+        clip_snapshot();
+    return 0;
+}
+#endif
 int hardware_clip_step(HardwareFrameConsumer consumer, void *context) noexcept
 {
 #ifndef TUBE5_HW_FRAME
@@ -578,6 +763,8 @@ int hardware_clip_step(HardwareFrameConsumer consumer, void *context) noexcept
         return -EINVAL;
     if (s.error)
         return s.error;
+    if (s.bframes)
+        return hardware_bclip_step(consumer, context);
     if (s.submitted == s.frames)
         return 1;
     const auto fail = [](const char *stage, int code)

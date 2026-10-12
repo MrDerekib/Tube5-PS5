@@ -55,3 +55,10 @@ int sceVideodec2Flush(void *decoder, void *frame, void *output)
     (void)output;
     return -1;
 }
+int sceVideodec2GetPictureInfo(const void *output, void *first, void *second)
+{
+    (void)output;
+    (void)first;
+    (void)second;
+    return -1;
+}

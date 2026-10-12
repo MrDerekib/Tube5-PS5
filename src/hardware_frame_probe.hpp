@@ -37,6 +37,15 @@ static_assert(sizeof(VideoComputeConfig) == 16 && sizeof(VideoInput) == 48);
 static_assert(sizeof(VideoFrame) == 32 && sizeof(VideoOutput) == 56);
 static_assert(offsetof(VideoOutput, buffer) == 32);
 using HardwareFrameConsumer = int (*)(const VideoOutput &, void *) noexcept;
+struct VideoPictureInfo
+{
+    std::uint64_t size;
+    std::uint8_t valid, padding[7];
+    std::uint64_t pts, dts, attached;
+    std::uint8_t codec_fields[80];
+};
+static_assert(sizeof(VideoPictureInfo) == 120 && offsetof(VideoPictureInfo, pts) == 16 &&
+              offsetof(VideoPictureInfo, attached) == 32);
 // One deterministic AU. Optional consumer runs before decoder resources are released.
 // Never retry quarantined resources.
 int hardware_frame_probe(const char *asset, const char *log,
@@ -52,9 +61,13 @@ struct HardwareClipStatus
     int error = 0, cleanup_error = 0;
     std::uint64_t decode_max_us = 0, convert_max_us = 0, copy_max_us = 0, elapsed_us = 0;
     std::uint64_t work_max_us = 0;
+    unsigned no_output = 0, drain_calls = 0, metadata = 0, crc_matches = 0;
+    unsigned input_reorders = 0, order_errors = 0;
+    std::uint64_t last_pts = 0, last_dts = 0, last_attached = 0;
+    bool bframes = false;
 };
 int hardware_clip_begin(const char *asset, const char *log) noexcept;
-// Returns zero for one copied frame, one at EOF, or a negative/native error.
+// Returns zero for a copied frame, one at EOF, two for priming, or a native error.
 int hardware_clip_step(HardwareFrameConsumer consumer, void *context) noexcept;
 void hardware_clip_presented(std::uint64_t copy_us) noexcept;
 int hardware_clip_close(bool cancelled = false, int display_error = 0) noexcept;

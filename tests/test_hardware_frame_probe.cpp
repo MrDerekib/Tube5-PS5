@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 namespace
@@ -20,9 +21,25 @@ std::array<Buffer, 5> buffers;
 void *cpu = nullptr;
 bool queue = false, decoder = false, delayed = false, invalid = false;
 bool partial_queue = false;
+int operation = 0, fail_operation = 0, delete_error = 0;
 bool clip_motion = false;
 unsigned decode_calls = 0, reset_calls = 0, last_luma = 16;
-int operation = 0, fail_operation = 0, delete_error = 0;
+bool b_mode = false, corrupt_metadata = false, wrong_order = false, corrupt_pixels = false;
+struct Pending
+{
+    tube5::VideoFrame frame{};
+    std::uint64_t pts = 0, dts = 0, tag = 0;
+    bool used = false;
+};
+std::array<Pending, 8> pending;
+tube5::VideoPictureInfo last_picture{};
+unsigned b_submitted = 0, b_next = 0;
+void reset_b_mock()
+{
+    pending = {};
+    b_submitted = b_next = 0;
+    operation = 0;
+}
 int next()
 {
     return ++operation == fail_operation ? -77 : 0;
@@ -58,6 +75,33 @@ int consume(const tube5::VideoOutput &output, void *context) noexcept
            output.height == 1088 && output.pitch_bytes == 2048 && output.buffer);
     ++*static_cast<unsigned *>(context);
     return 0;
+}
+void b_picture(tube5::VideoOutput *output)
+{
+    const unsigned wanted = wrong_order ? 3 : b_next;
+    for (auto &packet : pending)
+        if (packet.used && packet.pts == static_cast<std::uint64_t>(wanted) * 1000000 / 30)
+        {
+            picture(&packet.frame, output);
+            std::memset(packet.frame.buffer, 16 + wanted + (corrupt_pixels ? 1 : 0),
+                        packet.frame.bytes);
+            last_picture = {};
+            last_picture.size = sizeof(last_picture);
+            last_picture.valid = 1;
+            last_picture.pts = packet.pts;
+            last_picture.dts = packet.dts;
+            last_picture.attached = packet.tag;
+            packet.used = false;
+            ++b_next;
+            return;
+        }
+}
+void write32(int fd, std::uint32_t value)
+{
+    const unsigned char bytes[]{
+        static_cast<unsigned char>(value), static_cast<unsigned char>(value >> 8),
+        static_cast<unsigned char>(value >> 16), static_cast<unsigned char>(value >> 24)};
+    assert(write(fd, bytes, sizeof(bytes)) == sizeof(bytes));
 }
 } // namespace
 extern "C" std::size_t sceKernelGetDirectMemorySize()
@@ -180,7 +224,7 @@ extern "C" int sceVideodec2QueryDecoderMemoryInfo(const tube5::VideoDecoderConfi
                                                   tube5::VideoDecoderMemory *memory)
 {
     assert(queue && config->queue == reinterpret_cast<std::uintptr_t>(&queue) &&
-           config->width == 1920 && config->height == 1088 && config->depth == 1 &&
+           config->width == 1920 && config->height == 1088 && config->depth == (b_mode ? 3u : 1u) &&
            config->dpb == 4 && config->codec == 1 && config->profile == 100 && memory->size == 72);
     if (const int code = next())
         return code;
@@ -216,6 +260,20 @@ extern "C" int sceVideodec2Reset(void *handle)
 extern "C" int sceVideodec2Decode(void *handle, tube5::VideoInput *input, tube5::VideoFrame *frame,
                                   tube5::VideoOutput *output)
 {
+    if (b_mode)
+    {
+        assert(handle == &decoder && decoder && input->attached == b_submitted + 1 &&
+               input->bytes == 101);
+        if (const int code = next())
+            return code;
+        auto &packet = pending[b_submitted];
+        assert(!packet.used);
+        packet = {*frame, input->pts, input->dts, input->attached, true};
+        frame->accepted = 1;
+        if (++b_submitted >= 4)
+            b_picture(output);
+        return 0;
+    }
     assert(handle == &decoder && decoder && input->size == 48 && input->bytes > 100 &&
            input->bytes < 1024 * 1024 && input->dts == UINT64_MAX);
     if (clip_motion)
@@ -233,7 +291,19 @@ extern "C" int sceVideodec2Flush(void *, tube5::VideoFrame *frame, tube5::VideoO
 {
     if (const int code = next())
         return code;
-    picture(frame, output);
+    if (b_mode)
+        b_picture(output);
+    else
+        picture(frame, output);
+    return 0;
+}
+extern "C" int sceVideodec2GetPictureInfo(const tube5::VideoOutput *output,
+                                          tube5::VideoPictureInfo *info, void *second)
+{
+    assert(b_mode && output->valid && info->size == 120 && !second);
+    *info = last_picture;
+    if (corrupt_metadata)
+        info->attached = 0;
     return 0;
 }
 int main()
@@ -340,6 +410,65 @@ int main()
     no_resources();
     clip_motion = false;
     delayed = false;
+    char basset[200]{};
+    std::snprintf(basset, sizeof(basset), "%s/bclip.t5hc", directory);
+    const int fd = open(basset, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    assert(fd >= 0 && write(fd, "T5HC", 4) == 4);
+    for (auto value : {2u, 1920u, 1080u, 30u, 8u, 1u})
+        write32(fd, value);
+    constexpr unsigned order[]{0, 3, 1, 2, 6, 4, 5, 7};
+    // Checksums independently generated with Python zlib for 2170 constant samples.
+    constexpr std::uint32_t crc[]{0x4ecf7cb8, 0x02fb0f21, 0xd6a79b8a, 0x9a93e813,
+                                  0xa56fb49d, 0xe95bc704, 0x3d0753af, 0x71332036};
+    unsigned char payload[101]{};
+    for (unsigned i = 0; i < 8; ++i)
+    {
+        for (auto value : {101u, order[i], i, crc[order[i]]})
+            write32(fd, value);
+        assert(write(fd, payload, sizeof(payload)) == sizeof(payload));
+    }
+    assert(close(fd) == 0);
+    b_mode = true;
+    reset_b_mock();
+    consumed = 0;
+    assert(!tube5::hardware_clip_begin(basset, log));
+    for (unsigned step = 0; step < 20; ++step)
+    {
+        const int code = tube5::hardware_clip_step(consume, &consumed);
+        if (code == 1)
+            break;
+        assert(code == 0 || code == 2);
+        if (code == 0)
+            tube5::hardware_clip_presented(25);
+    }
+    assert(consumed == 8 && tube5::hardware_clip_status().metadata == 8 &&
+           tube5::hardware_clip_status().crc_matches == 8 &&
+           tube5::hardware_clip_status().no_output == 3 &&
+           tube5::hardware_clip_status().drain_calls == 3);
+    assert(!tube5::hardware_clip_close());
+    no_resources();
+    reset_b_mock();
+    assert(!tube5::hardware_clip_begin(basset, log));
+    assert(tube5::hardware_clip_step(consume, &consumed) == 2);
+    assert(tube5::hardware_clip_step(consume, &consumed) == 2);
+    assert(!tube5::hardware_clip_close(true) && tube5::hardware_clip_status().cancelled);
+    no_resources();
+    for (unsigned scenario = 0; scenario < 3; ++scenario)
+    {
+        reset_b_mock();
+        corrupt_metadata = scenario == 0;
+        wrong_order = scenario == 1;
+        corrupt_pixels = scenario == 2;
+        assert(!tube5::hardware_clip_begin(basset, log));
+        for (unsigned i = 0; i < 3; ++i)
+            assert(tube5::hardware_clip_step(consume, &consumed) == 2);
+        assert(tube5::hardware_clip_step(consume, &consumed) ==
+               (scenario == 2 ? -EILSEQ : -EINVAL));
+        assert(!tube5::hardware_clip_close());
+        no_resources();
+    }
+    b_mode = corrupt_metadata = wrong_order = corrupt_pixels = false;
+    assert(unlink(basset) == 0);
     const auto child = fork();
     assert(child >= 0);
     if (child == 0)

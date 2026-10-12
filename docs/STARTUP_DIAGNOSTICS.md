@@ -1,5 +1,42 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-59-HWBFRAMES: reordenación y metadatos
+
+Fixture propio 1080p/30, cinco segundos, 5 I + 50 P + 95 B, numerado por imagen.
+`python3 tools/prepare-hardware-bclip.py` genera el mismo flujo codificado en
+Annex B/MP4 y una referencia software de CRC32 de 2170 muestras de luma por
+imagen. T5HC v2 conserva el índice PTS de presentación por AU, el índice DTS
+de entrada y el CRC de su imagen. SHA-256:
+`4369dd6a7d2d4684a148ae0134e6499e6f50663475d7cd66b20e0f033429fc66`.
+
+Config depth 3, DPB 4, seis slots de entrada y seis de salida en memoria directa
+acotada. Los slots aceptados quedan reservados hasta recibir una imagen propia
+válida y copiarla. La entrada se conserva hasta recuperar su tag. Sin flush
+entre entradas B: al EOF se drena, con un máximo de doce llamadas. Salidas vacías
+durante el llenado no se consideran EOF. Círculo cierra también durante esa fase.
+
+GetPictureInfo usa un bloque de 120 bytes (prefix valid/PTS/DTS/attached, con
+offsets verificados y guardas). Solo se leen esos campos. Layout y firma
+contrastados con [PortPS5](https://github.com/ymatrix1/PortPS5/blob/main/core/libs/prx/libSceVideodec2/Export.cpp)
+y [shadPS4](https://github.com/shadps4-emu/shadPS4/blob/main/src/core/libraries/videodec/videodec2.h);
+son implementaciones públicas, no validación de esta API en nuestra consola.
+Los tags deben identificar una entrada viva y sus PTS/DTS deben coincidir con
+el fixture. Se exige orden de presentación ascendente y CRC idéntico al software;
+si no se cumple, el probe se detiene y guarda la causa. Todavía no implementa una
+cola de reordenación propia para un decoder que devolviese orden de entrada.
+
+Informe habitual tube5-hardware-clip.log: incluye llenado/drain, lecturas de
+metadatos, orden y CRC, además de memoria y tiempos. Pruebas host sanitizadas:
+salida diferida a un slot anterior, permutación de entradas, drain al EOF,
+cancelación con buffers retenidos, metadatos inválidos, orden incorrecto y
+pixeles distintos de la referencia. Prueba real de B frames/ABI pendiente.
+Con depth 3, DECODE MAX mide la duración de las llamadas al API (ocupación de
+submit/espera), no la latencia interna de decodificación de cada imagen.
+Las lecturas de archivo y escritura de logs se excluyen de ese contador;
+el tiempo total incluye el llenado, la cadencia y el drain final.
+ELF y artefactos exactos en .local/boot-diag-59; eboot.bin SHA-256:
+`253ab859e6a6f0315d346a569d40110be0182e768cce02a4c16d7f80450261f6`.
+
 ## BOOT-DIAG-58-HWCLIP: 150 frames consecutivos
 
 Fixture sintético propio 1080p/30, cinco segundos: cinco IDR y 145 P frames,

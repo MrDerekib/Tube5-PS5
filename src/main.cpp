@@ -813,7 +813,11 @@ int main()
                                                      SDL_TEXTUREACCESS_STREAMING, 1920, 1080);
 #ifdef TUBE5_HW_CLIP
         if (hardware_preview.texture &&
+#ifdef TUBE5_HW_BCLIP
+            tube5::hardware_clip_begin("/app0/assets/hw-bclip.t5hc",
+#else
             tube5::hardware_clip_begin("/app0/assets/hw-clip.t5hc",
+#endif
                                        "/download0/tube5-hardware-clip.log") == 0)
             hardware_clip_next_at = SDL_GetTicks64();
 #else
@@ -1631,10 +1635,12 @@ int main()
             if (!hardware_clip_started_at)
                 hardware_clip_started_at = SDL_GetTicks64();
             const int result = tube5::hardware_clip_step(capture_hardware_nv12, &hardware_preview);
-            if (result == 0)
+            if (result == 0 || result == 2)
                 hardware_clip_next_at =
                     hardware_clip_started_at +
-                    static_cast<Uint64>(tube5::hardware_clip_status().submitted) * 1000 / 30;
+                    static_cast<Uint64>(tube5::hardware_clip_status().submitted +
+                                        tube5::hardware_clip_status().drain_calls) *
+                        1000 / 30;
             else
             {
                 (void)tube5::hardware_clip_close();
@@ -1692,7 +1698,11 @@ int main()
                     hardware_preview.texture = nullptr;
                 }
             }
+#ifdef TUBE5_HW_CLIP
+            else if (!tube5::hardware_clip_status().active)
+#else
             else
+#endif
             {
                 SDL_DestroyTexture(hardware_preview.texture);
                 hardware_preview.texture = nullptr;
