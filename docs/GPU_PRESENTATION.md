@@ -641,6 +641,20 @@ sincronización, audio ni selección de formatos YouTube. Verificación focal:
 compilación de ambos call sites y guard de configuración en runtime; los tests
 del decoder ya pasados no se repiten por esta corrección de ruta.
 
+Resultado DIAG95: el propietario confirma que ahora se reproduce. Logs verifican
+profundidad tres/cuatro slots, pico pendiente tres y dos llamadas de drain.
+Reproducción continua de 12 segundos: 720 entradas/recibidas/entregadas, EOF,
+error nativo y cleanup cero. 714 uploads, 713 intervalos en 11.996.010 µs
+(59,436 fps), intervalo máximo 34.669 µs, cuatro drops de sincronización;
+PTS válidos, sin discontinuidades ni seek. No atribuir los dos frames restantes
+no subidos sin evidencia adicional. Decode-call medio 1.376 µs, copia 1.633 µs;
+tiempo de llamada no equivale a latencia real del decoder asíncrono.
+Audio: 570 callbacks, 2.306.048 bytes PCM, siete underruns, error cero, frente
+a 511 underruns en DIAG94. Este control confirma el beneficio del pipeline en
+el player visible-only, no YouTube 4K60 ni hidden. Logs privados `diag95-*`.
+Pendiente con la misma build: pausa, seek +/-5/barra y reentrada; después validar
+hidden/existing antes de activar la ruta asíncrona para vídeos reales.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
