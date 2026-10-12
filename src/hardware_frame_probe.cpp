@@ -98,6 +98,9 @@ struct Stream
 Stream stream;
 void clip_snapshot()
 {
+#ifdef TUBE5_HW_TIMING
+    const auto log_start = sceKernelGetProcessTime();
+#endif
     const auto &s = clip_status;
     char report[1800]{};
     const int length = std::snprintf(
@@ -141,6 +144,9 @@ void clip_snapshot()
     if (length > 0 && clip.log[0])
         (void)tube5::write_failure_log(clip.log, report,
                                        std::min<std::size_t>(length, sizeof(report) - 1));
+#ifdef TUBE5_HW_TIMING
+    clip_status.last_log_us += sceKernelGetProcessTime() - log_start;
+#endif
 }
 int read_exact(int descriptor, void *data, std::size_t bytes)
 {
@@ -872,9 +878,16 @@ int hardware_clip_step(HardwareFrameConsumer consumer, void *context) noexcept
     if (!clip.started)
         clip.started = sceKernelGetProcessTime();
     const unsigned index = s.submitted;
+#ifdef TUBE5_HW_TIMING
+    const auto step_start = sceKernelGetProcessTime();
+    s.last_log_us = 0;
+#endif
     if (::lseek(clip.descriptor, clip.offsets[index], SEEK_SET) < 0 ||
         read_exact(clip.descriptor, r.input.data, clip.sizes[index]))
         return fail("READ", -EIO);
+#ifdef TUBE5_HW_TIMING
+    s.last_read_us = sceKernelGetProcessTime() - step_start;
+#endif
     VideoInput input{sizeof(VideoInput), r.input.data,
                      clip.sizes[index],  static_cast<std::uint64_t>(index) * 1000000 / s.fps,
                      UINT64_MAX,         0};
@@ -954,6 +967,9 @@ int hardware_clip_step(HardwareFrameConsumer consumer, void *context) noexcept
     }
     const auto decode_us = sceKernelGetProcessTime() - decode_start;
     s.decode_max_us = std::max(s.decode_max_us, decode_us);
+#ifdef TUBE5_HW_TIMING
+    s.last_decode_us = decode_us;
+#endif
     const auto required = static_cast<std::uint64_t>(output.pitch_bytes) * output.height * 3 / 2;
     if (code || output.error || !output.valid || output.pictures != 1 ||
         output.codec != (clip.vp9 ? 0x00245bfdu : 1u) || output.format != 0 ||
@@ -962,6 +978,9 @@ int hardware_clip_step(HardwareFrameConsumer consumer, void *context) noexcept
         (output.height & 1u) || output.pitch_bytes < clip.width || output.pitch_bytes > 4096 ||
         (output.pitch_bytes & 1u) || output.bytes > r.frame.bytes || required > output.bytes)
         return fail("OUTPUT", code ? code : -EINVAL);
+#ifdef TUBE5_HW_TIMING
+    const auto crc_start = sceKernelGetProcessTime();
+#endif
     unsigned sum = 0;
     std::uint32_t crc = UINT32_MAX;
     for (unsigned y = 0; y < clip.height; y += 31)
@@ -982,6 +1001,9 @@ int hardware_clip_step(HardwareFrameConsumer consumer, void *context) noexcept
             return fail("VP9 PICTURE CRC", -EILSEQ);
         ++s.crc_matches;
     }
+#ifdef TUBE5_HW_TIMING
+    s.last_crc_us = sceKernelGetProcessTime() - crc_start;
+#endif
     if (!s.decoded)
         clip.first_sum = sum;
     else if (sum != clip.last_sum)
@@ -993,12 +1015,19 @@ int hardware_clip_step(HardwareFrameConsumer consumer, void *context) noexcept
     const auto convert_us = sceKernelGetProcessTime() - convert_start;
     s.convert_max_us = std::max(s.convert_max_us, convert_us);
     clip.last_work_us = decode_us + convert_us;
+#ifdef TUBE5_HW_TIMING
+    s.last_consumer_us = convert_us;
+#endif
     if (code)
         return fail("CONSUMER", code);
     s.elapsed_us = sceKernelGetProcessTime() - clip.started;
     clip.stage = "FRAME COPIED";
     if (s.submitted % 30 == 0 || s.submitted == s.frames)
         clip_snapshot();
+#ifdef TUBE5_HW_TIMING
+    s.last_step_us = sceKernelGetProcessTime() - step_start;
+    clip.last_work_us = s.last_step_us;
+#endif
     return 0;
 #endif
 }

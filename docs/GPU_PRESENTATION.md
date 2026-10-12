@@ -457,6 +457,31 @@ También HDR10 Profile 2 de 10 bits: itag 337 WebM e itag 642 MP4.
 La disponibilidad en nuestro cliente de consola y la reproducción siguen
 pendientes. El selector Tube5 aún excluye 60 fps y HDR.
 
+## VP9 4K/60: costes por fase, DIAG89
+
+La misma fixture DIAG88 se reutiliza sin regenerarla. `TUBE5_HW_TIMING` añade
+medición de lectura, decode, CRC, consumer, paso completo, log y espera del
+reloj solamente al probe. Se excluye el primer frame de los percentiles.
+La prueba enfocada verifica que las fases registran tiempos y que su suma
+cabe en el paso total. `hardware_clip_presented(0)` elimina la doble cuenta
+del tiempo de presentación, ya incluido en el consumer. La iteración de EOF
+no escribe fuera del array de 180 muestras.
+
+DIAG89 en FW 13.20: 180/180 frames y CRC correctos; resultado y cleanup cero.
+Los 179 intervalos tardaron 3.580.057 µs (aproximadamente 50 fps). Medias:
+lectura 70 µs, decode 16.860 µs, CRC 86 µs, consumer 2.687 µs, paso completo
+19.918 µs y log 208 µs. Decode p50/p95/máximo: 16.018/20.053/34.148 µs;
+consumer: 2.650/2.790/4.850 µs. Los logs son esporádicos y llegan a 4.008 µs,
+pero no son el coste dominante. La espera media del reloj fue 93 µs.
+
+La prueba secuencial supera el presupuesto de 16.667 µs para 60 fps: el decode
+ya está alrededor del presupuesto y sumar presentación lleva a ~20 ms.
+Quitar el CRC no resolvería ese déficit. El siguiente ensayo es el player
+real con decode/render en hilos distintos, midiendo la cadencia, descartes y
+sincronización; el solapamiento puede ayudar, pero no garantiza 60 fps.
+No se da 4K/60 por validado ni se atribuye aún un límite absoluto al hardware.
+Logs privados: `.local/console-logs/diag89-*`.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

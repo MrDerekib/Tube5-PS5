@@ -14,6 +14,7 @@ namespace
 std::uint32_t *background = nullptr;
 std::uint64_t epoch = 0, previous = 0, last_work = 0;
 std::uint64_t work[180]{}, intervals[180]{};
+std::uint64_t phases[7][180]{};
 unsigned shown = 0, late = 0;
 int show(const tube5::VideoOutput &frame, void *) noexcept
 {
@@ -45,7 +46,7 @@ int show(const tube5::VideoOutput &frame, void *) noexcept
 } // namespace
 int main()
 {
-    tube5::failure_log_build_label("BOOT-DIAG-88-VP9-4K60");
+    tube5::failure_log_build_label("BOOT-DIAG-89-VP9-PHASES");
     int result = sceSysmoduleLoadModule(207);
     if (!result)
     {
@@ -63,18 +64,32 @@ int main()
     }
     while (!result)
     {
-        if (shown)
+        if (shown && shown < 180)
         {
+            const auto sleep_start = sceKernelGetProcessTime();
             const auto target = epoch + shown * UINT64_C(1000000) / 60;
             const auto now = sceKernelGetProcessTime();
             if (now < target)
+            {
                 sceKernelUsleep(static_cast<unsigned>(target - now));
+                phases[6][shown] = sceKernelGetProcessTime() - sleep_start;
+            }
             else if (now - target > 2000)
                 ++late;
         }
         result = tube5::hardware_clip_step(show, nullptr);
         if (!result)
-            tube5::hardware_clip_presented(last_work);
+        {
+            const auto &s = tube5::hardware_clip_status();
+            const unsigned i = shown - 1;
+            phases[0][i] = s.last_read_us;
+            phases[1][i] = s.last_decode_us;
+            phases[2][i] = s.last_crc_us;
+            phases[3][i] = s.last_consumer_us;
+            phases[4][i] = s.last_step_us;
+            phases[5][i] = s.last_log_us;
+            tube5::hardware_clip_presented(0); // Consumer already includes presentation/copy.
+        }
     }
     if (result == 1)
         result = 0;
@@ -87,10 +102,10 @@ int main()
         std::sort(intervals, intervals + shown - 1);
     }
     const auto &status = tube5::hardware_clip_status();
-    char report[640]{};
+    char report[2560]{};
     const int n = std::snprintf(
         report, sizeof(report),
-        "TUBE5 VP9 CLIP V4\nBUILD BOOT-DIAG-88-VP9-4K60\nRESULT %d CLEANUP %d GPU %s\n"
+        "TUBE5 VP9 CLIP V5\nBUILD BOOT-DIAG-89-VP9-PHASES\nRESULT %d CLEANUP %d GPU %s\n"
         "SOURCE VP9 PROFILE 0 3840x2160 TARGET 1920x1080 FPS 60\n"
         "SHOWN %u CRC MATCHES %u ELAPSED BETWEEN FLIPS US %llu LATE %u\n"
         "PRESENT WORK P50/P95/MAX US %llu/%llu/%llu\n"
@@ -106,9 +121,28 @@ int main()
         static_cast<unsigned long long>(shown > 1 ? intervals[(shown - 2) * 95 / 100] : 0),
         static_cast<unsigned long long>(shown > 1 ? intervals[shown - 2] : 0), status.coded_frames,
         status.hidden_frames, status.superframes, status.existing_frames);
-    if (n > 0)
-        (void)tube5::write_failure_log("/download0/tube5-vp9-4k60.log", report,
-                                       std::min<std::size_t>(n, sizeof(report) - 1));
+    std::size_t used = n > 0 ? std::min<std::size_t>(n, sizeof(report) - 1) : 0;
+    const char *names[]{"READ", "DECODE", "CRC", "CONSUMER", "STEP_TOTAL", "LOG", "PACE_SLEEP"};
+    if (shown > 1)
+        for (unsigned p = 0; p < 7; ++p)
+        {
+            const unsigned count = shown - 1;
+            std::uint64_t sum = 0;
+            for (unsigned i = 1; i < shown; ++i)
+                sum += phases[p][i];
+            std::sort(phases[p] + 1, phases[p] + shown);
+            const int added = std::snprintf(
+                report + used, sizeof(report) - used,
+                "PHASE %s N %u AVG US %llu P50/P95/MAX US %llu/%llu/%llu\n", names[p], count,
+                static_cast<unsigned long long>(sum / count),
+                static_cast<unsigned long long>(phases[p][1 + (count - 1) / 2]),
+                static_cast<unsigned long long>(phases[p][1 + (count - 1) * 95 / 100]),
+                static_cast<unsigned long long>(phases[p][shown - 1]));
+            if (added > 0)
+                used += std::min<std::size_t>(added, sizeof(report) - used - 1);
+        }
+    if (used)
+        (void)tube5::write_failure_log("/download0/tube5-vp9-4k60.log", report, used);
     for (;;)
         sceKernelUsleep(16000);
 }

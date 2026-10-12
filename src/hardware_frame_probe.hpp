@@ -67,6 +67,8 @@ struct HardwareClipStatus
     int error = 0, cleanup_error = 0;
     std::uint64_t decode_max_us = 0, convert_max_us = 0, copy_max_us = 0, elapsed_us = 0;
     std::uint64_t work_max_us = 0;
+    std::uint64_t last_read_us = 0, last_decode_us = 0, last_crc_us = 0;
+    std::uint64_t last_consumer_us = 0, last_step_us = 0, last_log_us = 0;
     unsigned no_output = 0, drain_calls = 0, metadata = 0, crc_matches = 0;
     unsigned input_reorders = 0, order_errors = 0;
     unsigned coded_frames = 0, hidden_frames = 0, superframes = 0, existing_frames = 0;

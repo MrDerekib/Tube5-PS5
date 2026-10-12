@@ -376,6 +376,13 @@ int main(int argc, char **argv)
         tube5::hardware_clip_presented(1);
         assert(tube5::hardware_clip_step(consume4k, &shown) == 1);
         assert(shown == 2 && tube5::hardware_clip_status().crc_matches == 2);
+#ifdef TUBE5_HW_TIMING
+        const auto &timing = tube5::hardware_clip_status();
+        assert(timing.last_read_us > 0 && timing.last_decode_us > 0 && timing.last_crc_us > 0 &&
+               timing.last_consumer_us > 0 &&
+               timing.last_step_us >= timing.last_read_us + timing.last_decode_us +
+                                          timing.last_crc_us + timing.last_consumer_us);
+#endif
         assert(!tube5::hardware_clip_close());
         no_resources();
         if (sixty)
