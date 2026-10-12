@@ -683,7 +683,7 @@ int main()
             used += std::min<std::size_t>(length, sizeof(hardware_log) - used - 1);
     }
     (void)tube5::write_failure_log("/download0/tube5-hardware.log", hardware_log, used);
-#ifdef TUBE5_HW_FRAME
+#if defined(TUBE5_HW_FRAME) && !defined(TUBE5_HW_CLIP)
     if (hardware_report.module == 0 && hardware_report.compute == 0 &&
         hardware_report.query[0] == 0)
         (void)tube5::hardware_frame_cycles("/app0/assets/hw-frame.h264", "/download0");
@@ -801,22 +801,46 @@ int main()
 #ifndef TUBE5_HOST
 #ifdef TUBE5_HW_FRAME
     HardwarePreview hardware_preview;
+#ifdef TUBE5_HW_CLIP
+    Uint64 hardware_clip_started_at = 0, hardware_clip_next_at = 0;
+#else
     Uint64 hardware_preview_until = 0;
+#endif
     if (hardware_report.module == 0 && hardware_report.compute == 0 &&
         hardware_report.query[0] == 0)
     {
         hardware_preview.texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
                                                      SDL_TEXTUREACCESS_STREAMING, 1920, 1080);
+#ifdef TUBE5_HW_CLIP
+        if (hardware_preview.texture &&
+            tube5::hardware_clip_begin("/app0/assets/hw-clip.t5hc",
+                                       "/download0/tube5-hardware-clip.log") == 0)
+            hardware_clip_next_at = SDL_GetTicks64();
+#else
         if (hardware_preview.texture &&
             tube5::hardware_frame_probe("/app0/assets/hw-frame.h264",
                                         "/download0/tube5-hardware-display.log",
                                         capture_hardware_nv12, &hardware_preview) == 0)
             hardware_preview_until = SDL_GetTicks64() + 5000;
+#endif
         else if (hardware_preview.texture)
         {
             SDL_DestroyTexture(hardware_preview.texture);
             hardware_preview.texture = nullptr;
         }
+#ifdef TUBE5_HW_CLIP
+        else
+        {
+            char report[256]{};
+            const int length = std::snprintf(
+                report, sizeof(report),
+                "TUBE5 HARDWARE CLIP V1\nBUILD %s\nSTAGE TEXTURE ERROR %08X\nSDL %s\n",
+                tube5::failure_log_build_label(), static_cast<unsigned>(-ENOMEM), SDL_GetError());
+            if (length > 0)
+                (void)tube5::write_failure_log("/download0/tube5-hardware-clip.log", report,
+                                               std::min<std::size_t>(length, sizeof(report) - 1));
+        }
+#endif
     }
 #endif
 #endif
@@ -905,6 +929,18 @@ int main()
     };
     const auto command = [&](tube5::Command action)
     {
+#if defined(TUBE5_HW_CLIP) && !defined(TUBE5_HOST)
+        if (tube5::hardware_clip_status().active)
+        {
+            if (action == tube5::Command::back)
+            {
+                (void)tube5::hardware_clip_close(true);
+                SDL_DestroyTexture(hardware_preview.texture);
+                hardware_preview.texture = nullptr;
+            }
+            return;
+        }
+#endif
         if (nav.screen == tube5::Screen::sources)
         {
             if (action == tube5::Command::previous)
@@ -1589,6 +1625,25 @@ int main()
                 SDL_FlushEvent(SDL_KEYDOWN);
             }
         }
+#if defined(TUBE5_HW_CLIP) && !defined(TUBE5_HOST)
+        if (tube5::hardware_clip_status().active && SDL_GetTicks64() >= hardware_clip_next_at)
+        {
+            if (!hardware_clip_started_at)
+                hardware_clip_started_at = SDL_GetTicks64();
+            const int result = tube5::hardware_clip_step(capture_hardware_nv12, &hardware_preview);
+            if (result == 0)
+                hardware_clip_next_at =
+                    hardware_clip_started_at +
+                    static_cast<Uint64>(tube5::hardware_clip_status().submitted) * 1000 / 30;
+            else
+            {
+                (void)tube5::hardware_clip_close();
+                SDL_DestroyTexture(hardware_preview.texture);
+                hardware_preview.texture = nullptr;
+            }
+        }
+        Uint64 hardware_copy_started = 0;
+#endif
         if (output && SDL_LockSurface(output) != 0)
             fatal("UI SURFACE LOCK");
         const Uint32 paint_start = SDL_GetTicks();
@@ -1618,11 +1673,21 @@ int main()
 #ifdef TUBE5_HW_FRAME
         if (hardware_preview.texture)
         {
+#ifdef TUBE5_HW_CLIP
+            if (tube5::hardware_clip_status().active && tube5::hardware_clip_status().decoded)
+#else
             if (hardware_preview_until && SDL_GetTicks64() < hardware_preview_until)
+#endif
             {
+#ifdef TUBE5_HW_CLIP
+                hardware_copy_started = SDL_GetPerformanceCounter();
+#endif
                 const SDL_Rect preview_area{350, 260, 1220, 686};
                 if (SDL_RenderCopy(renderer, hardware_preview.texture, nullptr, &preview_area) != 0)
                 {
+#ifdef TUBE5_HW_CLIP
+                    (void)tube5::hardware_clip_close(false, -EIO);
+#endif
                     SDL_DestroyTexture(hardware_preview.texture);
                     hardware_preview.texture = nullptr;
                 }
@@ -1669,6 +1734,11 @@ int main()
                 fatal("NATIVE BLIT");
             }
         }
+#if defined(TUBE5_HW_CLIP) && !defined(TUBE5_HOST)
+        if (hardware_copy_started)
+            tube5::hardware_clip_presented((SDL_GetPerformanceCounter() - hardware_copy_started) *
+                                           1000000 / SDL_GetPerformanceFrequency());
+#endif
 #ifdef TUBE5_DIAGNOSTICS
         std::snprintf(frame_timing.data(), frame_timing.size(),
                       "MS LOOP %u WORK %u UI %u VIDEO %u COPY %u", interval,

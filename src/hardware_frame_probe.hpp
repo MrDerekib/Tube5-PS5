@@ -44,4 +44,19 @@ int hardware_frame_probe(const char *asset, const char *log,
                          void *consumer_context = nullptr) noexcept;
 // Eight bounded cycles, stop on the first error, with separate per-cycle reports.
 int hardware_frame_cycles(const char *asset, const char *directory) noexcept;
+struct HardwareClipStatus
+{
+    bool active = false, cancelled = false;
+    unsigned frames = 0, fps = 0, submitted = 0, decoded = 0, presented = 0;
+    unsigned changed_frames = 0, slow_frames = 0;
+    int error = 0, cleanup_error = 0;
+    std::uint64_t decode_max_us = 0, convert_max_us = 0, copy_max_us = 0, elapsed_us = 0;
+    std::uint64_t work_max_us = 0;
+};
+int hardware_clip_begin(const char *asset, const char *log) noexcept;
+// Returns zero for one copied frame, one at EOF, or a negative/native error.
+int hardware_clip_step(HardwareFrameConsumer consumer, void *context) noexcept;
+void hardware_clip_presented(std::uint64_t copy_us) noexcept;
+int hardware_clip_close(bool cancelled = false, int display_error = 0) noexcept;
+const HardwareClipStatus &hardware_clip_status() noexcept;
 } // namespace tube5

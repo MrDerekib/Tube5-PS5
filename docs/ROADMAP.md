@@ -90,6 +90,9 @@ DIAG57 validada: el propietario vio el frame hardware al arrancar en FW13.20.
 Decode, conversión NV12/RGBA y cleanup correctos; memoria flexible constante
 en el ciclo visual. Presentación CPU/SDL. Siguiente paso: clip corto con
 frames consecutivos antes de integrar streams y sincronización al player.
+DIAG58 preparada: clip propio de cinco segundos, 150 frames 1080p/30 (IDR/P),
+un decoder continuo, cancelación y métricas de tiempos/memoria. Validación real
+pendiente. B frames, audio y seeks siguen pendientes para el backend hardware.
 Después: integración
 1080p con audio/reloj/seeks, presentación GPU, VP9 SDR 1440p y 2160p. Conservar
 software como alternativa. No asumir AV1 por hardware ni HDR antes de pruebas.

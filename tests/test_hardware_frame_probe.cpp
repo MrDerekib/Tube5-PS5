@@ -20,6 +20,8 @@ std::array<Buffer, 5> buffers;
 void *cpu = nullptr;
 bool queue = false, decoder = false, delayed = false, invalid = false;
 bool partial_queue = false;
+bool clip_motion = false;
+unsigned decode_calls = 0, reset_calls = 0, last_luma = 16;
 int operation = 0, fail_operation = 0, delete_error = 0;
 int next()
 {
@@ -39,7 +41,7 @@ void no_resources()
 void picture(tube5::VideoFrame *frame, tube5::VideoOutput *output)
 {
     assert(frame->size == 32 && output->size == 56 && frame->bytes >= 3346432);
-    std::memset(frame->buffer, 16, frame->bytes);
+    std::memset(frame->buffer, clip_motion ? last_luma : 16, frame->bytes);
     frame->accepted = 1;
     output->valid = 1;
     output->pictures = 1;
@@ -61,6 +63,12 @@ int consume(const tube5::VideoOutput &output, void *context) noexcept
 extern "C" std::size_t sceKernelGetDirectMemorySize()
 {
     return 512 * 1024 * 1024;
+}
+extern "C" std::uint64_t sceKernelGetProcessTime()
+{
+    static std::uint64_t clock = 1000;
+    clock += 1000;
+    return clock;
 }
 extern "C" int sceKernelAvailableFlexibleMemorySize(std::size_t *bytes)
 {
@@ -202,6 +210,7 @@ extern "C" int sceVideodec2DeleteDecoder(void *handle)
 extern "C" int sceVideodec2Reset(void *handle)
 {
     assert(handle == &decoder && decoder);
+    ++reset_calls;
     return next();
 }
 extern "C" int sceVideodec2Decode(void *handle, tube5::VideoInput *input, tube5::VideoFrame *frame,
@@ -209,6 +218,11 @@ extern "C" int sceVideodec2Decode(void *handle, tube5::VideoInput *input, tube5:
 {
     assert(handle == &decoder && decoder && input->size == 48 && input->bytes > 100 &&
            input->bytes < 1024 * 1024 && input->dts == UINT64_MAX);
+    if (clip_motion)
+    {
+        assert(input->pts == static_cast<std::uint64_t>(decode_calls) * 1000000 / 30);
+        last_luma = 16 + (++decode_calls % 120);
+    }
     if (const int code = next())
         return code;
     if (!delayed)
@@ -276,6 +290,56 @@ int main()
     invalid = false;
     assert(tube5::hardware_frame_probe("/missing-tube5-frame", log) != 0);
     no_resources();
+    // Keep one decoder across 150 access units, including depth-one deferred output.
+    clip_motion = true;
+    delayed = true;
+    operation = 0;
+    decode_calls = 0;
+    const auto resets_before = reset_calls;
+    assert(!tube5::hardware_clip_begin("assets/hw-clip.t5hc", log));
+    assert(tube5::hardware_frame_probe(asset, log) == -EBUSY);
+    consumed = 0;
+    for (unsigned i = 0; i < 150; ++i)
+    {
+        assert(!tube5::hardware_clip_step(consume, &consumed));
+        tube5::hardware_clip_presented(50);
+    }
+    assert(tube5::hardware_clip_step(consume, &consumed) == 1 && consumed == 150);
+    assert(reset_calls == resets_before + 1 && decode_calls == 150);
+    assert(!tube5::hardware_clip_close());
+    const auto &clip_result = tube5::hardware_clip_status();
+    assert(!clip_result.active && !clip_result.error && clip_result.submitted == 150 &&
+           clip_result.decoded == 150 && clip_result.presented == 150 &&
+           clip_result.changed_frames == 149 && clip_result.copy_max_us == 50);
+    no_resources();
+    operation = 0;
+    decode_calls = 0;
+    assert(!tube5::hardware_clip_begin("assets/hw-clip.t5hc", log));
+    assert(!tube5::hardware_clip_step(consume, &consumed));
+    assert(!tube5::hardware_clip_close(true) && tube5::hardware_clip_status().cancelled);
+    no_resources();
+    operation = 0;
+    decode_calls = 0;
+    assert(!tube5::hardware_clip_begin("assets/hw-clip.t5hc", log));
+    invalid = true;
+    assert(tube5::hardware_clip_step(consume, &consumed) == -EINVAL);
+    assert(!tube5::hardware_clip_close());
+    invalid = false;
+    no_resources();
+    operation = 0;
+    decode_calls = 0;
+    assert(!tube5::hardware_clip_begin("assets/hw-clip.t5hc", log));
+    const auto rejected = +[](const tube5::VideoOutput &, void *) noexcept { return -88; };
+    assert(tube5::hardware_clip_step(rejected, nullptr) == -88);
+    const auto calls_after_error = decode_calls;
+    assert(tube5::hardware_clip_step(rejected, nullptr) == -88 &&
+           decode_calls == calls_after_error);
+    assert(!tube5::hardware_clip_close());
+    no_resources();
+    assert(tube5::hardware_clip_begin(asset, log) == -EINVAL);
+    no_resources();
+    clip_motion = false;
+    delayed = false;
     const auto child = fork();
     assert(child >= 0);
     if (child == 0)

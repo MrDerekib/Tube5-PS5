@@ -1,5 +1,35 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-58-HWCLIP: 150 frames consecutivos
+
+Fixture sintético propio 1080p/30, cinco segundos: cinco IDR y 145 P frames,
+sin audio ni B frames. `python3 tools/prepare-hardware-clip.py` genera y verifica
+el vídeo, empaquetado como T5HC v1 (cabecera LE y unidades Annex B acotadas).
+SHA-256: `ae664debce014b5691da2d54ac34966b0ecf10a73cc4cdb76096ffd7f5612a73`.
+
+Un solo decoder/compute queue permanece vivo durante toda la secuencia, con
+un reset al inicio y depth 1. Si Decode no entrega imagen, Flush solicita la
+salida de ese AU, como la ruta depth-one de ProsperoLight. Solo se reutiliza el
+buffer tras obtener una salida propia válida y copiarla a SDL. No se recrea
+ni resetea el decoder entre frames. Mantiene las referencias P del mismo GOP.
+
+Reproducción automática al entrar, programada a 30fps en el hilo de interfaz;
+un AU por tick, sin omitir frames. Círculo cancela y vuelve al menú. Al EOF se
+cierra y destruye la textura. Los ocho ciclos de DIAG56 se omiten en esta build.
+Informe `/download0/tube5-hardware-clip.log`: submitted/decoded/COMPOSED,
+muestras de luma cambiadas, máximos decode+flush/conversión/copia, tiempo total,
+errores, cleanup y memoria flexible. COMPOSED cuenta copias al framebuffer
+nativo, antes del submit/flip de VideoOut: el log no confirma todos los flips.
+WORK/SLOW incluye decode, conversión y copia, excluye el dibujo del menú y
+esperas de VideoOut. El tiempo total permite observar si se alcanza la cadencia.
+
+Tests sanitizados: 150 AUs con salida diferida, un único reset, EOF, cancelación,
+reapertura, error de consumer y puntero de salida inválido. Preparación compartida
+con el probe de un frame conserva las comprobaciones y cuarentena de teardown.
+Prueba real PS5 pendiente; después faltan B frames, audio, seeks y streams.
+ELF exacto y artefactos en .local/boot-diag-58; SHA-256 eboot.bin:
+`677669487f539e287286340d43e3b4278d865d1cd4c704fa6eb89e7ce63d80a6`.
+
 ## BOOT-DIAG-56-HWCYCLES: memoria tras ocho ciclos
 
 Ejecuta ocho pruebas de un frame en el mismo proceso, antes de iniciar SDL.
