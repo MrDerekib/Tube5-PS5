@@ -22,6 +22,10 @@ y las mismas muestras de luma. La memoria flexible pierde 1048576 bytes en
 el primer ciclo y permanece constante en los siete restantes. No se observa
 crecimiento acumulativo en esta prueba; el origen de la reserva única sigue
 sin determinar. Resumen real conservado en .local/boot-diag-56/.
+Repetición tras despertar de standby (12 oct 2026 06:41:12 UTC): nuevos
+timestamps FTP confirman el arranque; los ocho ciclos vuelven a dar cero,
+con el mismo descenso inicial y sin crecimiento posterior. Snapshot en
+.local/boot-diag-56/ps5-hardware-cycles-standby.log.
 ELF exacto conservado en .local/boot-diag-56; SHA-256 eboot.bin:
 `b2b33364854c2f9dde8fcea71ac4650c3e4bab35fe86da5f1b8d157e1d754761`.
 
