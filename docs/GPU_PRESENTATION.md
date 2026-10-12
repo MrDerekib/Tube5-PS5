@@ -817,6 +817,17 @@ para la rama compartida. Build/firma correctas; executable, etiqueta y remux
 preparados por FTP. Pendiente activar tras cierre y probar continuo primero,
 después pausa/seek/reentrada, conservar app abierta para logs.
 
+Resultado continuo DIAG101: propietario confirma finalización. 768 AUs,
+720 visibles recibidos/entregados, 48 hidden contabilizados (47 superficies
+suprimidas y una omisión), política/decoder/cleanup cero, EOF, profundidad
+tres/cuatro slots, pico pendiente cuatro y dos drains. 714 uploads, 713
+intervalos en 11.995.756 µs (59,438 fps), máximo 33.686 µs, cuatro drops,
+PTS válidos y sin discontinuidades. Audio 569 callbacks, 2.306.048 bytes PCM,
+seis underruns y error cero. Tiempo medio de llamada decode 723 µs y copia
+1.755 µs; no confundir llamada asíncrona con latencia de una imagen.
+Logs privados `diag101-*`. Pendiente misma build: pausa, seek/barra y reentrada;
+todavía no YouTube 4K60 ni show-existing en consola.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
