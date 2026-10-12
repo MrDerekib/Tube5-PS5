@@ -328,11 +328,14 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             const auto &quality = formats.qualities[i];
             canvas.rectangle(120, y, 1540, 43, i == quality_selected ? accent : panel);
             char label[128]{};
-            std::snprintf(label, sizeof(label), "%uP - %s", quality.height,
-                          quality.playable    ? "LISTA: MP4 H.264 + AAC"
-                          : quality.candidate ? "CONSULTAR: H.264 + AUDIO SEPARADO"
-                          : quality.separate  ? "NO COMPATIBLE: CODEC/FPS/URL"
-                                              : "NO COMPATIBLE CON LA RUTA ACTUAL");
+            std::snprintf(
+                label, sizeof(label), "%uP - %s", quality.height,
+                quality.playable
+                    ? (quality.height == 1440 ? "LISTA: VP9 + AAC" : "LISTA: MP4 H.264 + AAC")
+                : quality.candidate ? (quality.height == 1440 ? "CONSULTAR: VP9 + AUDIO SEPARADO"
+                                                              : "CONSULTAR: H.264 + AUDIO SEPARADO")
+                : quality.separate  ? "NO COMPATIBLE: CODEC/FPS/URL"
+                                    : "NO COMPATIBLE CON LA RUTA ACTUAL");
             canvas.text(145, y + 10, label, 3, Color::white);
         }
         canvas.text(120, 925, "AUTO: MAXIMO 360P. NO CAMBIA CALIDAD DURANTE EL PLAY.", 2, muted);
@@ -348,9 +351,9 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
         const char *status =
             stage == tube5::ProbeStage::dns         ? "DNS: RESOLVIENDO WWW.YOUTUBE.COM"
             : stage == tube5::ProbeStage::https     ? "HTTPS: CONSULTANDO FORMATOS YOUTUBE"
-            : stage == tube5::ProbeStage::source    ? "HTTPS: LEYENDO 4 KIB DEL STREAM MP4"
+            : stage == tube5::ProbeStage::source    ? "HTTPS: VALIDANDO CONTENEDOR DEL STREAM"
             : stage == tube5::ProbeStage::sponsor   ? "HTTPS: CONSULTANDO API SPONSORBLOCK"
-            : stage == tube5::ProbeStage::ready     ? "OK: FUENTE MP4 RECIBIDA DESDE YOUTUBE"
+            : stage == tube5::ProbeStage::ready     ? "OK: FUENTE RECIBIDA DESDE YOUTUBE"
             : stage == tube5::ProbeStage::failed    ? "FALLO: CAPTURA ESTA PANTALLA"
             : stage == tube5::ProbeStage::cancelled ? "CANCELADO"
                                                     : "X INICIAR PRUEBA";
@@ -376,11 +379,12 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
                           formats.avc, formats.vp9, formats.av1, formats.aac, formats.opus);
             canvas.text(120, 675, detail, 2, muted);
             std::snprintf(detail, sizeof(detail),
-                          "STREAM ITAG %u %uP AAC %u  HTTP %ld CURL %d CERT %ld  BYTES %u MP4 %s",
+                          "STREAM ITAG %u %uP AAC %u HTTP %ld CURL %d CERT %ld BYTES %u %s %s",
                           formats.selected_itag, formats.selected_height, formats.audio_itag,
                           result.source_http, result.source_curl, result.source_verify,
-                          result.source_bytes, result.source_mp4 ? "SI" : "NO");
-            canvas.text(120, 725, detail, 2, result.source_mp4 ? Color::white : Color::yellow);
+                          result.source_bytes, formats.selected_webm ? "WEBM" : "MP4",
+                          result.source_valid ? "SI" : "NO");
+            canvas.text(120, 725, detail, 2, result.source_valid ? Color::white : Color::yellow);
             canvas.text(120, 775, result.title.data(), 2, Color::white);
             canvas.text(120, 825, result.error.data(), 2, Color::yellow);
             if (!error[0])
@@ -1093,7 +1097,7 @@ int main()
                 else if (action == tube5::Command::select)
                 {
                     if (youtube_probe.stage() == tube5::ProbeStage::ready &&
-                        youtube_probe.result().source_mp4)
+                        youtube_probe.result().source_valid)
                     {
                         direct_playback = true;
                         library_playback = false;

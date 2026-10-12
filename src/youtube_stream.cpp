@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "youtube_stream.hpp"
 #include "youtube_formats.hpp"
+#include "youtube_container.hpp"
 #include "verified_https.hpp"
 #include "network_source.hpp"
 #include <SDL.h>
@@ -345,8 +346,18 @@ Kit_Source *YouTubeStream::open(const char *url) noexcept
                 self.format->pb = self.io;
                 self.format->flags |= AVFMT_FLAG_CUSTOM_IO;
                 prepare_custom_network(self.format);
-                int result =
-                    avformat_open_input(&self.format, "", av_find_input_format("mov"), nullptr);
+                int result = self.refill();
+                const auto container = result >= 0
+                                           ? youtube_container(self.cache.get(), self.cached)
+                                           : YouTubeContainer::unknown;
+                if (result >= 0 && container == YouTubeContainer::unknown)
+                    result = AVERROR_INVALIDDATA;
+                if (result >= 0)
+                    result = avformat_open_input(
+                        &self.format, "",
+                        av_find_input_format(container == YouTubeContainer::webm ? "matroska"
+                                                                                 : "mov"),
+                        nullptr);
                 if (result >= 0)
                     result = avformat_find_stream_info(self.format, nullptr);
                 if (result >= 0 && !network_session_interrupted())

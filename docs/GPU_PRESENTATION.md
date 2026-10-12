@@ -316,6 +316,30 @@ esta sesión/resolución), no como un nuevo CRC de los frames integrados.
 Pendiente YouTube VP9 1440p con AAC separado y sesiones largas. Esta prueba
 no valida aún show-existing-frame, 4K, 60 fps ni salida HDMI 1440p.
 
+## YouTube directo VP9 1440p, DIAG84
+
+El selector permite únicamente VP9 Profile 0, 8 bits, 2560×1440 y hasta
+30 fps junto a AAC separado. Auto sigue limitado a 360p. La consulta valida
+la cabecera MP4/WebM según el formato seleccionado y el transporte elige
+`mov` o `matroska` conservando HTTPS, certificados, límites y rangos.
+El test enfocado cubre selección VP9/AAC y rechazo de Profile 2, 10 bits,
+60 fps, 4K, dimensiones incompatibles y contenedores truncados; también
+pasó el test offline de transporte y la build nativa.
+
+El propietario confirmó reproducción, audio y controles en YouTube 1440p,
+con algunos saltos algo lentos. Los logs rescatados registraron 5.826
+entradas, 5.385 imágenes recibidas, 3.313 entregadas, 2.072 descartadas como
+preroll, 441 ocultos y 33 resets. Cierre, adaptador y decoder: cero errores.
+No hubo EOF en la última sesión, así que no se afirma reproducción hasta el
+final. Audio después del último seek: `HOLD 0`, resets 31/31, 192.512 bytes
+PCM adicionales y error cero. Los 1.109 underruns en 6.699 callbacks incluyen
+esperas de seek; no cuantifican cortes audibles. Subida GPU máxima del proceso:
+698 µs; la comparación de color integrada queda no medida (`ERRORS -1`).
+Los logs no proporcionan latencia individual de seek ni cadencia sostenida
+por frame. Pendientes sesiones largas, salida HDMI nativa 1440p y 4K/60 fps.
+DIAG84 queda como baseline de YouTube 1440p; los logs privados se conservan
+en `.local/console-logs/`, fuera de Git.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

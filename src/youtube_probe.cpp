@@ -2,6 +2,7 @@
 #include "youtube_probe.hpp"
 #include "verified_https.hpp"
 #include "youtube_visitor.hpp"
+#include "youtube_container.hpp"
 #include <openssl/rand.h>
 #include <algorithm>
 #include <cstdio>
@@ -144,7 +145,7 @@ bool YouTubeProbe::begin(ProbeMode mode, std::string_view input, unsigned height
     result_ = {};
     pending_ = {};
     result_.mode = pending_.mode = mode;
-    if (!youtube_input_id(input, pending_.video_id) || height > 1080)
+    if (!youtube_input_id(input, pending_.video_id) || height > 1440)
     {
         stage_ = ProbeStage::failed;
         std::snprintf(result_.error.data(), result_.error.size(), "ID/URL O CALIDAD NO VALIDA");
@@ -360,7 +361,7 @@ int YouTubeProbe::worker(void *opaque) noexcept
                               "PLAYER: ID DE VIDEO NO COINCIDE");
             else if (!out.formats.source[0])
                 std::snprintf(out.error.data(), out.error.size(),
-                              "SIN PAREJA MP4 COMPATIBLE PARA ESTA CALIDAD");
+                              "SIN PAREJA VIDEO/AAC COMPATIBLE PARA ESTA CALIDAD");
             else
             {
                 if (adaptive)
@@ -395,10 +396,14 @@ int YouTubeProbe::worker(void *opaque) noexcept
                                               out.formats.source.data(), nullptr, true, chunk,
                                               out.source_http, out.source_verify);
                     out.source_bytes = static_cast<unsigned>(chunk.used);
-                    out.source_mp4 = out.source_curl == CURLE_OK && out.source_http == 206 &&
-                                     out.source_verify == 0 && chunk.range && chunk.used == 4096 &&
-                                     std::memcmp(chunk.bytes.get() + 4, "ftyp", 4) == 0;
-                    if (!out.source_mp4)
+                    const auto container = youtube_container(chunk.bytes.get(), chunk.used);
+                    const bool transport = out.source_curl == CURLE_OK && out.source_http == 206 &&
+                                           out.source_verify == 0 && chunk.range &&
+                                           chunk.used == 4096;
+                    out.source_mp4 = transport && container == YouTubeContainer::mp4;
+                    out.source_webm = transport && container == YouTubeContainer::webm;
+                    out.source_valid = out.formats.selected_webm ? out.source_webm : out.source_mp4;
+                    if (!out.source_valid)
                         std::snprintf(out.error.data(), out.error.size(),
                                       "STREAM: NO VALIDADO HTTP %ld CURL %d CERT %ld",
                                       out.source_http, out.source_curl, out.source_verify);

@@ -6,6 +6,29 @@
 #include <json-c/json.h>
 namespace
 {
+bool vp9_profile0(std::string_view mime)
+{
+    const auto start = mime.find("codecs=");
+    if (start == std::string_view::npos)
+        return false;
+    auto codec = mime.substr(start + 7);
+    if (!codec.empty() && codec.front() == '"')
+    {
+        codec.remove_prefix(1);
+        const auto end = codec.find('"');
+        if (end == std::string_view::npos)
+            return false;
+        codec = codec.substr(0, end);
+    }
+    const bool numeric =
+        std::all_of(codec.begin(), codec.end(), [](char c)
+                    { return (c >= '0' && c <= '9') || c == '.' || c == 'v' || c == 'p'; });
+    return codec == "vp9" ||
+           (numeric && codec.size() >= 13 && codec.starts_with("vp09.00.") &&
+            codec.substr(11, 2) == "08" && codec[8] >= '0' && codec[8] <= '5' && codec[9] >= '0' &&
+            codec[9] <= '9' && (codec[8] != '5' || codec[9] == '0') && codec[10] == '.' &&
+            (codec.size() == 13 || codec[13] == '.'));
+}
 json_object *member(json_object *object, const char *name, json_type type)
 {
     json_object *value = nullptr;
@@ -151,8 +174,14 @@ bool parse_youtube_formats(std::string_view json, YouTubeFormats &out,
             const bool eligible = status == "OK" && !separate && height && height <= 1080 &&
                                   mime.starts_with("video/mp4;") && avc && aac &&
                                   youtube_media_host(url, host);
-            const bool candidate = separate && height && height <= 1080 && fps && fps <= 30 &&
-                                   mime.starts_with("video/mp4;") && avc && !aac &&
+            const bool h264_video =
+                height && height <= 1080 && mime.starts_with("video/mp4;") && avc;
+            const bool vp9_video =
+                height == 1440 && integer_member(format, "width") == 2560 &&
+                (mime.starts_with("video/webm;") || mime.starts_with("video/mp4;")) &&
+                vp9_profile0(mime);
+            const bool candidate = separate && fps && fps <= 30 && (h264_video || vp9_video) &&
+                                   !aac &&
                                    string_member(format, "type") != "FORMAT_STREAM_TYPE_OTF";
             const bool adaptive = status == "OK" && candidate && youtube_media_host(url, host);
             if (requested_height && adaptive && height == requested_height && !selected_video)
@@ -215,6 +244,9 @@ bool parse_youtube_formats(std::string_view json, YouTubeFormats &out,
         out.selected_itag = integer_member(selected_video, "itag");
         out.selected_height = integer_member(selected_video, "height");
         out.selected_fps = integer_member(selected_video, "fps");
+        const auto mime = string_member(selected_video, "mimeType");
+        out.selected_webm = mime.starts_with("video/webm;");
+        out.selected_vp9 = vp9_profile0(mime);
         out.audio_itag = integer_member(selected_audio, "itag");
         for (unsigned q = 0; q < out.quality_count; ++q)
             if (out.qualities[q].height == out.selected_height)

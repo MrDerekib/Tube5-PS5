@@ -44,6 +44,7 @@ struct ProbeResult
     int source_curl = 0;
     unsigned source_bytes = 0;
     bool source_mp4 = false;
+    bool source_webm = false, source_valid = false;
 };
 // Bounded JSON string reader for the oEmbed diagnostic, not a YouTube resolver.
 bool probe_title(std::string_view json, std::array<char, 128> &title) noexcept;
