@@ -1,5 +1,21 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-65-GPULINKED: imports del loader nativo
+
+DIAG64 llegó al menú, pero dlopen devolvió nulo para ambos módulos; no
+hubo init ni submissions. No demuestra incompatibilidad de AGC/FW13.20.
+DIAG65 usa imports enlazados por el loader del título, como el presenter
+nativo de ProsperoLight, con stubs públicos solo para el linker, nunca
+incluidos en el paquete. Importa únicamente `sceAgcInit`,
+`sceAgcGetRegisterDefaults` y la consulta de tamaño del paquete wait del
+driver. ABI init version=8. Máscaras de esta ruta: AGC 3, driver 2, no las
+máscaras completas de la ruta dinámica. Comprueba tamaño entre 1 y 4096
+dwords sin generar ese paquete ni enviar comandos GPU. Cero submissions;
+player sin cambios. Mismo log `tube5-gpu.log`; basta abrir al menú.
+Pruebas enfocadas de host bajo ASan/UBSan: éxito, init fallido, defaults
+nulos y tamaños de driver inválidos. Build nativa e imports Agc/AgcDriver
+correctos. Consola pendiente.
+
 ## BOOT-DIAG-64-GPUACCESS: acceso AGC sin rendering
 
 Probe independiente del player, al arrancar. Carga los módulos del sistema

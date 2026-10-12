@@ -116,7 +116,10 @@ HOLD 0 y PCM posterior al seek, sin error; el propietario no aprecia el fallo.
 Pendiente estabilidad de sesiones largas con hardware. No habilita 1440p/4K.
 Prioridad actual acordada: reducir copias y validar presentación GPU a 1080p
 antes de subir resolución. DIAG64 añade un probe AGC de acceso/inicialización
-sin submissions y mantiene el reproductor sin cambios; consola pendiente.
+sin submissions y mantiene el reproductor sin cambios. En consola falla la
+carga dinámica de ambos módulos, sin llegar a init: no prueba incompatibilidad.
+DIAG65 prepara imports enlazados de AGC/driver, init y query mínimo sin draw;
+build correcta, consola pendiente.
 Plan acotado y ownership: [presentación GPU](GPU_PRESENTATION.md).
 Después: VP9 SDR 1440p y 2160p. Conservar
 software como alternativa. No asumir AV1 por hardware ni HDR antes de pruebas.

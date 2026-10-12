@@ -4,6 +4,11 @@
 #include <algorithm>
 #include <cstdio>
 #ifdef TUBE5_GPU_PROBE
+#ifdef TUBE5_GPU_LINKED
+extern "C" int sceAgcInit(std::uint32_t);
+extern "C" void *sceAgcGetRegisterDefaults();
+extern "C" std::uint32_t sceAgcDriverGetWaitRenderingPacketSizeInDwords();
+#else
 #include <dlfcn.h>
 #ifdef TUBE5_GPU_PROBE_MOCK
 extern "C" void *tube5_gpu_test_open(const char *, int);
@@ -13,6 +18,7 @@ extern "C" void *tube5_gpu_test_symbol(void *, const char *);
 #else
 #define GPU_OPEN dlopen
 #define GPU_SYMBOL dlsym
+#endif
 #endif
 #endif
 namespace tube5
@@ -28,15 +34,24 @@ GpuProbeReport probe_gpu(const char *log_path) noexcept
             text, sizeof(text),
             "TUBE5 GPU ACCESS V1\nBUILD %s\nSTAGE %s\nAGC LOAD %u DRIVER LOAD %u\n"
             "AGC EXPORTS %08X DRIVER EXPORTS %08X\nINIT VERSION 8 RESULT %08X OK %u DEFAULTS %u\n"
-            "GPU SUBMISSIONS 0 - PLAYER PRESENTATION STILL CPU\n",
+            "WAIT PACKET WORDS %u\nGPU SUBMISSIONS 0 - PLAYER PRESENTATION STILL CPU\n",
             failure_log_build_label(), stage, report.agc_loaded ? 1u : 0u,
             report.driver_loaded ? 1u : 0u, report.agc_exports, report.driver_exports,
             static_cast<unsigned>(report.init_result), report.initialized ? 1u : 0u,
-            report.defaults ? 1u : 0u);
+            report.defaults ? 1u : 0u, report.wait_packet_words);
         if (length > 0)
             (void)write_failure_log(log_path, text,
                                     std::min<std::size_t>(length, sizeof(text) - 1));
     };
+#ifdef TUBE5_GPU_LINKED
+    // A native title reaches these through loader-resolved system imports,
+    // not the payload SDK's runtime dlopen search. These are only three exports.
+    report.agc_loaded = report.driver_loaded = true;
+    report.agc_exports = 3;
+    report.driver_exports = 2;
+    save("LINKED IMPORTS - INIT AGC");
+    report.init_result = sceAgcInit(8);
+#else
     // Process-owned references: AGC's initialized globals must not point into
     // an unloaded module. No Sony module binaries are redistributed.
     static void *agc = nullptr, *driver = nullptr;
@@ -91,6 +106,7 @@ GpuProbeReport probe_gpu(const char *log_path) noexcept
     // Public native presenter ABI in pinned ProsperoLight and PS5_Vulkan:
     // sceAgcInit(uint32_t version), NOT the historical state/size prototype.
     report.init_result = reinterpret_cast<int (*)(std::uint32_t)>(init_address)(8);
+#endif
     report.initialized = report.init_result == 0;
     if (!report.initialized)
     {
@@ -98,7 +114,18 @@ GpuProbeReport probe_gpu(const char *log_path) noexcept
         return report;
     }
     save("QUERY DEFAULTS");
+#ifdef TUBE5_GPU_LINKED
+    report.defaults = sceAgcGetRegisterDefaults() != nullptr;
+    save("QUERY DRIVER PACKET SIZE");
+    report.wait_packet_words = sceAgcDriverGetWaitRenderingPacketSizeInDwords();
+    if (!report.wait_packet_words || report.wait_packet_words > 4096)
+    {
+        save("DRIVER QUERY INVALID");
+        return report;
+    }
+#else
     report.defaults = reinterpret_cast<void *(*)()>(defaults_address)() != nullptr;
+#endif
     save(report.defaults ? "ACCESS READY - NO GPU DRAW" : "DEFAULTS UNAVAILABLE");
 #else
     (void)log_path;

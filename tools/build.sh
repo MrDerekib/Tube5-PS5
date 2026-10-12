@@ -301,6 +301,25 @@ if [[ " ${definitions[*]} " == *" TUBE5_HW_PROBE "* ]]; then
     link_inputs+=("$stub_library")
     extra_stubs+=(--stub "$stub_library")
 fi
+if [[ " ${definitions[*]} " == *" TUBE5_GPU_LINKED "* ]]; then
+    for gpu_stub in Agc AgcDriver; do
+        case $gpu_stub in
+            Agc) gpu_source="$native/agc_access_link_stub.c" ;;
+            AgcDriver) gpu_source="$native/agc_driver_access_link_stub.c" ;;
+        esac
+        gpu_object="$build/obj/${gpu_stub}_access_link_stub.o"
+        gpu_library="$build/libSce${gpu_stub}.so"
+        ninja_inputs=("$gpu_source")
+        ninja_edge CC "$gpu_object" env PS5_PAYLOAD_SDK="$sdk_root" \
+            PS5_CLANG="$target_compiler" USE_CCACHE="${USE_CCACHE:-1}" \
+            sh "$root/tooling/prospero-clang18" -O2 -fPIC -c "$gpu_source" -o "$gpu_object"
+        ninja_inputs=("$gpu_object")
+        ninja_edge LINK "$gpu_library" "$sdk_root/bin/prospero-lld" --shared \
+            -soname "libSce${gpu_stub}.prx" -o "$gpu_library" "$gpu_object"
+        link_inputs+=("$gpu_library")
+        extra_stubs+=(--stub "$gpu_library")
+    done
+fi
 for archive in "${archives[@]}"; do
     [[ $archive =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\.a$ && -f $root/$archive ]] || {
         echo "invalid static archive: $archive" >&2; exit 2;
