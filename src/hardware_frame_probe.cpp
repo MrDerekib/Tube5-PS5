@@ -71,6 +71,10 @@ struct Clip
     bool input_displayable[6]{};
     bool input_retained[6]{};
     unsigned hidden_materialized = 0;
+    int native_info_code = -ENOTSUP;
+    bool native_info_guard = false;
+    tube5::VideoPictureInfo native_info{};
+    unsigned output_padding = 0, output_offered = 0, output_returned = 0;
     unsigned part_index = 0, next_coded_tag = 1;
     std::size_t frame_stride = 0;
     char log[256]{};
@@ -124,6 +128,8 @@ void clip_snapshot()
         "VP9 CODED %u HIDDEN %u SUPERFRAMES %u EXISTING %u\n"
         "VP9 HIDDEN NO OUTPUT %u LAST VALID %u ACCEPTED %u PICTURES %u\n"
         "PIPELINE HIDDEN MATERIALIZED %u OMITTED %u - CRC GUIDED PROBE ONLY\n"
+        "PROBE OUTPUT PADDING %u OFFERED %u RETURNED %u\n"
+        "VP9 NATIVE INFO RC %d GUARD %u SIZE %llu VALID %u PTS %llu DTS %llu TAG %llu\n"
         "MEMORY REQUIRED CPU %llu GPU %llu SHARED %llu FRAME %llu\n"
         "FLEX BEFORE %llu RC %08X AFTER %llu RC %08X\n",
         tube5::failure_log_build_label(),
@@ -145,6 +151,12 @@ void clip_snapshot()
         s.coded_frames, s.hidden_frames, s.superframes, s.existing_frames, s.hidden_no_output,
         s.last_valid, s.last_accepted, s.last_output_pictures,
         clip.hidden_materialized, s.hidden_no_output,
+        clip.output_padding, clip.output_offered, clip.output_returned,
+        clip.native_info_code, clip.native_info_guard ? 1u : 0u,
+        static_cast<unsigned long long>(clip.native_info.size), clip.native_info.valid,
+        static_cast<unsigned long long>(clip.native_info.pts),
+        static_cast<unsigned long long>(clip.native_info.dts),
+        static_cast<unsigned long long>(clip.native_info.attached),
         static_cast<unsigned long long>(s.required_cpu),
         static_cast<unsigned long long>(s.required_gpu),
         static_cast<unsigned long long>(s.required_shared),
@@ -846,6 +858,9 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
         (output.height & 1u) || output.pitch_bytes < clip.width || output.pitch_bytes > 4096 ||
         (output.pitch_bytes & 1u) || output.bytes > clip.frame_stride || required > output.bytes)
         return fail("OUTPUT B", -EINVAL);
+    clip.output_padding = output.padding;
+    clip.output_offered = offered;
+    clip.output_returned = returned;
     unsigned sum = 0;
     std::uint32_t crc = UINT32_MAX;
     const auto crc_start = sceKernelGetProcessTime();
@@ -872,6 +887,19 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     picture.info.pts = picture.info.dts = picture.info.attached = UINT64_MAX;
     if (clip.vp9)
     {
+        if (clip.compound_vp9 && (s.decoded < 3 || (s.decoded >= 85 && s.decoded <= 95)))
+        {
+            // Read-only diagnostic: do not trust/use VP9 metadata to select a
+            // buffer until its contract and tags have been proved on this console.
+            clip.native_info_code = sceVideodec2GetPictureInfo(&output, &picture.info, nullptr);
+            clip.native_info_guard = picture.before == UINT64_C(0xc0dec0dec0dec0de) &&
+                                     picture.after == UINT64_C(0xc0dec0dec0dec0de);
+            clip.native_info = picture.info;
+            if (!clip.native_info_guard || picture.info.size != sizeof(picture.info))
+                return fail("VP9 NATIVE INFO GUARD", -EINVAL);
+            picture.info = {};
+            picture.info.size = sizeof(picture.info);
+        }
         unsigned oldest = clip.slots;
         for (unsigned i = 0; i < clip.slots; ++i)
             if (clip.input_tag[i] &&

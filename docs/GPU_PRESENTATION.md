@@ -706,6 +706,21 @@ Host ASan/UBSan focal: hidden materializado, omitido con visible siguiente,
 rechazo de corrupción y de hidden omitido con superficie aún retenida; buffers,
 FIFO/CRC, drain y cleanup. Build/firma correctas; staging preparado para cierre.
 
+Resultado DIAG97: 90 imágenes visibles/CRC correctos, 99 AUs, siete hidden
+enviados; cinco superficies hidden suprimidas y una omisión validada por CRC.
+Fallo en visible 90, esperado `B1291A72`; recibido `6D7F7878`, exactamente CRC
+del visible 89 según la fixture. No inferir por qué se repitió: puede ser
+semántica de output o lifetime/correlación de superficie. Cleanup cero.
+Logs privados `diag97-*`; avance parcial de 1,5 segundos, no prueba completa.
+
+DIAG98 (`BOOT-DIAG-98-VP9-NATIVE-TAGS`) añade únicamente diagnóstico de salida
+y consulta protegida de GetPictureInfo para VP9 en las primeras imágenes y
+alrededor del frame 90. Guarda rc/size/valid/PTS/DTS/tag y canarios, padding,
+slots offered/returned. No usa todavía esos metadatos para cambiar FIFO ni
+ignora el CRC repetido; la llamada ya tiene ABI probado en AVC pero su resultado
+VP9 queda por verificar. Mismo clip/configuración, no nuevas fixtures ni player.
+Prueba focal host del probe y canarios con ASan/UBSan; build/firma verificadas.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
