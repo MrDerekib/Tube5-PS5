@@ -739,6 +739,22 @@ semántica universal del flag. Host focal ASan/UBSan añade hidden que adelanta
 a un visible pendiente y conserva casos de materialización, omisión, corrupción,
 retención insegura y drain. Build/firma correctas, staging pendiente de cierre.
 
+Resultado DIAG99: el propietario informó que se paró; logs confirman **fin
+correcto** del probe, que mantiene el último frame en un bucle inactivo tras
+cerrar el decoder. 180 visibles/180 CRC, 179 cambiados, 192 AUs, 12 hidden y
+12 superframes. Once superficies hidden suprimidas y una omisión corroborada
+por CRC. Error, orden y cleanup cero, dos llamadas de drain. 179 intervalos
+en 3.002.968 µs (~59,61 fps), p95/máximo 17.647/28.318 µs; 80 llegadas tarde
+respecto al pacing y 26 pasos lentos: integridad demostrada en este control
+corto, no prueba sostenida ni objetivo de timing perfecto. GetPictureInfo
+VP9 sigue sin metadata utilizable. Logs privados `diag99-*`.
+
+Antes de integrar hidden en el player: retirar la dependencia del oráculo CRC
+de referencia manteniendo reglas explícitas de flags/completion y retención.
+Validar esa política en el mismo probe usando CRC solo como verificador,
+incluyendo hidden sin superficie y llegada fuera de FIFO visible. No habilitar
+formatos YouTube 60 fps sobre una política que depende de imágenes conocidas.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
