@@ -89,6 +89,7 @@ struct HardwareStreamStatus
     unsigned submitted = 0, received = 0, resets = 0;
     unsigned accepted = 0, no_output = 0, last_nal_mask = 0;
     unsigned hidden = 0;
+    unsigned hidden_omitted = 0, hidden_materialized = 0, policy_error = 0;
     unsigned depth = 1, slots = 1, pending_peak = 0, drain_calls = 0;
     std::uint64_t decode_total_us = 0, decode_max_us = 0;
     unsigned decode_calls = 0;

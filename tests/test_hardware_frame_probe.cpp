@@ -376,6 +376,68 @@ extern "C" int sceVideodec2GetPictureInfo(const tube5::VideoOutput *output,
 }
 int main(int argc, char **argv)
 {
+    if (argc == 2 && std::strcmp(argv[1], "--vp9-async-hidden-stream") == 0)
+    {
+        vp9_mode = vp9_4k = vp9_pipeline = b_mode = vp9_hidden_fixture = true;
+        assert(!tube5::hardware_stream_begin(tube5::HardwareFrameMode::vp9_2160, true));
+        tube5::VideoOutput output{};
+        tube5::VideoPictureInfo info{};
+        unsigned char bytes[101]{};
+        for (unsigned scenario : {0u, 1u, 2u})
+        {
+            assert(!tube5::hardware_stream_reset());
+            reset_b_mock();
+            missing_hidden_output = scenario == 1;
+            reorder_hidden_output = scenario == 2;
+            unsigned delivered = 0;
+            const auto collect = [&]()
+            {
+                const int rc = tube5::hardware_stream_receive(output, info);
+                if (!rc)
+                {
+                    assert(delivered < 3 && output.width == 3840 && output.height == 2160);
+                    assert(info.pts == static_cast<std::uint64_t>(delivered) * 1000000 / 60);
+                    assert(*static_cast<unsigned char *>(output.buffer) == 16 + delivered);
+                    ++delivered;
+                    tube5::hardware_stream_release();
+                }
+                else
+                    assert(rc == 1 || rc == 2);
+                return rc;
+            };
+            // Same sequence as a split superframe: key, hidden, visible, visible.
+            for (unsigned au = 0; au < 4; ++au)
+            {
+                const unsigned index = au ? au == 3 ? 2 : 1 : 0;
+                bytes[0] = au == 1 ? 0x84 : 0x86;
+                bytes[1] = index;
+                assert(!tube5::hardware_stream_send(bytes, sizeof(bytes),
+                           static_cast<std::uint64_t>(index) * 1000000 / 60, index, au != 1));
+                collect();
+            }
+            assert(!tube5::hardware_stream_send(nullptr, 0, 0, 0));
+            unsigned drains = 0;
+            while (collect() != 1)
+                assert(++drains <= 4);
+            assert(delivered == 3 && tube5::hardware_stream_status().hidden == scenario + 1);
+            assert(!tube5::hardware_stream_status().policy_error);
+            assert(tube5::hardware_stream_status().hidden_omitted == (scenario >= 1 ? 1u : 0u));
+            // A seek may abandon hidden and visible AUs together.
+            assert(!tube5::hardware_stream_reset());
+            reset_b_mock();
+            for (unsigned au = 0; au < 3; ++au)
+            {
+                bytes[0] = au == 1 ? 0x84 : 0x86;
+                bytes[1] = au;
+                assert(!tube5::hardware_stream_send(bytes, sizeof(bytes), au, au, au != 1));
+                assert(tube5::hardware_stream_receive(output, info) == 2);
+            }
+        }
+        assert(!tube5::hardware_stream_close());
+        no_resources();
+        std::puts("VP9 async hidden stream flags, omitted/materialized/overtaking, PTS, drain and seek reset passed");
+        return 0;
+    }
     if (argc == 2 && std::strcmp(argv[1], "--vp9-async-stream") == 0)
     {
         vp9_mode = vp9_4k = vp9_pipeline = b_mode = true;
@@ -434,10 +496,9 @@ int main(int argc, char **argv)
             assert(!tube5::hardware_stream_reset());
             reset_b_mock();
         }
-        assert(tube5::hardware_stream_send(payload, sizeof(payload), 0, 0, false) == -ENOTSUP);
         assert(!tube5::hardware_stream_close());
         no_resources();
-        std::puts("VP9 async stream FIFO, retained buffers, backpressure, drain, seek reset and hidden guard passed");
+        std::puts("VP9 async stream FIFO, retained buffers, backpressure, drain and seek reset passed");
         return 0;
     }
     if (argc == 2 &&

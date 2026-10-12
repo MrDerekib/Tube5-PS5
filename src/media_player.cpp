@@ -273,7 +273,8 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer, const char *source_path)
     bool vp9_pipeline = false;
 #ifdef TUBE5_VP9_PIPELINE_CONTROL
     vp9_pipeline = source_path &&
-                   !std::strcmp(source_path, "/app0/assets/hw-vp9-4k60-player-tc2.mp4");
+                   (!std::strcmp(source_path, "/app0/assets/hw-vp9-4k60-player-tc2.mp4") ||
+                    !std::strcmp(source_path, "/app0/assets/hw-vp9-4k60-player-altref-tc2.mp4"));
 #else
     (void)source_path;
 #endif

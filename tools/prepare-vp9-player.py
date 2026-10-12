@@ -12,12 +12,17 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--4k", dest="four_k", action="store_true")
 parser.add_argument("--fps", type=int, choices=(30, 60), default=30)
 parser.add_argument("--tile-columns", type=int, choices=(0, 1, 2, 3), default=None)
+parser.add_argument("--altref", action="store_true", help="remux the validated 4K60 hidden-frame control")
 options = parser.parse_args()
 
 root = pathlib.Path(__file__).resolve().parents[1]
 if options.fps == 60 and not options.four_k:
     parser.error("The current 60fps control is 4K only")
 name = "hw-vp9-4k60.t5hc" if options.fps == 60 else "hw-vp9-4k.t5hc" if options.four_k else "hw-vp9-altref.t5hc"
+if options.altref:
+    if not options.four_k or options.fps != 60:
+        parser.error("The new hidden control is 4K60 only")
+    name = pathlib.Path(name).stem + "-altref.t5hc"
 if options.tile_columns is not None:
     if not options.four_k or options.fps != 60:
         parser.error("The tile-layout control is currently 4K60 only")
@@ -25,7 +30,7 @@ if options.tile_columns is not None:
 data = (root / "assets" / name).read_bytes()
 assert data[:4] == b"T5HC"
 version, width, height, fps, count, flags = struct.unpack_from("<6I", data, 4)
-expected = (6, 3840, 2160, 60, 180, 2) if options.fps == 60 else (5, 3840, 2160, 30, 90, 2) if options.four_k else (4, 2560, 1440, 30, 90, 2)
+expected = (7, 3840, 2160, 60, 180, 2) if options.altref else (6, 3840, 2160, 60, 180, 2) if options.fps == 60 else (5, 3840, 2160, 30, 90, 2) if options.four_k else (4, 2560, 1440, 30, 90, 2)
 assert (version, width, height, fps, count, flags) == expected
 with tempfile.TemporaryDirectory(prefix="tube5-vp9-player-") as folder:
     ivf = pathlib.Path(folder) / "clip.ivf"
@@ -41,6 +46,8 @@ with tempfile.TemporaryDirectory(prefix="tube5-vp9-player-") as folder:
     assert offset == len(data)
     ivf.write_bytes(encoded)
     destination = root / "assets" / ("hw-vp9-4k60-player.mp4" if options.fps == 60 else "hw-vp9-4k-player.mp4" if options.four_k else "hw-vp9-player.mp4")
+    if options.altref:
+        destination = destination.with_name(destination.stem + "-altref" + destination.suffix)
     if options.tile_columns is not None:
         destination = destination.with_name(destination.stem + f"-tc{options.tile_columns}" + destination.suffix)
     subprocess.run([

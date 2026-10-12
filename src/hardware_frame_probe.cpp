@@ -101,7 +101,7 @@ struct Stream
     struct Input
     {
         std::uint64_t tag = 0, pts = 0, dts = 0;
-        bool displayable = true;
+        bool displayable = true, retained = false;
     } input[6];
     std::uint64_t next_tag = 1;
     tube5::VideoOutput output{};
@@ -1187,6 +1187,8 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
     {
         ++stream_status.accepted;
         stream.frame_used[offered] = true;
+        if (!stream.draining)
+            stream.input[stream.sync_input].retained = true;
     }
     if (output.error)
         return stream_failure("OUTPUT ERROR", -EIO);
@@ -1231,16 +1233,25 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
         unsigned oldest = stream.sync_input;
         if (stream.pipeline)
         {
-            oldest = stream.slots;
+            Vp9PendingOutput pending[6]{};
             for (unsigned i = 0; i < stream.slots; ++i)
-                if (stream.input[i].tag &&
-                    (oldest == stream.slots || stream.input[i].tag < stream.input[oldest].tag))
-                    oldest = i;
-            if (oldest == stream.slots)
-                return stream_failure("VP9 FIFO EMPTY", -EINVAL);
+                pending[i] = {stream.input[i].tag, stream.input[i].displayable,
+                              stream.input[i].retained};
+            const auto choice = select_vp9_output({pending, stream.slots}, output.padding);
+            stream_status.policy_error = static_cast<unsigned>(choice.error);
+            if (choice.error != Vp9OutputError::none)
+                return stream_failure("VP9 OUTPUT FLAG POLICY", -EINVAL);
+            oldest = choice.input;
+            for (unsigned i = 0; i < stream.slots; ++i)
+                if (choice.retire_mask & (1u << i))
+                {
+                    stream.input[i] = {};
+                    ++stream_status.hidden;
+                    ++stream_status.hidden_omitted;
+                }
         }
-        // VP9 preserves coded order. CRC proved FIFO for the visible-only control;
-        // production hidden streams remain depth one until independently validated.
+        // Visible outputs keep FIFO; hidden surfaces can overtake visible ones.
+        // Metadata selection never inspects pixels or fixture CRCs.
         const auto &submitted = stream.input[oldest];
         info.picture.valid = 1;
         info.picture.pts = submitted.pts;
@@ -1264,6 +1275,8 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
     {
         stream.frame_used[returned] = false;
         ++stream_status.hidden;
+        if (stream.pipeline)
+            ++stream_status.hidden_materialized;
         return 0;
     }
     stream.frame_used[returned] = true;
@@ -1387,8 +1400,6 @@ int hardware_stream_send(const std::uint8_t *data, std::size_t bytes, std::uint6
         return 1;
     if (!bytes || bytes >= mib)
         return stream_failure("AU SIZE", -EINVAL);
-    if (stream.pipeline && !displayable)
-        return stream_failure("VP9 ASYNC HIDDEN NOT VALIDATED", -ENOTSUP);
     unsigned input = 0, offered = 0;
     while (input < stream.slots && stream.input[input].tag)
         ++input;
@@ -1406,7 +1417,7 @@ int hardware_stream_send(const std::uint8_t *data, std::size_t bytes, std::uint6
         if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1)
             stream_status.last_nal_mask |= 1u << (data[i + 3] & 31u);
     const auto tag = stream.next_tag++;
-    stream.input[input] = {tag, pts, dts, displayable};
+    stream.input[input] = {tag, pts, dts, displayable, false};
     unsigned pending_count = 0;
     for (const auto &pending : stream.input)
         pending_count += pending.tag != 0;

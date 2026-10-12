@@ -792,6 +792,31 @@ La línea de metadata nativa rc -45/guard cero/size cero es inicialización
 Siguiente: reutilizar la política en el stream y probar el mismo control con
 hidden, audio, seek/reentrada antes de ampliar YouTube 4K60.
 
+### DIAG101: hidden integrado en el player, control local de 12 segundos
+
+`BOOT-DIAG-101-VP9-HIDDEN-PLAYER` reutiliza `select_vp9_output` en el stream
+asíncrono del player. Cada input preserva displayable y si su superficie fue
+aceptada; FIFO visible, hidden único adelantado y retiro de hidden sin
+superficie tras completion visible siguen la política validada sin CRC.
+El stream copia la superficie antes de release, retiene AUs pendientes y
+conserva guards de layout, flags, ambigüedad y drain limitado. Reset descarta
+el estado de entrada/superficie después del reset nativo. Telemetría añade
+hidden materializados/omitidos y código de error de política.
+
+Nuevo remux `hw-vp9-4k60-player-altref-tc2.mp4`: misma fixture v7, 180 paquetes
+repetidos cuatro veces, 720 visibles y 48 hidden en 12 segundos, AAC 96 kbps.
+Hashes de los paquetes verificados contra IVF repetido, sin reencode de vídeo.
+Comando: `python3 tools/prepare-vp9-player.py --4k --fps 60 --altref --tile-columns 2`.
+Control LOCAL usa este path; solo los paths de prueba explícitos activan
+profundidad tres/cuatro slots. YouTube/VP9 previo sigue profundidad uno y no
+se cambian formatos ni disponibilidad de 60 fps.
+
+Host focal ASan/UBSan: stream con hidden materializado, omitido o adelantado,
+PTS, drain, superficies y reset con AUs en vuelo; control visible asíncrono
+para la rama compartida. Build/firma correctas; executable, etiqueta y remux
+preparados por FTP. Pendiente activar tras cierre y probar continuo primero,
+después pausa/seek/reentrada, conservar app abierta para logs.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
