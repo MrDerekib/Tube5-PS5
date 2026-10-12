@@ -164,6 +164,20 @@ Audio, pausa y seek fueron confirmados por el usuario durante la integración;
 la comprobación siguiente es YouTube directo 1080p con esta misma build, antes
 de aumentar resolución. DIAG70 y DIAG65 continúan respaldadas.
 
+DIAG73 también validada con YouTube directo 1080p: el usuario completó la
+prueba de reproducción, pausa y saltos y salió del player. VideoDec2 entregó
+3.453 frames y cerró con `ERROR 0`, `NATIVE ERROR 0`, `CLEANUP 0`; siete resets
+quedaron registrados. El presenter reportó `ERROR NONE`, cero diferencias de
+color (CPU/GPU `32/41/60`) y un máximo de subida NV12 de 505 µs. El último
+informe de audio tras seek registró `HOLD 0`, resets de vídeo/audio 6/6,
+196.608 bytes PCM adicionales y `ERROR 0`. Hay 133 callbacks contabilizados
+como underrun en 5.416 callbacks; el contador incluye periodos de espera de
+seek y no establece ausencia de cortes audibles. El máximo global de
+composición sigue incluyendo el arranque, por lo que no se usa como rendimiento
+continuo. La ruta 1080p integrada queda como nueva baseline; resoluciones
+superiores requieren revisar formatos YouTube y límites del decoder, además
+de dimensiones y propiedad de los buffers.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
