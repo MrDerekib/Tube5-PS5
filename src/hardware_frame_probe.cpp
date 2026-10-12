@@ -110,9 +110,11 @@ void clip_snapshot()
         "PTS %llu DTS %llu ATTACHED %llu CRC LAST %08X EXPECTED %08X\n"
         "VP9 CODED %u HIDDEN %u SUPERFRAMES %u EXISTING %u\n"
         "VP9 HIDDEN NO OUTPUT %u LAST VALID %u ACCEPTED %u PICTURES %u\n"
+        "MEMORY REQUIRED CPU %llu GPU %llu SHARED %llu FRAME %llu\n"
         "FLEX BEFORE %llu RC %08X AFTER %llu RC %08X\n",
         tube5::failure_log_build_label(),
-        clip.vp9    ? "1440P VP9 PROFILE 0 VISIBLE FRAMES"
+        clip.vp9    ? (clip.height == 2160 ? "2160P VP9 PROFILE 0 VISIBLE FRAMES"
+                                           : "1440P VP9 PROFILE 0 VISIBLE FRAMES")
         : s.bframes ? "1080P AVC HIGH IPB"
                     : "1080P AVC HIGH IP",
         clip.stage, clip.failure_stage, static_cast<unsigned>(s.error), s.active ? 1u : 0u,
@@ -128,6 +130,10 @@ void clip_snapshot()
         static_cast<unsigned long long>(s.last_attached), clip.last_crc, clip.expected_crc,
         s.coded_frames, s.hidden_frames, s.superframes, s.existing_frames, s.hidden_no_output,
         s.last_valid, s.last_accepted, s.last_output_pictures,
+        static_cast<unsigned long long>(s.required_cpu),
+        static_cast<unsigned long long>(s.required_gpu),
+        static_cast<unsigned long long>(s.required_shared),
+        static_cast<unsigned long long>(s.required_frame),
         static_cast<unsigned long long>(clip.flexible_before),
         static_cast<unsigned>(clip.before_rc), static_cast<unsigned long long>(clip.flexible_after),
         static_cast<unsigned>(clip.after_rc));
@@ -276,22 +282,31 @@ int prepare_decoder(Recorder record, unsigned depth = 1, unsigned slots = 1,
     record("DECODER QUERY", code);
     if (code)
         return code;
+    if (clip_status.active)
+    {
+        clip_status.required_cpu = memory.cpu_bytes;
+        clip_status.required_gpu = memory.gpu_bytes;
+        clip_status.required_shared = memory.shared_bytes;
+        clip_status.required_frame = memory.frame_bytes;
+    }
     record("DECODER CPU BYTES", static_cast<int>(memory.cpu_bytes));
     record("DECODER GPU BYTES", static_cast<int>(memory.gpu_bytes));
     record("DECODER SHARED BYTES", static_cast<int>(memory.shared_bytes));
     record("DECODER FRAME BYTES", static_cast<int>(memory.frame_bytes));
     record("DECODER ALIGNMENT", static_cast<int>(memory.alignment));
     r.cpu_bytes = rounded(memory.cpu_bytes, 64 * mib);
-    const auto gpu_bytes = rounded(memory.gpu_bytes, 128 * mib);
+    const bool vp9_4k =
+        config.codec == 0x00245bfdu && config.width == 3840 && config.height == 2160;
+    const auto gpu_bytes = rounded(memory.gpu_bytes, (vp9_4k ? 256 : 128) * mib);
     // VP9 1440p on FW 13.20 requests ~101 MiB here; retain the total budget below.
-    const auto shared_bytes = rounded(memory.shared_bytes, 128 * mib);
+    const auto shared_bytes = rounded(memory.shared_bytes, (vp9_4k ? 256 : 128) * mib);
     const auto frame_bytes = rounded(memory.frame_bytes, 16 * mib);
     if (!r.cpu_bytes || !gpu_bytes || (memory.shared_bytes && !shared_bytes) || !frame_bytes ||
         !memory.alignment || memory.alignment > page ||
         (memory.alignment & (memory.alignment - 1)) ||
         r.cpu_bytes + gpu_bytes + shared_bytes + frame_bytes * slots + r.compute.bytes +
                 mib * slots >
-            256 * mib ||
+            (vp9_4k ? 512 : 256) * mib ||
         !slots || slots > 6)
         return -EINVAL;
     code = sceKernelMapNamedFlexibleMemory(&r.cpu, r.cpu_bytes, 3, 0, "Tube5HwCpu");
@@ -599,12 +614,12 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
     clip_status.frames = little32(header + 20);
     const auto version = little32(header + 4);
     clip_status.bframes = version == 2;
-    clip.vp9 = version == 3 || version == 4;
+    clip.vp9 = version == 3 || version == 4 || version == 5;
     clip.compound_vp9 = version == 4;
-    clip.width = clip.vp9 ? 2560 : 1920;
-    clip.height = clip.vp9 ? 1440 : 1080;
+    clip.width = version == 5 ? 3840 : clip.vp9 ? 2560 : 1920;
+    clip.height = version == 5 ? 2160 : clip.vp9 ? 1440 : 1080;
     if (std::memcmp(header, "T5HC", 4) ||
-        (version != 1 && version != 2 && version != 3 && version != 4) ||
+        (version != 1 && version != 2 && version != 3 && version != 4 && version != 5) ||
         little32(header + 8) != clip.width || little32(header + 12) != clip.height ||
         clip_status.fps != 30 || !clip_status.frames || clip_status.frames > 300 ||
         little32(header + 24) != (clip.vp9              ? 2u
@@ -648,9 +663,9 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
     VideoDecoderConfig requested{};
     requested.codec = 0x00245bfd;
     requested.profile = 0;
-    requested.level = 50;
-    requested.width = 2560;
-    requested.height = 1440;
+    requested.level = clip.width == 3840 ? 51 : 50;
+    requested.width = clip.width;
+    requested.height = clip.height;
     int code = prepare_decoder(record, clip_status.bframes ? 3 : 1, clip_status.bframes ? 6 : 1,
                                clip.vp9 ? &requested : nullptr);
     if (code)

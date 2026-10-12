@@ -10,10 +10,13 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--altref", action="store_true", help="generate the new hidden/superframe fixture only")
+parser.add_argument("--4k", dest="four_k", action="store_true", help="generate only the new 4K visible-frame fixture")
 options = parser.parse_args()
+if options.four_k and options.altref:
+    parser.error("The first 4K proof is visible-frame only")
 
 root = pathlib.Path(__file__).resolve().parents[1]
-w, h, count = 2560, 1440, 90
+w, h, count = (3840, 2160, 90) if options.four_k else (2560, 1440, 90)
 with tempfile.TemporaryDirectory(prefix="tube5-vp9-") as folder:
     ivf = pathlib.Path(folder) / "clip.ivf"
     command = [
@@ -75,7 +78,7 @@ with tempfile.TemporaryDirectory(prefix="tube5-vp9-") as folder:
         "ffmpeg", "-v", "error", "-i", str(ivf), "-f", "rawvideo", "-pix_fmt",
         "nv12", "pipe:1"
     ], stdout=subprocess.PIPE)
-    encoded = bytearray(b"T5HC" + struct.pack("<6I", 4 if options.altref else 3, w, h, 30, count, 2))
+    encoded = bytearray(b"T5HC" + struct.pack("<6I", 5 if options.four_k else 4 if options.altref else 3, w, h, 30, count, 2))
     for index, packet in enumerate(packets):
         frame = bytearray()
         needed = w * h * 3 // 2
@@ -89,6 +92,6 @@ with tempfile.TemporaryDirectory(prefix="tube5-vp9-") as folder:
         encoded.extend(packet)
     assert not decoder.stdout.read(1) and decoder.wait() == 0
     assert len(encoded) < 16 * 1024 * 1024
-    destination = root / "assets" / ("hw-vp9-altref.t5hc" if options.altref else "hw-vp9-clip.t5hc")
+    destination = root / "assets" / ("hw-vp9-4k.t5hc" if options.four_k else "hw-vp9-altref.t5hc" if options.altref else "hw-vp9-clip.t5hc")
     destination.write_bytes(encoded)
     print(f"{destination}: {count} visible frames, {hidden} hidden, {superframes} superframes, {existing} show-existing; {len(encoded)} bytes; software CRC per frame")

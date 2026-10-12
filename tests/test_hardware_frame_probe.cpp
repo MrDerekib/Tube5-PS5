@@ -26,6 +26,7 @@ bool clip_motion = false;
 unsigned decode_calls = 0, reset_calls = 0, last_luma = 16;
 bool b_mode = false, corrupt_metadata = false, wrong_order = false, corrupt_pixels = false;
 bool vp9_mode = false, retain_hidden = false;
+bool vp9_4k = false;
 struct Pending
 {
     tube5::VideoFrame frame{};
@@ -64,9 +65,9 @@ void picture(tube5::VideoFrame *frame, tube5::VideoOutput *output)
     output->valid = 1;
     output->pictures = 1;
     output->codec = vp9_mode ? 0x00245bfd : 1;
-    output->width = vp9_mode ? 2560 : 1920;
-    output->height = vp9_mode ? 1440 : 1088;
-    output->pitch = output->pitch_bytes = vp9_mode ? 2560 : 2048;
+    output->width = vp9_4k ? 3840 : vp9_mode ? 2560 : 1920;
+    output->height = vp9_4k ? 2160 : vp9_mode ? 1440 : 1088;
+    output->pitch = output->pitch_bytes = vp9_4k ? 3840 : vp9_mode ? 2560 : 2048;
     output->buffer = invalid ? nullptr : frame->buffer;
     output->bytes = frame->bytes;
 }
@@ -225,14 +226,19 @@ extern "C" int sceVideodec2QueryDecoderMemoryInfo(const tube5::VideoDecoderConfi
                                                   tube5::VideoDecoderMemory *memory)
 {
     assert(queue && config->queue == reinterpret_cast<std::uintptr_t>(&queue) &&
-           config->width == (vp9_mode ? 2560 : 1920) &&
-           config->height == (vp9_mode ? 1440 : 1088) && config->depth == (b_mode ? 3u : 1u) &&
-           config->dpb == 4 && config->codec == (vp9_mode ? 0x00245bfdu : 1u) &&
+           config->width == (vp9_4k     ? 3840
+                             : vp9_mode ? 2560
+                                        : 1920) &&
+           config->height == (vp9_4k     ? 2160
+                              : vp9_mode ? 1440
+                                         : 1088) &&
+           config->depth == (b_mode ? 3u : 1u) && config->dpb == 4 &&
+           config->codec == (vp9_mode ? 0x00245bfdu : 1u) &&
            config->profile == (vp9_mode ? 0u : 100u) && memory->size == 72);
     if (const int code = next())
         return code;
     memory->cpu_bytes = memory->gpu_bytes = memory->shared_bytes = 0x4000;
-    memory->frame_bytes = vp9_mode ? 5668864 : 3346432;
+    memory->frame_bytes = vp9_4k ? 12533760 : vp9_mode ? 5668864 : 3346432;
     memory->alignment = 256;
     return 0;
 }
@@ -265,7 +271,7 @@ extern "C" int sceVideodec2Decode(void *handle, tube5::VideoInput *input, tube5:
 {
     if (vp9_mode)
     {
-        assert(handle == &decoder && decoder && input->attached && input->bytes == 101);
+        assert(handle == &decoder && decoder && (input->attached || vp9_4k) && input->bytes == 101);
         if (*static_cast<unsigned char *>(input->au) == 0x84)
             frame->accepted = retain_hidden ? 1 : 0;
         else
@@ -324,6 +330,57 @@ extern "C" int sceVideodec2GetPictureInfo(const tube5::VideoOutput *output,
 }
 int main(int argc, char **argv)
 {
+    if (argc == 2 && std::strcmp(argv[1], "--vp9-4k") == 0)
+    {
+        vp9_mode = vp9_4k = true;
+        char folder[] = "/tmp/tube5-vp9-4k-XXXXXX";
+        assert(mkdtemp(folder));
+        char asset[200]{}, log[200]{};
+        std::snprintf(asset, sizeof(asset), "%s/clip.t5hc", folder);
+        std::snprintf(log, sizeof(log), "%s/decoder.log", folder);
+        const int fd = open(asset, O_CREAT | O_WRONLY | O_EXCL, 0600);
+        assert(fd >= 0 && write(fd, "T5HC", 4) == 4);
+        for (auto value : {5u, 3840u, 2160u, 30u, 2u, 2u})
+            write32(fd, value);
+        std::uint32_t crc = UINT32_MAX;
+        for (unsigned y = 0; y < 2160; y += 31)
+            for (unsigned x = 0; x < 3840; x += 31)
+            {
+                crc ^= 16u;
+                for (unsigned bit = 0; bit < 8; ++bit)
+                    crc = (crc >> 1) ^ ((crc & 1u) ? UINT32_C(0xedb88320) : 0);
+            }
+        unsigned char payload[101]{};
+        payload[0] = 0x86;
+        for (unsigned index = 0; index < 2; ++index)
+        {
+            for (auto value : {101u, index, index, crc ^ UINT32_MAX})
+                write32(fd, value);
+            assert(write(fd, payload, sizeof(payload)) == sizeof(payload));
+        }
+        close(fd);
+        assert(!tube5::hardware_clip_begin(asset, log));
+        unsigned shown = 0;
+        const auto consume4k = [](const tube5::VideoOutput &output, void *context) noexcept
+        {
+            assert(output.width == 3840 && output.height == 2160 && output.pitch_bytes == 3840);
+            ++*static_cast<unsigned *>(context);
+            return 0;
+        };
+        assert(!tube5::hardware_clip_step(consume4k, &shown));
+        tube5::hardware_clip_presented(1);
+        assert(!tube5::hardware_clip_step(consume4k, &shown));
+        tube5::hardware_clip_presented(1);
+        assert(tube5::hardware_clip_step(consume4k, &shown) == 1);
+        assert(shown == 2 && tube5::hardware_clip_status().crc_matches == 2);
+        assert(!tube5::hardware_clip_close());
+        no_resources();
+        unlink(asset);
+        unlink(log);
+        rmdir(folder);
+        std::puts("VP9 4K clip schema, frame bounds, CRC and cleanup passed");
+        return 0;
+    }
     if (argc == 2 && std::strcmp(argv[1], "--vp9") == 0)
     {
         vp9_mode = true;

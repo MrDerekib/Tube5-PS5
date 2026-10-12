@@ -17,8 +17,8 @@ std::uint64_t work[90]{}, intervals[90]{};
 unsigned shown = 0, late = 0;
 int show(const tube5::VideoOutput &frame, void *) noexcept
 {
-    if (!frame.buffer || frame.width != 2560 || frame.height != 1440 || frame.format != 0 ||
-        frame.pitch_bytes < 2560 || frame.pitch_bytes > 4096 || shown >= 90)
+    if (!frame.buffer || frame.width != 3840 || frame.height != 2160 || frame.format != 0 ||
+        frame.pitch_bytes < 3840 || frame.pitch_bytes > 4096 || shown >= 90)
         return -22;
     auto *y = static_cast<unsigned char *>(frame.buffer);
     unsigned char *planes[2] = {y, y + static_cast<std::size_t>(frame.pitch_bytes) * frame.height};
@@ -26,7 +26,7 @@ int show(const tube5::VideoOutput &frame, void *) noexcept
                             static_cast<int>(frame.pitch_bytes)};
     const auto start = sceKernelGetProcessTime();
     tube5::gpu_begin_frame();
-    if (!tube5::gpu_upload_nv12(planes, pitches, 2560, 1440, true, false))
+    if (!tube5::gpu_upload_nv12(planes, pitches, 3840, 2160, true, false))
         return -5;
     tube5::gpu_draw_video(SDL_Rect{0, 0, 1920, 1080});
     if (!tube5::gpu_present_ui(background))
@@ -45,7 +45,7 @@ int show(const tube5::VideoOutput &frame, void *) noexcept
 } // namespace
 int main()
 {
-    tube5::failure_log_build_label("BOOT-DIAG-79-VP9-HIDDEN");
+    tube5::failure_log_build_label("BOOT-DIAG-85-VP9-4K");
     int result = sceSysmoduleLoadModule(207);
     if (!result)
     {
@@ -58,8 +58,8 @@ int main()
     if (!result)
     {
         (void)sceSystemServiceHideSplashScreen();
-        result = tube5::hardware_clip_begin("/app0/assets/hw-vp9-altref.t5hc",
-                                            "/download0/tube5-vp9-altref-decoder.log");
+        result = tube5::hardware_clip_begin("/app0/assets/hw-vp9-4k.t5hc",
+                                            "/download0/tube5-vp9-4k-decoder.log");
     }
     while (!result)
     {
@@ -90,12 +90,13 @@ int main()
     char report[640]{};
     const int n = std::snprintf(
         report, sizeof(report),
-        "TUBE5 VP9 CLIP V2\nBUILD BOOT-DIAG-79-VP9-HIDDEN\nRESULT %d CLEANUP %d GPU %s\n"
-        "SOURCE VP9 PROFILE 0 2560x1440 TARGET 1920x1080 FPS 30\n"
+        "TUBE5 VP9 CLIP V3\nBUILD BOOT-DIAG-85-VP9-4K\nRESULT %d CLEANUP %d GPU %s\n"
+        "SOURCE VP9 PROFILE 0 3840x2160 TARGET 1920x1080 FPS 30\n"
         "SHOWN %u CRC MATCHES %u ELAPSED BETWEEN FLIPS US %llu LATE %u\n"
         "PRESENT WORK P50/P95/MAX US %llu/%llu/%llu\n"
         "FLIP INTERVAL P50/P95/MAX US %llu/%llu/%llu\n"
-        "CODED %u HIDDEN %u SUPERFRAMES %u EXISTING %u\nNO AUDIO/YOUTUBE TEST\n",
+        "CODED %u HIDDEN %u SUPERFRAMES %u EXISTING %u\nVISIBLE FRAME PROOF - NO "
+        "AUDIO/YOUTUBE/HIDDEN TEST\n",
         result, cleanup, tube5::gpu_presenter_error()[0] ? tube5::gpu_presenter_error() : "OK",
         shown, status.crc_matches, static_cast<unsigned long long>(elapsed), late,
         static_cast<unsigned long long>(shown > 1 ? work[1 + (shown - 2) / 2] : 0),
@@ -106,7 +107,7 @@ int main()
         static_cast<unsigned long long>(shown > 1 ? intervals[shown - 2] : 0), status.coded_frames,
         status.hidden_frames, status.superframes, status.existing_frames);
     if (n > 0)
-        (void)tube5::write_failure_log("/download0/tube5-vp9-altref.log", report,
+        (void)tube5::write_failure_log("/download0/tube5-vp9-4k.log", report,
                                        std::min<std::size_t>(n, sizeof(report) - 1));
     for (;;)
         sceKernelUsleep(16000);

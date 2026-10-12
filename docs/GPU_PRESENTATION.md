@@ -340,6 +340,36 @@ por frame. Pendientes sesiones largas, salida HDMI nativa 1440p y 4K/60 fps.
 DIAG84 queda como baseline de YouTube 1440p; los logs privados se conservan
 en `.local/console-logs/`, fuera de Git.
 
+## VP9 4K/30: primera secuencia, DIAG85
+
+`tools/prepare-vp9-clip.py --4k` genera únicamente la nueva fixture 3840×2160:
+90 frames visibles a 30 fps, sin cuadros ocultos/superframes. T5HC versión 5
+se valida antes del decoder; el test enfocado con sanitizers comprueba el
+layout, CRC, dimensiones y cleanup. El presenter admite buffers NV12 hasta
+3840×2160, dentro del límite de texels RGBA32UI del SDK. Para la configuración
+VP9 4K exclusivamente se permiten bloques GPU/compartido de hasta 256 MiB,
+con total acotado a 512 MiB; H.264 y VP9 1440p conservan sus límites anteriores.
+El log conserva los requisitos consultados para diagnosticar un rechazo sin
+otra build de marcadores.
+
+En FW 13.20, el propietario confirmó visualización correcta. Los 90 frames
+se enviaron, decodificaron y presentaron con 90 CRC correctos, 89 cambios y
+`RESULT 0`, `CLEANUP 0`, sin cuarentena. Tiempo entre 89 flips: 2.985.306 µs,
+aproximadamente 29,8 fps. Intervalos p50/p95/máximo: 32.747/37.671/54.903 µs;
+dos inicios tardíos y tres frames contabilizados como lentos (incluye inicio).
+Trabajo de presentación sin primer frame p50/p95/máximo: 2.642/2.801/2.839 µs.
+Decode máximo: 33.994 µs. No demuestra cadencia perfectamente uniforme ni
+estabilidad prolongada.
+
+Requisitos del decoder: CPU 12.588.320, GPU 171.327.744, compartido
+178.574.080 y superficie 12.541.952 bytes. La diferencia final de memoria
+flexible volvió a ser 1 MiB con el contexto GPU abierto. Logs privados
+rescatados en `.local/console-logs/diag85-*`, fuera de Git.
+
+La fuente sí es 4K, pero la salida permanece en 1920×1080. Pendientes
+integración 4K en el player real, audio/seek, YouTube, cuadros ocultos,
+salida HDMI 4K y 60 fps. DIAG84 funcional queda respaldada en consola.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
