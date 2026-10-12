@@ -901,7 +901,7 @@ int main()
 #ifdef TUBE5_HOST
         constexpr const char *clip = "assets/test-clip.mp4";
 #elif defined(TUBE5_HW_PLAYER)
-        constexpr const char *clip = "/app0/assets/hw-player-test.mp4";
+        constexpr const char *clip = "/app0/assets/hw-player-control.mp4";
 #else
         constexpr const char *clip = "/app0/assets/test-clip.mp4";
 #endif

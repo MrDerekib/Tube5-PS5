@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Generate one owned AVC I/P/B fixture with packet times and picture checksums."""
 import fractions
+import argparse
 import json
 import pathlib
 import re
@@ -11,6 +12,10 @@ import tempfile
 import zlib
 
 root = pathlib.Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser()
+parser.add_argument("--player-control", action="store_true",
+                    help="export the identical validated video as MP4 with AAC; do not replace T5HC")
+options = parser.parse_args()
 with tempfile.TemporaryDirectory(prefix="tube5-bclip-") as temporary:
     raw = pathlib.Path(temporary) / "clip.h264"
     mp4 = pathlib.Path(temporary) / "clip.mp4"
@@ -58,12 +63,32 @@ with tempfile.TemporaryDirectory(prefix="tube5-bclip-") as temporary:
     offsets[0] = 0  # Keep the muxer's initial SPS/PPS prefix before AUD in access unit zero.
     offsets.append(len(data))
     destination = root / "assets" / "hw-bclip.t5hc"
-    with destination.open("wb") as output:
-        output.write(b"T5HC" + struct.pack("<6I", 2, 1920, 1080, 30, 150, 1))
-        for i in range(150):
-            packet = data[offsets[i]:offsets[i + 1]]
-            if not packet or len(packet) >= 1024 * 1024:
-                raise RuntimeError("Input slot capacity exceeded")
-            output.write(struct.pack("<4I", len(packet), int(pts[i]), i, crc[int(pts[i])]))
-            output.write(packet)
+    encoded = bytearray(b"T5HC" + struct.pack("<6I", 2, 1920, 1080, 30, 150, 1))
+    for i in range(150):
+        packet = data[offsets[i]:offsets[i + 1]]
+        if not packet or len(packet) >= 1024 * 1024:
+            raise RuntimeError("Input slot capacity exceeded")
+        encoded.extend(struct.pack("<4I", len(packet), int(pts[i]), i, crc[int(pts[i])]))
+        encoded.extend(packet)
+    if options.player_control:
+        if destination.read_bytes() != encoded:
+            raise RuntimeError("Regenerated video differs from the validated DIAG59 fixture")
+        control = root / "assets" / "hw-player-control.mp4"
+        subprocess.run([
+            "ffmpeg", "-v", "error", "-y", "-i", str(mp4), "-f", "lavfi", "-i",
+            "sine=frequency=440:sample_rate=48000", "-map", "0:v:0", "-map", "1:a:0",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "96k", "-ac", "2",
+            "-af", "volume=0.15", "-t", "5", "-movflags", "+faststart", str(control)
+        ], check=True)
+        def packet_hashes(path):
+            report = json.loads(subprocess.check_output([
+                "ffprobe", "-v", "error", "-select_streams", "v:0", "-show_packets",
+                "-show_data_hash", "sha256", "-show_entries", "packet=data_hash,pts,dts",
+                "-of", "json", str(path)]))
+            return report["packets"]
+        if packet_hashes(mp4) != packet_hashes(control):
+            raise RuntimeError("AAC remux changed video packet bytes or timestamps")
+        print(f"{control}: validated video identical; AAC added without video re-encoding")
+    else:
+        destination.write_bytes(encoded)
     print(f"{destination}: I={types.count('I')} P={types.count('P')} B={types.count('B')}, {destination.stat().st_size} bytes")

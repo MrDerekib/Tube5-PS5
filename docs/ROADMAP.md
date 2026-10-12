@@ -101,7 +101,10 @@ CRC de muestras correctos, cero errores de orden, drain completo y cleanup cero.
 integrar el backend hardware con el reproductor y su reloj/audio.
 DIAG60 implementa esa integración para H.264 1080p con audio y controles existentes,
 filtro Annex B, propiedad de frames y reset al buscar. Pruebas enfocadas de host
-y build nativa correctas; validación en consola pendiente. No habilita 1440p/4K.
+y build nativa correctas. DIAG60/61 fallan en consola antes del primer frame:
+seis envíos, cero output, `POOL FULL`, sin fallo de heap. DIAG62 prepara un
+control con el mismo H.264 validado de DIAG59 en el reproductor real y corrige
+AUD duplicados en el filtrado; consola pendiente. No habilita 1440p/4K.
 Después: integración
 1080p con audio/reloj/seeks, presentación GPU, VP9 SDR 1440p y 2160p. Conservar
 software como alternativa. No asumir AV1 por hardware ni HDR antes de pruebas.

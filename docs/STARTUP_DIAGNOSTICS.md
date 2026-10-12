@@ -1,5 +1,28 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-62-HWCONTROL: mismo vídeo validado, reproductor real
+
+DIAG61 volvió a fallar con -55, `POOL FULL`: seis envíos, cero imágenes,
+cero buffers de salida marcados como aceptados, seis respuestas sin output,
+sin fallos de asignación y cleanup correcto. AUD presente (máscara 0x202 en
+el último paquete), así que insertarlo no solucionó el bloqueo.
+
+Local usa ahora `hw-player-control.mp4`, cinco segundos con el H.264 exacto
+del fixture validado DIAG59 y AAC añadido sin recodificar el vídeo.
+`python3 tools/prepare-hardware-bclip.py --player-control` comprueba que el
+T5HC regenerado es byte a byte idéntico al existente, sin reemplazarlo, y
+que el remux AAC conserva hashes, PTS y DTS de los 150 paquetes MP4.
+La prueba permite separar incompatibilidad del flujo anterior de problemas
+del adaptador/reproductor. No se da por resuelta la reproducción hardware.
+
+El test del nuevo MP4 detectó dos AUD en el primer paquete tras el filtro;
+ahora se eliminan los AUD existentes antes de insertar exactamente uno:
+`h264_mp4toannexb,filter_units=remove_types=9,h264_metadata=aud=insert`.
+Verificación enfocada del adaptador bajo ASan/UBSan con ambos MP4, contando
+un AUD por imagen, drain, timestamps, propiedad de frames y reset/reapertura;
+build nativa correcta. Prueba en PS5 pendiente. No cambia el pool ni añade flush
+durante reproducción.
+
 ## BOOT-DIAG-61-HWAUD: delimitación del H.264
 
 DIAG60 abrió el decoder real, pero en consola envió seis paquetes sin recibir

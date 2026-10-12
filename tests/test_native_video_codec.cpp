@@ -3,7 +3,9 @@
 #include "native_video_codec.hpp"
 #include "hardware_frame_probe.hpp"
 #include <cassert>
+#include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <vector>
 extern "C"
 {
@@ -48,6 +50,9 @@ int hardware_stream_send(const unsigned char *data, std::size_t size, std::uint6
                 aud += type == 9;
                 slice += type == 1 || type == 5;
             }
+        if (aud != 1 || !slice)
+            std::fprintf(stderr, "AU bytes=%zu AUD=%u slices=%u PTS=%lld DTS=%lld\n", size, aud,
+                         slice, static_cast<long long>(pts), static_cast<long long>(dts));
         assert(aud == 1 && slice > 0);
     }
     AVPacket *packet = av_packet_alloc();
@@ -113,7 +118,9 @@ int hardware_stream_close() noexcept
 } // namespace tube5
 int main(int argc, char **argv)
 {
-    assert(argc == 2);
+    assert(argc == 2 || argc == 3);
+    const unsigned expected_frames = argc == 3 ? static_cast<unsigned>(std::atoi(argv[2])) : 600;
+    assert(expected_frames > 0);
     AVFormatContext *source = nullptr;
     assert(!avformat_open_input(&source, argv[1], nullptr, nullptr));
     assert(avformat_find_stream_info(source, nullptr) >= 0);
@@ -167,7 +174,7 @@ int main(int argc, char **argv)
             av_packet_unref(packet);
         }
         assert(!tube5::native_codec_send(ctx, nullptr));
-        assert(receive() == AVERROR_EOF && frames == 600);
+        assert(receive() == AVERROR_EOF && frames == expected_frames);
         assert(!tube5::native_codec_error() && held->data[0][0] != 0);
         av_frame_unref(held);
         if (!cycle)

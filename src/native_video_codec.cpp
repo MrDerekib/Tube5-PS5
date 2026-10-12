@@ -222,7 +222,10 @@ void native_codec_adopt(AVCodecContext *context) noexcept
     delivered = eof_events = skipped = 0;
     // Native fixtures include AUDs; MP4 streams commonly omit them. Preserve
     // compressed pictures while giving the native parser explicit AU boundaries.
-    int code = av_bsf_list_parse_str("h264_mp4toannexb,h264_metadata=aud=insert", &bsf);
+    // Extradata may itself contain AUDs, duplicated when parameter sets are
+    // prepended to an IDR. Remove existing delimiters before inserting one.
+    int code = av_bsf_list_parse_str(
+        "h264_mp4toannexb,filter_units=remove_types=9,h264_metadata=aud=insert", &bsf);
     if (!code)
         code = avcodec_parameters_from_context(bsf->par_in, context);
     if (!code)
