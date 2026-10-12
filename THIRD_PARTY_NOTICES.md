@@ -226,6 +226,17 @@ Original ps5-native-app-boilerplate code is Copyright (C) 2026
 BlackBearReloaded and licensed under GPL-3.0-or-later. Source and script files
 carry matching SPDX identifiers.
 
+## Experimental PS5 OpenGL presentation
+
+`experiments/gpu-frame/` links the public
+[ps5-opengl SDK 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
+Copyright (C) 2026 BlackBearReloaded, GPL-3.0-or-later. The allocator integration
+includes its `native-app/app_heap.c`; the shaders are authored for Tube5.
+The SDK and its compiled libraries remain under ignored `.deps/gpu-sdk/`.
+The SDK archive contains its own `THIRD_PARTY_NOTICES.md` and `LICENSES/`
+for the transitive Mesa and shader compiler components; retain those notices
+with any distribution that contains the linked experimental SDK.
+
 ## Original presentation assets
 
 The BlackBear icon, selection artwork, and default selection track

@@ -95,7 +95,7 @@ void clip_snapshot()
     char report[1800]{};
     const int length = std::snprintf(
         report, sizeof(report),
-        "TUBE5 HARDWARE CLIP V1\nBUILD %s\n1080P AVC HIGH %s - CPU SDL DISPLAY\n"
+        "TUBE5 HARDWARE CLIP V1\nBUILD %s\n1080P AVC HIGH %s - DISPLAY CONSUMER\n"
         "STAGE %s FAILURE %s ERROR %08X ACTIVE %u CANCELLED %u\n"
         "FRAMES %u FPS %u SUBMITTED %u DECODED %u COMPOSED %u CHANGED %u SLOW %u\n"
         "DECODE MAX US %llu CONVERT MAX US %llu COPY MAX US %llu WORK MAX US %llu ELAPSED US %llu\n"

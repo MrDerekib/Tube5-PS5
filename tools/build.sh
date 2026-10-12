@@ -286,6 +286,7 @@ for name in app_crt app_cpp_runtime; do
 done
 
 link_inputs=("$build/obj/app_crt.o" "$build/obj/app_cpp_runtime.o" "${objects[@]}")
+gpu_link_options=()
 extra_stubs=()
 if [[ " ${definitions[*]} " == *" TUBE5_HW_PROBE "* ]]; then
     stub_object="$build/obj/videodec2_link_stub.o"
@@ -320,12 +321,28 @@ if [[ " ${definitions[*]} " == *" TUBE5_GPU_LINKED "* ]]; then
         extra_stubs+=(--stub "$gpu_library")
     done
 fi
+if [[ " ${definitions[*]} " == *" TUBE5_GPU_GL "* ]]; then
+    # The public OpenGL archive pulls its shader compiler, which uses libc++.
+    # Keep these dependencies exclusive to the isolated GPU build.
+    gpu_link_options=(-u ps5_agc_gate2_run)
+    for gpu_module in Agc AgcDriver; do
+        gpu_library="$root/.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/sdk/lib/libSce${gpu_module}.so"
+        [[ -f $gpu_library ]] || { echo "missing public OpenGL SDK: $gpu_library" >&2; exit 2; }
+        link_inputs+=("$gpu_library")
+        extra_stubs+=(--stub "$gpu_library")
+    done
+fi
 for archive in "${archives[@]}"; do
     [[ $archive =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\.a$ && -f $root/$archive ]] || {
         echo "invalid static archive: $archive" >&2; exit 2;
     }
     link_inputs+=("$root/$archive")
 done
+if [[ " ${definitions[*]} " == *" TUBE5_GPU_GL "* ]]; then
+    link_inputs+=(--start-group "$sdk_root/target/lib/libc++.a" \
+                  "$sdk_root/target/lib/libc++abi.a" \
+                  "$sdk_root/target/lib/libunwind.a" --end-group)
+fi
 if (( ${#pacbrew_libs[@]} > 0 )); then
     link_inputs+=(--start-group "${pacbrew_libs[@]}" --end-group)
 fi
@@ -341,7 +358,8 @@ if [[ -n ${pacbrew_root:-} ]]; then
 fi
 ninja_edge LINK "$build/llvm-pie.elf" "$sdk_root/bin/prospero-lld" -T "$native/ps5-pie.ld" --eh-frame-hdr \
     "${wrap_options[@]}" --version-script "$native/app-symbols.map" \
-    -e _start -o "$build/llvm-pie.elf" -L"$sdk_root/target/lib" "${link_inputs[@]}" \
+    -e _start -o "$build/llvm-pie.elf" -L"$sdk_root/target/lib" \
+    "${gpu_link_options[@]}" "${link_inputs[@]}" \
     --as-needed "$sdk_root"/target/lib/*.so "$sdk_root/target/lib/libc.a"
 ninja_inputs=("$build/llvm-pie.elf" "$tool" "$sdk_root"/target/lib/*.so)
 [[ -z ${stub_library:-} ]] || ninja_inputs+=("$stub_library")
