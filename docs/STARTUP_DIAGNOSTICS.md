@@ -20,8 +20,17 @@ ahora se eliminan los AUD existentes antes de insertar exactamente uno:
 `h264_mp4toannexb,filter_units=remove_types=9,h264_metadata=aud=insert`.
 Verificación enfocada del adaptador bajo ASan/UBSan con ambos MP4, contando
 un AUD por imagen, drain, timestamps, propiedad de frames y reset/reapertura;
-build nativa correcta. Prueba en PS5 pendiente. No cambia el pool ni añade flush
-durante reproducción.
+build nativa correcta. No cambia el pool ni añade flush durante reproducción.
+
+Validación FW13.20: el propietario confirma imagen y reproducción del control.
+El log de DIAG62 registra 150 submitted/received/delivered, 150 buffers de
+salida aceptados, cuatro respuestas sin imagen durante pipeline/drain,
+un EOF, dos resets (inicial y cierre del player), cero errores y cleanup cero.
+El log de fallo conservado corresponde a DIAG61 y no es un fallo nuevo.
+Esto valida el backend dentro del player para el flujo de control; no demuestra
+la causa de la incompatibilidad del MP4 anterior ni calidad/sincronía del audio.
+Siguiente prueba enfocada: vídeo directo de YouTube H.264 1080p en la misma
+build, seguido de pausa/seek/reapertura si logra arrancar.
 
 ## BOOT-DIAG-61-HWAUD: delimitación del H.264
 
