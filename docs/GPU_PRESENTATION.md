@@ -755,6 +755,31 @@ Validar esa política en el mismo probe usando CRC solo como verificador,
 incluyendo hidden sin superficie y llegada fuera de FIFO visible. No habilitar
 formatos YouTube 60 fps sobre una política que depende de imágenes conocidas.
 
+### DIAG100: política independiente de CRC, resultado explícito
+
+`BOOT-DIAG-100-VP9-FLAG-POLICY` reutiliza la fixture de tres segundos/12 hidden.
+`vp9_output_policy.hpp` selecciona metadata únicamente con tags, displayable,
+indicador de superficie y retención. No recibe CRC, imágenes ni timestamps de
+referencia. Superficie visible: selecciona el visible más antiguo y retira
+solo hidden anteriores sin superficie retenida. Hidden materializado: exige
+una única entrada hidden pendiente, incluso si adelanta a un visible. Estados
+ambiguos, indicadores desconocidos y hidden retenido sin salida fallan.
+CRC posterior a la selección verifica cada visible, nunca decide su metadata.
+La regla de retirar hidden anteriores tras completion visible queda sometida
+a validación en consola con el mismo clip; aún no habilita hidden del player.
+
+No repite GetPictureInfo VP9, que DIAG98/99 no pudieron utilizar. Pruebas
+focales ASan/UBSan: helper puro sin píxeles, FIFO con huecos, oculto posterior,
+omisión, ambigüedad, flags desconocidos y retención insegura; probe integrado
+con CRC, hidden materializado/omitido/adelantado, corrupción, drain y cleanup.
+Build/firma correctas, staging FTP preparado. Sin fixtures nuevas.
+
+Al acabar el probe muestra `FINALIZADA` o `ERROR`, counts de frames/CRC,
+result/cleanup y duración de tres segundos. Reutiliza Canvas/font existente
+en buffer lineal offscreen; solo EGL presenta, no inicia el VideoOut de Canvas.
+Los logs del clip se guardan antes de la pantalla final, fuera de la cadencia
+de prueba. Pendiente activación cuando el propietario cierre la app.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

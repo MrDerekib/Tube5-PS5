@@ -8,6 +8,7 @@ tube5::HardwareStreamStatus stream_status;
 #ifdef TUBE5_HW_FRAME
 #include "failure_log.hpp"
 #include "vp9_packet.hpp"
+#include "vp9_output_policy.hpp"
 #include <algorithm>
 #include <cerrno>
 #include <cstdio>
@@ -127,7 +128,7 @@ void clip_snapshot()
         "PTS %llu DTS %llu ATTACHED %llu CRC LAST %08X EXPECTED %08X\n"
         "VP9 CODED %u HIDDEN %u SUPERFRAMES %u EXISTING %u\n"
         "VP9 HIDDEN NO OUTPUT %u LAST VALID %u ACCEPTED %u PICTURES %u\n"
-        "PIPELINE HIDDEN MATERIALIZED %u OMITTED %u - CRC GUIDED PROBE ONLY\n"
+        "PIPELINE HIDDEN MATERIALIZED %u OMITTED %u - FLAG POLICY CRC VERIFIER\n"
         "PROBE OUTPUT PADDING %u OFFERED %u RETURNED %u\n"
         "VP9 NATIVE INFO RC %d GUARD %u SIZE %llu VALID %u PTS %llu DTS %llu TAG %llu\n"
         "MEMORY REQUIRED CPU %llu GPU %llu SHARED %llu FRAME %llu\n"
@@ -887,64 +888,20 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     picture.info.pts = picture.info.dts = picture.info.attached = UINT64_MAX;
     if (clip.vp9)
     {
-        if (clip.compound_vp9 && (s.decoded < 3 || (s.decoded >= 85 && s.decoded <= 95)))
-        {
-            // Read-only diagnostic: do not trust/use VP9 metadata to select a
-            // buffer until its contract and tags have been proved on this console.
-            clip.native_info_code = sceVideodec2GetPictureInfo(&output, &picture.info, nullptr);
-            clip.native_info_guard = picture.before == UINT64_C(0xc0dec0dec0dec0de) &&
-                                     picture.after == UINT64_C(0xc0dec0dec0dec0de);
-            clip.native_info = picture.info;
-            if (!clip.native_info_guard || picture.info.size != sizeof(picture.info))
-                return fail("VP9 NATIVE INFO GUARD", -EINVAL);
-            picture.info = {};
-            picture.info.size = sizeof(picture.info);
-        }
-        unsigned oldest = clip.slots;
+        Vp9PendingOutput pending[6]{};
         for (unsigned i = 0; i < clip.slots; ++i)
-            if (clip.input_tag[i] &&
-                (oldest == clip.slots || clip.input_tag[i] < clip.input_tag[oldest]))
-                oldest = i;
-        if (oldest == clip.slots)
-            return fail("PIPELINE FIFO EMPTY", -EINVAL);
-        if (clip.compound_vp9 && output.padding)
-        {
-            // Hidden surfaces can arrive before an older visible output. Without
-            // usable native metadata, only a unique hidden pending AU is unambiguous.
-            unsigned hidden = clip.slots;
-            for (unsigned i = 0; i < clip.slots; ++i)
-                if (clip.input_tag[i] && !clip.input_displayable[i])
-                {
-                    if (hidden != clip.slots)
-                        return fail("HIDDEN OUTPUT AMBIGUOUS", -EINVAL);
-                    hidden = i;
-                }
-            if (hidden == clip.slots)
-                return fail("HIDDEN OUTPUT WITHOUT INPUT", -EINVAL);
-            oldest = hidden;
-        }
-        if (clip.compound_vp9 && !clip.input_displayable[oldest] && !output.padding)
-        {
-            unsigned visible = clip.slots;
-            for (unsigned i = 0; i < clip.slots; ++i)
-                if (clip.input_tag[i] && clip.input_displayable[i] &&
-                    (visible == clip.slots || clip.input_tag[i] < clip.input_tag[visible]))
-                    visible = i;
-            if (visible == clip.slots || crc != clip.crc[clip.input_packet[visible]])
-                return fail("HIDDEN OMITTED CRC PROOF", -EILSEQ);
-            // Only this fixture's CRC proves completion of the later visible AU.
-            // Never infer that a retained hidden surface may be reused.
-            for (unsigned i = 0; i < clip.slots; ++i)
-                if (clip.input_tag[i] && clip.input_tag[i] < clip.input_tag[visible])
-                {
-                    if (clip.input_displayable[i] || clip.input_retained[i])
-                        return fail("HIDDEN OMITTED RETAINED", -EINVAL);
-                    clip.input_tag[i] = 0;
-                    ++s.hidden_no_output;
-                }
-            oldest = visible;
-        }
-        // Diagnostic CRC-guided mapping is not a general stream implementation.
+            pending[i] = {clip.input_tag[i], clip.input_displayable[i], clip.input_retained[i]};
+        const auto choice = select_vp9_output({pending, clip.slots}, output.padding);
+        if (choice.error != Vp9OutputError::none)
+            return fail("VP9 OUTPUT FLAG POLICY", -EINVAL);
+        for (unsigned i = 0; i < clip.slots; ++i)
+            if (choice.retire_mask & (1u << i))
+            {
+                clip.input_tag[i] = 0;
+                ++s.hidden_no_output;
+            }
+        const unsigned oldest = choice.input;
+        // Selection is pixel-independent; the CRC below only verifies its result.
         const unsigned index = clip.input_packet[oldest];
         picture.info.valid = 1;
         picture.info.attached = clip.input_tag[oldest];

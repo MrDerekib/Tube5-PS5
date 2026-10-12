@@ -9,4 +9,4 @@ PS5_CLANG=clang USE_CCACHE=0 make \
     APP_INCLUDE_PATHS='src .deps/gpu-sdk/ps5-opengl-sdk-1.0.1/sdk/include' \
     APP_STATIC_ARCHIVES='.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/sdk/lib/libPS5OpenGL.a' \
     APP_WRAP_SYMBOLS='malloc calloc realloc free posix_memalign malloc_usable_size' \
-    PACBREW_PACKAGES='sdl2' BUILD_LABEL=BOOT-DIAG-99-VP9-HIDDEN-ORDER
+    PACBREW_PACKAGES='sdl2' BUILD_LABEL=BOOT-DIAG-100-VP9-FLAG-POLICY

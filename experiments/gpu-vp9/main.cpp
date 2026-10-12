@@ -2,6 +2,7 @@
 #include "hardware_frame_probe.hpp"
 #include "gpu_presenter.hpp"
 #include "failure_log.hpp"
+#include "demo_renderer.hpp"
 #include <cstdlib>
 #include <cstdio>
 #include <algorithm>
@@ -46,7 +47,7 @@ int show(const tube5::VideoOutput &frame, void *) noexcept
 } // namespace
 int main()
 {
-    tube5::failure_log_build_label("BOOT-DIAG-99-VP9-HIDDEN-ORDER");
+    tube5::failure_log_build_label("BOOT-DIAG-100-VP9-FLAG-POLICY");
     int result = sceSysmoduleLoadModule(207);
     if (!result)
     {
@@ -110,7 +111,7 @@ int main()
     char report[2560]{};
     const int n = std::snprintf(
         report, sizeof(report),
-        "TUBE5 VP9 HIDDEN SURFACE ORDER PROBE\nBUILD BOOT-DIAG-99-VP9-HIDDEN-ORDER\nRESULT %d CLEANUP %d GPU %s\n"
+        "TUBE5 VP9 FLAG POLICY - CRC INDEPENDENT VERIFIER\nBUILD BOOT-DIAG-100-VP9-FLAG-POLICY\nRESULT %d CLEANUP %d GPU %s\n"
         "SOURCE VP9 PROFILE 0 3840x2160 TARGET 1920x1080 FPS 60\n"
         "SHOWN %u CRC MATCHES %u ELAPSED BETWEEN FLIPS US %llu LATE %u\n"
         "PRESENT WORK P50/P95/MAX US %llu/%llu/%llu\n"
@@ -148,6 +149,24 @@ int main()
         }
     if (used)
         (void)tube5::write_failure_log("/download0/tube5-vp9-depth3.log", report, used);
+    if (background)
+    {
+        const bool success = !result && !cleanup && shown == 180 && status.crc_matches == 180;
+        ps5::demo::Canvas canvas(background, true);
+        canvas.clear(ps5::demo::Color::background);
+        canvas.text(100, 160, success ? "FINALIZADA" : "ERROR", 10,
+                    success ? ps5::demo::Color::cyan : ps5::demo::Color::yellow);
+        char outcome[128]{};
+        std::snprintf(outcome, sizeof(outcome), "FRAMES %u/180 - CRC %u/180", shown, status.crc_matches);
+        canvas.text(100, 320, outcome, 5, ps5::demo::Color::white);
+        std::snprintf(outcome, sizeof(outcome), "RESULT %d - CLEANUP %d", result, cleanup);
+        canvas.text(100, 410, outcome, 5, ps5::demo::Color::white);
+        canvas.text(100, 560, "CLIP DE 3 SEGUNDOS - DEJA LA APP ABIERTA", 4,
+                    ps5::demo::Color::white);
+        tube5::gpu_clear_video();
+        tube5::gpu_begin_frame();
+        (void)tube5::gpu_present_ui(background);
+    }
     for (;;)
         sceKernelUsleep(16000);
 }
