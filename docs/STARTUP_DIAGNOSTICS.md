@@ -111,8 +111,12 @@ La build convierte la salida NV12 (formato 0 de VideoDec2) de un IDR sintético
 Después continúa al menú. El decoder se destruye tras copiar la imagen. El log
 `/download0/tube5-hardware-display.log` distingue decode, formato, conversión y
 cleanup. La presentación depende de la interpretación NV12 (pitch y superficie
-confirmados por las consultas y la API de referencia); la inspección visual en
-FW13.20 es la comprobación pendiente. La ruta de reproducción no cambia.
+confirmados por las consultas y la API de referencia). El propietario confirma
+que el frame se vio al arrancar en FW13.20. El log devuelve cero en decode,
+flush, consumer y cleanup, sin cuarentena y sin variación de memoria flexible
+en este ciclo (1007681536 bytes antes/después). Snapshot real conservado en
+.local/boot-diag-57/ps5-hardware-display.log. La conversión y presentación
+siguen en CPU/SDL; falta reproducción continua y presentación GPU.
 Build preparada: eboot.bin SHA-256
 `34e646d29cbd1cd4e57bebdcf425356d49a6aa26e362518ba1e81f66e4f0dd9a`.
 ELF exacto guardado en .local/boot-diag-54; SHA-256 eboot.bin:

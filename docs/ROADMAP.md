@@ -86,9 +86,10 @@ proceso: diferencia inicial de 1 MiB flexible todavía sin causa confirmada.
 DIAG56: ocho ciclos en FW13.20 completados, también después de standby. No hay
 crecimiento de memoria flexible tras el primer ciclo (caída de 1 MiB de causa
 desconocida).
-DIAG57 preparada: convierte el frame hardware NV12 a RGBA y muestra una
-preview SDL al arrancar. Pendiente verificación visual en consola. Después,
-probar un clip corto antes de integrar streams y sincronización al player.
+DIAG57 validada: el propietario vio el frame hardware al arrancar en FW13.20.
+Decode, conversión NV12/RGBA y cleanup correctos; memoria flexible constante
+en el ciclo visual. Presentación CPU/SDL. Siguiente paso: clip corto con
+frames consecutivos antes de integrar streams y sincronización al player.
 Después: integración
 1080p con audio/reloj/seeks, presentación GPU, VP9 SDR 1440p y 2160p. Conservar
 software como alternativa. No asumir AV1 por hardware ni HDR antes de pruebas.
