@@ -32,6 +32,7 @@ bool have_frame = false, held_packet = false, draining = false, drain_sent = fal
 bool need_key = true, have_pts = false;
 std::int64_t last_pts = 0;
 unsigned delivered = 0, eof_events = 0, skipped = 0;
+unsigned sample_y = 0, sample_u = 0, sample_v = 0;
 struct Lock
 {
     Lock()
@@ -49,17 +50,23 @@ void snapshot(const char *stage)
     char text[768]{};
     const int length = std::snprintf(
         text, sizeof(text),
-        "TUBE5 HARDWARE PLAYER V1\nBUILD %s\nPLAYER HARDWARE H264 1080P - NV12 TO IYUV\n"
+        "TUBE5 HARDWARE PLAYER V1\nBUILD %s\nPLAYER HARDWARE H264 1080P - "
+#ifdef TUBE5_GPU_PLAYER
+        "NV12 TO GPU\n"
+#else
+        "NV12 TO IYUV\n"
+#endif
         "STAGE %s NATIVE STAGE %s ACTIVE %u ERROR %08X NATIVE ERROR %08X CLEANUP %08X\n"
         "SUBMITTED %u RECEIVED %u DELIVERED %u RESETS %u EOF EVENTS %u SKIPPED PREROLL %u\n"
-        "LAST PTS %lld\nACCEPTED %u NO OUTPUT %u LAST AU %zu NAL MASK %08X INPUT PTS %lld DTS "
+        "LAST PTS %lld\nNATIVE CENTER YUV %u/%u/%u\nACCEPTED %u NO OUTPUT %u LAST AU %zu NAL MASK "
+        "%08X INPUT PTS %lld DTS "
         "%lld\n",
         tube5::failure_log_build_label(), stage, s.stage, s.active ? 1u : 0u,
         static_cast<unsigned>(fatal.load()), static_cast<unsigned>(s.error),
         static_cast<unsigned>(s.cleanup_error), s.submitted, s.received, delivered, s.resets,
-        eof_events, skipped, static_cast<long long>(last_pts), s.accepted, s.no_output,
-        s.last_au_bytes, s.last_nal_mask, static_cast<long long>(s.last_input_pts),
-        static_cast<long long>(s.last_input_dts));
+        eof_events, skipped, static_cast<long long>(last_pts), sample_y, sample_u, sample_v,
+        s.accepted, s.no_output, s.last_au_bytes, s.last_nal_mask,
+        static_cast<long long>(s.last_input_pts), static_cast<long long>(s.last_input_dts));
     if (length > 0)
         (void)tube5::write_failure_log("/download0/tube5-hardware-player.log", text,
                                        std::min<std::size_t>(length, sizeof(text) - 1));
@@ -121,6 +128,10 @@ int collect()
         return failure("FRAME ALLOCATION", allocation);
     }
     const auto *source = static_cast<const unsigned char *>(output.buffer);
+    sample_y = source[540u * output.pitch_bytes + 960u];
+    const auto *chroma = source + static_cast<std::size_t>(output.pitch_bytes) * output.height;
+    sample_u = chroma[270u * output.pitch_bytes + 960u];
+    sample_v = chroma[270u * output.pitch_bytes + 961u];
     for (unsigned y = 0; y < 1080; ++y)
         std::memcpy(pending->data[0] + static_cast<std::size_t>(y) * pending->linesize[0],
                     source + static_cast<std::size_t>(y) * output.pitch_bytes, 1920);
@@ -203,6 +214,16 @@ bool native_codec_active() noexcept
 {
     return owner.load() != nullptr;
 }
+int native_codec_color_space() noexcept
+{
+    const auto *context = owner.load();
+    return context ? context->colorspace : AVCOL_SPC_UNSPECIFIED;
+}
+bool native_codec_full_range() noexcept
+{
+    const auto *context = owner.load();
+    return context && context->color_range == AVCOL_RANGE_JPEG;
+}
 unsigned native_codec_reset_generation() noexcept
 {
     return reset_generation.load();
@@ -230,6 +251,7 @@ void native_codec_adopt(AVCodecContext *context) noexcept
     Lock lock;
     fatal = 0;
     delivered = eof_events = skipped = 0;
+    sample_y = sample_u = sample_v = 0;
     // Native fixtures include AUDs; MP4 streams commonly omit them. Preserve
     // compressed pictures while giving the native parser explicit AU boundaries.
     // Extradata may itself contain AUDs, duplicated when parameter sets are
@@ -325,7 +347,7 @@ int native_codec_receive(AVCodecContext *context, AVFrame *frame) noexcept
         return eof ? AVERROR_EOF : AVERROR(EAGAIN);
     av_frame_move_ref(frame, pending);
     have_frame = false;
-    if (++delivered % 300 == 0)
+    if (++delivered == 1 || delivered % 300 == 0)
         snapshot("PLAYING");
     return 0;
 }

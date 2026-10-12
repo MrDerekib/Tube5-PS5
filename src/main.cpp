@@ -20,6 +20,9 @@
 #include "hardware_video_probe.hpp"
 #include "hardware_frame_probe.hpp"
 #include "gpu_probe.hpp"
+#ifdef TUBE5_GPU_PLAYER
+#include "gpu_presenter.hpp"
+#endif
 #include "nv12_rgba.hpp"
 #include "sponsor_notice.hpp"
 #include "youtube_search.hpp"
@@ -1362,6 +1365,9 @@ int main()
 #endif
     auto render_frame = [&](Canvas *destination) noexcept
     {
+#ifdef TUBE5_GPU_PLAYER
+        tube5::gpu_begin_frame();
+#endif
         const Uint32 frame_start = SDL_GetTicks();
         static Uint32 previous_frame_start = frame_start;
         const Uint32 interval = frame_start - previous_frame_start;
@@ -1780,11 +1786,37 @@ int main()
     while (running)
         render_frame(nullptr);
 #else
+#ifdef TUBE5_GPU_PLAYER
+    tube5_boot_checkpoint("Tube5 D12G: iniciar presentacion GPU");
+    if (!tube5::gpu_presenter_init())
+    {
+        tube5_boot_checkpoint(tube5::gpu_presenter_error());
+        for (;;)
+            (void)sceKernelUsleep(16000);
+    }
+    (void)sceSystemServiceHideSplashScreen();
+    for (;;)
+    {
+        const auto start = SDL_GetPerformanceCounter();
+        render_frame(nullptr);
+        if (!tube5::gpu_present_ui(canvas_pixels))
+        {
+            tube5_boot_checkpoint(tube5::gpu_presenter_error());
+            for (;;)
+                (void)sceKernelUsleep(16000);
+        }
+        const auto elapsed =
+            (SDL_GetPerformanceCounter() - start) * 1000000 / SDL_GetPerformanceFrequency();
+        if (elapsed < 16667)
+            (void)sceKernelUsleep(static_cast<std::uint32_t>(16667 - elapsed));
+    }
+#else
     tube5_boot_checkpoint("Tube5 D12V: iniciar presentacion VideoOut nativa");
     using Frame = decltype(render_frame);
     ps5::demo::run_frames([](Canvas &destination, void *state) noexcept
                           { (*static_cast<Frame *>(state))(&destination); }, &render_frame,
                           "Tube5 D13: primer frame nativo presentado");
+#endif
 #endif
     media.close();
     sponsor_notice.cancel();

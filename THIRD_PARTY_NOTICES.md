@@ -228,10 +228,14 @@ carry matching SPDX identifiers.
 
 ## Experimental PS5 OpenGL presentation
 
-`experiments/gpu-frame/` links the public
+`experiments/gpu-frame/` and the opt-in GPU player (`src/gpu_presenter.cpp`)
+link the public
 [ps5-opengl SDK 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 Copyright (C) 2026 BlackBearReloaded, GPL-3.0-or-later. The allocator integration
-includes its `native-app/app_heap.c`; the shaders are authored for Tube5.
+includes its `native-app/app_heap.c`, also adapted through `src/gpu_heap.c`;
+the shaders are authored for Tube5. The integrated player mechanically
+renames seven Parson symbols in a generated copy of PSBC to avoid json-c ABI
+collisions; the rename map and generator are in `tooling/native/` and `tools/`.
 The SDK and its compiled libraries remain under ignored `.deps/gpu-sdk/`.
 The SDK archive contains its own `THIRD_PARTY_NOTICES.md` and `LICENSES/`
 for the transitive Mesa and shader compiler components; retain those notices

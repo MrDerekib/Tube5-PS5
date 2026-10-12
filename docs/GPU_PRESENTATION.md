@@ -123,6 +123,47 @@ permanece abierto; un ciclo no valida ausencia de crecimiento entre reaperturas.
 El siguiente paso es integrar el presenter en el reproductor con un único
 propietario de VideoOut, audio, pausa y seek a 1080p.
 
+DIAG71 integra EGL como único presenter del menú y vídeo. SDL conserva el
+compositor offscreen, audio, eventos y mando; Kitchensink entrega NV12 en vez
+de IYUV, sin crear una textura SDL de vídeo. El presenter conserva dos buffers
+GL empaquetados para UI y NV12 y espera la finalización tras cada swap antes de
+actualizarlos. Se mantienen las copias nativo→AVFrame y AVFrame→buffer GL.
+El adaptador del heap público se encadena con los wrappers/pools existentes;
+una copia generada de PSBC cambia siete símbolos Parson que colisionan con
+`json-c`, conservando las bibliotecas SDK originales.
+
+La build nativa y los tres shaders pasaron; también las comprobaciones de ABI
+de pools RefStruct/parser/SDL. En consola, el menú se mostró correctamente y el
+usuario confirmó audio, pausa y seek, pero el vídeo salió verde. Los logs
+registraron decoder y cleanup sin errores, tres resets y 248 frames entregados.
+DIAG72 separa las unidades de textura UI/vídeo y compara un píxel central CPU
+con readback GPU del primer frame visible. Esto distingue datos de entrada
+incorrectos de interpretación o estado gráfico incorrecto, sin fotos. Su
+comparación en consola devolvió CPU y GPU `0/125/0`, con cero diferencias:
+el verde ya estaba en el NV12 que recibía el presenter. El informe es
+`/download0/tube5-gpu-player.log`; el cierre conserva el último resultado de
+color para poder leerlo al volver al menú.
+
+DIAG73 evita swscale cuando el sink GPU recibe un frame ya NV12 a sus dimensiones
+originales: `av_frame_ref` conserva planos, pitch, timestamps y propiedad a
+través de la cola de Kitchensink. Un test enfocado mueve esa referencia a la
+cola, libera el frame de entrada y verifica que ambos planos siguen válidos.
+Los frames de otros formatos mantienen la conversión existente a NV12.
+También sustituye el triángulo sobredimensionado por un quad de dos triángulos
+dentro del clip, para corregir la esquina superior derecha ausente.
+
+DIAG73 validada con el clip local 1080p: el usuario confirmó color y rectángulo
+correctos; CPU y GPU `0/15/255`, cero diferencias. VideoDec2 entregó 150 frames,
+con EOF y cleanup sin error; el NV12 nativo central reportó `41/240/111`.
+La cola nueva preserva el color y evita NV12→NV12 innecesario. La subida máxima
+medida al buffer GL fue 484 µs. El máximo global de composición (1,41 s) incluye
+el primer render/compilación del backend y no establece coste sostenido.
+Al cerrar el player, `ORACLE` se reinicia para la siguiente sesión, mientras se
+conservan los últimos RGB comparados y su resultado en el informe.
+Audio, pausa y seek fueron confirmados por el usuario durante la integración;
+la comprobación siguiente es YouTube directo 1080p con esta misma build, antes
+de aumentar resolución. DIAG70 y DIAG65 continúan respaldadas.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

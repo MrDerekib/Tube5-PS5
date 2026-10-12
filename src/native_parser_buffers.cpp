@@ -8,6 +8,10 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#ifdef TUBE5_GPU_PLAYER
+#define __real_free tube5_gpu_free
+#define __real_realloc tube5_gpu_realloc
+#endif
 extern "C"
 {
     void av_fast_malloc(void *, unsigned *, std::size_t);

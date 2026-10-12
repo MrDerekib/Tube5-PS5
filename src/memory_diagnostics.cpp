@@ -122,6 +122,12 @@ void memory_allocation_origin_status(unsigned row, char *text, std::size_t capac
 }
 } // namespace tube5
 #if defined(TUBE5_DIAGNOSTICS) && !defined(TUBE5_HOST)
+#ifdef TUBE5_GPU_PLAYER
+#define __real_malloc tube5_gpu_malloc
+#define __real_calloc tube5_gpu_calloc
+#define __real_realloc tube5_gpu_realloc
+#define __real_posix_memalign tube5_gpu_posix_memalign
+#endif
 extern "C" int __wrap_posix_memalign(void **, std::size_t, std::size_t);
 namespace
 {

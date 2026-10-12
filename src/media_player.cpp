@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "media_player.hpp"
 #include "native_video_codec.hpp"
+#ifdef TUBE5_GPU_PLAYER
+#include "gpu_presenter.hpp"
+#endif
 #include <cmath>
 #include "audio_reader.hpp"
 #include "codec_diagnostics.hpp"
@@ -244,7 +247,11 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
     Kit_ResetVideoFormatRequest(&video_request);
     // Keep decoded frames in planar YUV420. RGBA costs ~1 MiB per
     // converted 640x360 frame, on top of the decoder and SDL texture storage.
+#ifdef TUBE5_GPU_PLAYER
+    video_request.format = SDL_PIXELFORMAT_NV12;
+#else
     video_request.format = SDL_PIXELFORMAT_IYUV;
+#endif
     video_request.hw_device_types = KIT_HWDEVICE_TYPE_NONE;
     Kit_AudioFormatRequest audio_request{};
     Kit_ResetAudioFormatRequest(&audio_request);
@@ -293,14 +300,20 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
         Kit_GetPlayerInfo(audio_player_, &audio_info);
         info.audio_format = audio_info.audio_format;
     }
+#ifdef TUBE5_GPU_PLAYER
+    if (info.video_format.format != SDL_PIXELFORMAT_NV12)
+        return fail("VIDEO", "GPU frame path requires NV12");
+#else
     if (info.video_format.format != SDL_PIXELFORMAT_IYUV)
         return fail("VIDEO", "raw frame path requires IYUV");
+#endif
     width_ = info.video_format.width;
     height_ = info.video_format.height;
     frame_area_ = SDL_Rect{0, 0, width_, height_};
     if (width_ <= 0 || height_ <= 0 || width_ > 1920 || height_ > 1080)
         return fail("VIDEO", "unsupported test frame size");
     memory_set_stage("TEXTURE_CREATE");
+#ifndef TUBE5_GPU_PLAYER
     // SDL's software IYUV fallback allocates a full RGB scratch image for
     // every STATIC update. STREAMING converts into the existing native pixels.
     texture_ = SDL_CreateTexture(renderer, info.video_format.format, SDL_TEXTUREACCESS_STREAMING,
@@ -309,6 +322,9 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
         return fail("TEXTURE", SDL_GetError());
     if (SDL_SetTextureBlendMode(texture_, SDL_BLENDMODE_NONE) != 0)
         return fail("TEXTURE BLEND", SDL_GetError());
+#else
+    (void)renderer;
+#endif
     SDL_AudioSpec desired{};
     desired.freq = info.audio_format.sample_rate;
     desired.format = static_cast<SDL_AudioFormat>(info.audio_format.format);
@@ -390,6 +406,9 @@ void MediaPlayer::close() noexcept
     if (texture_)
         SDL_DestroyTexture(texture_);
     texture_ = nullptr;
+#ifdef TUBE5_GPU_PLAYER
+    gpu_clear_video();
+#endif
     if (source_ && !youtube_)
         Kit_CloseSource(source_);
     youtube_stream_.close();
@@ -485,7 +504,12 @@ void MediaPlayer::seek_sponsor(double destination) noexcept
 
 void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noexcept
 {
+#ifdef TUBE5_GPU_PLAYER
+    (void)renderer;
+    if (!player_)
+#else
     if (!player_ || !texture_)
+#endif
         return;
     if (!audio_started_ && !paused_)
     {
@@ -540,13 +564,26 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
             ++raw_successes_;
             const bool valid = data && pitch && data[0] && area.x == 0 && area.y == 0 &&
                                area.w > 0 && area.h > 0 && area.w <= width_ && area.h <= height_ &&
-                               data[1] && data[2] && pitch[0] >= area.w &&
-                               pitch[1] >= (area.w + 1) / 2 && pitch[2] >= (area.w + 1) / 2;
+                               data[1] && pitch[0] >= area.w &&
+#ifdef TUBE5_GPU_PLAYER
+                               pitch[1] >= area.w && !(area.w & 1) && !(area.h & 1);
+#else
+                               data[2] && pitch[1] >= (area.w + 1) / 2 &&
+                               pitch[2] >= (area.w + 1) / 2;
+#endif
             if (!valid)
-                std::snprintf(error_, sizeof(error_), "VIDEO FRAME: invalid IYUV layout");
+                std::snprintf(error_, sizeof(error_), "VIDEO FRAME: invalid YUV layout");
+#ifdef TUBE5_GPU_PLAYER
+            else if (!gpu_upload_nv12(data, pitch, area.w, area.h,
+                                      native_codec_color_space() == 1 ||
+                                          (native_codec_color_space() == 2 && height_ >= 720),
+                                      native_codec_full_range()))
+                std::snprintf(error_, sizeof(error_), "VIDEO UPLOAD: %s", gpu_presenter_error());
+#else
             else if (SDL_UpdateYUVTexture(texture_, &area, data[0], pitch[0], data[1], pitch[1],
                                           data[2], pitch[2]) != 0)
                 std::snprintf(error_, sizeof(error_), "VIDEO UPLOAD: %s", SDL_GetError());
+#endif
             else
             {
                 frame_area_ = area;
@@ -592,10 +629,15 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
     }
     if (frames_uploaded_ && initial_seek_target_ < 0.0)
     {
+#ifdef TUBE5_GPU_PLAYER
+        gpu_draw_video(target);
+        ++frames_presented_;
+#else
         if (SDL_RenderCopy(renderer, texture_, &frame_area_, &target) != 0)
             std::snprintf(error_, sizeof(error_), "VIDEO DRAW: %s", SDL_GetError());
         else
             ++frames_presented_;
+#endif
     }
 }
 

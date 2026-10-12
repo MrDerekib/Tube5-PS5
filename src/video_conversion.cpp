@@ -9,6 +9,7 @@ namespace
 // different frame objects. Reset only before workers start, after prior joins.
 std::atomic<const void *> failed_frame{nullptr};
 std::atomic<unsigned> converted{0}, conversion_failures{0}, rejected{0};
+std::atomic<unsigned> nv12_references{0};
 std::atomic<int> last_error{0};
 } // namespace
 namespace tube5
@@ -17,12 +18,14 @@ void reset_video_conversion() noexcept
 {
     failed_frame = nullptr;
     converted = conversion_failures = rejected = 0;
+    nv12_references = 0;
     last_error = 0;
 }
 void video_conversion_status(char *text, std::size_t capacity) noexcept
 {
-    std::snprintf(text, capacity, "YUV SCALE %u FAIL %u DROP %u ERR %d", converted.load(),
-                  conversion_failures.load(), rejected.load(), last_error.load());
+    std::snprintf(text, capacity, "YUV SCALE %u NV12 REF %u FAIL %u DROP %u ERR %d",
+                  converted.load(), nv12_references.load(), conversion_failures.load(),
+                  rejected.load(), last_error.load());
 }
 } // namespace tube5
 
@@ -43,15 +46,34 @@ extern "C" AVPixelFormat __wrap_Kit_FindAVPixelFormat(unsigned int format)
 {
     // a2 recognizes YV12 but omitted SDL's Y/U/V alias. Raw AVFrames carry
     // Y/U/V planes, which SDL_UpdateYUVTexture uploads into an IYUV texture.
-    return format == SDL_PIXELFORMAT_IYUV ? AV_PIX_FMT_YUV420P
-                                          : __real_Kit_FindAVPixelFormat(format);
+    if (format == SDL_PIXELFORMAT_IYUV)
+        return AV_PIX_FMT_YUV420P;
+#ifdef TUBE5_GPU_PLAYER
+    if (format == SDL_PIXELFORMAT_NV12)
+        return AV_PIX_FMT_NV12;
+#endif
+    return __real_Kit_FindAVPixelFormat(format);
 }
 extern "C" int __wrap_sws_scale_frame(SwsContext *context, AVFrame *destination,
                                       const AVFrame *source)
 {
-    const int result = context && destination && source
-                           ? __real_sws_scale_frame(context, destination, source)
-                           : AVERROR(EINVAL);
+    int result = AVERROR(EINVAL);
+#ifdef TUBE5_GPU_PLAYER
+    if (context && destination && source && source->format == AV_PIX_FMT_NV12 && source->data[0] &&
+        source->data[1] && source->width > 0 && source->height > 0)
+    {
+        // Tube5's GPU sink requests NV12 at the source dimensions. The frame
+        // already owns copied native pixels: move a reference through the Kit
+        // queue, preserving plane addresses, stride and lifetime without sws.
+        av_frame_unref(destination);
+        result = av_frame_ref(destination, source);
+        if (result >= 0)
+            ++nv12_references;
+    }
+    else
+#endif
+        if (context && destination && source)
+        result = __real_sws_scale_frame(context, destination, source);
     if (result < 0)
     {
         failed_frame = destination;
