@@ -780,6 +780,18 @@ en buffer lineal offscreen; solo EGL presenta, no inicia el VideoOut de Canvas.
 Los logs del clip se guardan antes de la pantalla final, fuera de la cadencia
 de prueba. Pendiente activación cuando el propietario cierre la app.
 
+Resultado DIAG100: propietario confirma `FINALIZADA`. Logs: 180 visibles/180
+CRC correctos, 179 cambios, 192 AUs, 12 superframes/hidden; once superficies
+hidden y una omisión, error/orden/cleanup cero, dos drains. La política no
+consultó CRC para seleccionar metadata. 179 intervalos en 3.002.957 µs
+(~59,61 fps), p95/máximo 17.650/28.192 µs; 51 llegadas tarde y 26 pasos lentos.
+Esto valida integridad y clasificación en el control acotado, no estabilidad
+sostenida ni show-existing (cero en esta fixture). Logs privados `diag100-*`.
+La línea de metadata nativa rc -45/guard cero/size cero es inicialización
+`ENOTSUP`, no una llamada fallida nueva: GetPictureInfo VP9 ya no se consulta.
+Siguiente: reutilizar la política en el stream y probar el mismo control con
+hidden, audio, seek/reentrada antes de ampliar YouTube 4K60.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
