@@ -3,7 +3,8 @@
 namespace
 {
 tube5::HardwareClipStatus clip_status;
-}
+tube5::HardwareStreamStatus stream_status;
+} // namespace
 #ifdef TUBE5_HW_FRAME
 #include "failure_log.hpp"
 #include <algorithm>
@@ -74,6 +75,20 @@ struct Clip
     std::uint32_t last_crc = 0, expected_crc = 0;
 };
 Clip clip;
+struct Stream
+{
+    bool frame_used[6]{};
+    struct Input
+    {
+        std::uint64_t tag = 0, pts = 0, dts = 0;
+    } input[6];
+    std::uint64_t next_tag = 1;
+    tube5::VideoOutput output{};
+    tube5::VideoPictureInfo picture{};
+    unsigned returned = 0;
+    bool ready = false, borrowed = false, draining = false, eof = false;
+};
+Stream stream;
 void clip_snapshot()
 {
     const auto &s = clip_status;
@@ -299,7 +314,7 @@ int hardware_frame_probe(const char *asset, const char *log, HardwareFrameConsum
     return -1;
 #else
     auto &r = resources;
-    if (r.quarantined || clip_status.active)
+    if (r.quarantined || clip_status.active || stream_status.active)
         return -EBUSY;
     char report[3072]{};
     std::size_t used = static_cast<std::size_t>(std::snprintf(
@@ -514,7 +529,8 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
     (void)log;
     return -1;
 #else
-    if (clip_status.active || resources.quarantined || resources.decoder || resources.queue)
+    if (clip_status.active || stream_status.active || resources.quarantined || resources.decoder ||
+        resources.queue)
         return -EBUSY;
     if (!asset || !log || std::strlen(log) >= sizeof(clip.log))
         return -EINVAL;
@@ -847,6 +863,226 @@ void hardware_clip_presented(std::uint64_t copy_us) noexcept
     }
 #else
     (void)copy_us;
+#endif
+}
+#ifdef TUBE5_HW_FRAME
+static int stream_failure(const char *stage, int code)
+{
+    stream_status.stage = stage;
+    stream_status.error = code;
+    return code;
+}
+static int stream_output(unsigned offered, const VideoFrame &frame, const VideoOutput &output)
+{
+    if (frame.accepted)
+        stream.frame_used[offered] = true;
+    if (output.error)
+        return stream_failure("OUTPUT ERROR", -EIO);
+    if (!output.valid)
+        return 0;
+    unsigned returned = 0;
+    while (returned < 6 && output.buffer != static_cast<unsigned char *>(resources.frame.data) +
+                                                returned * clip.frame_stride)
+        ++returned;
+    const auto bytes = static_cast<std::uint64_t>(output.pitch_bytes) * output.height * 3 / 2;
+    if (returned == 6 || (!stream.frame_used[returned] && returned != offered) ||
+        output.codec != 1 || output.pictures != 1 || output.format != 0 || output.padding ||
+        output.width != 1920 || output.height < 1080 || output.height > 1088 ||
+        (output.height & 1u) || output.pitch_bytes < 1920 || output.pitch_bytes > 4096 ||
+        (output.pitch_bytes & 1u) || output.bytes > clip.frame_stride || bytes > output.bytes)
+        return stream_failure("OUTPUT LAYOUT", -EINVAL);
+    struct Guarded
+    {
+        std::uint64_t before = UINT64_C(0xc0dec0dec0dec0de);
+        VideoPictureInfo picture{};
+        std::uint64_t after = UINT64_C(0xc0dec0dec0dec0de);
+    } info;
+    info.picture.size = sizeof(info.picture);
+    info.picture.pts = info.picture.dts = info.picture.attached = UINT64_MAX;
+    const int code = sceVideodec2GetPictureInfo(&output, &info.picture, nullptr);
+    if (code || info.picture.valid != 1 || info.picture.size != sizeof(info.picture) ||
+        info.before != UINT64_C(0xc0dec0dec0dec0de) || info.after != UINT64_C(0xc0dec0dec0dec0de))
+        return stream_failure("PICTURE INFO", code ? code : -EINVAL);
+    unsigned input = 0;
+    while (input < 6 && stream.input[input].tag != info.picture.attached)
+        ++input;
+    if (input == 6 || !info.picture.attached || stream.input[input].pts != info.picture.pts ||
+        stream.input[input].dts != info.picture.dts)
+        return stream_failure("PICTURE TAG", -EINVAL);
+    stream.input[input] = {};
+    stream.frame_used[returned] = true;
+    stream.returned = returned;
+    stream.output = output;
+    stream.picture = info.picture;
+    stream.ready = true;
+    return 0;
+}
+#endif
+const HardwareStreamStatus &hardware_stream_status() noexcept
+{
+    return stream_status;
+}
+int hardware_stream_close() noexcept
+{
+#ifndef TUBE5_HW_FRAME
+    return -1;
+#else
+    if (!stream_status.active)
+        return stream_status.cleanup_error;
+    stream_status.cleanup_error = cleanup();
+    resources.quarantined = stream_status.cleanup_error != 0;
+    stream_status.active = false;
+    if (!stream_status.error)
+        stream_status.stage = "CLOSED";
+    return stream_status.cleanup_error;
+#endif
+}
+int hardware_stream_reset() noexcept
+{
+#ifndef TUBE5_HW_FRAME
+    return -1;
+#else
+    if (!stream_status.active || stream_status.error)
+        return stream_status.error ? stream_status.error : -EINVAL;
+    const int code = sceVideodec2Reset(resources.decoder);
+    if (code)
+        return stream_failure("RESET", code);
+    const auto next_tag = stream.next_tag;
+    stream = {};
+    stream.next_tag = next_tag;
+    ++stream_status.resets;
+    stream_status.stage = "READY";
+    return 0;
+#endif
+}
+int hardware_stream_begin() noexcept
+{
+#ifndef TUBE5_HW_FRAME
+    return -1;
+#else
+    if (stream_status.active || clip_status.active || resources.quarantined || resources.decoder ||
+        resources.queue)
+        return -EBUSY;
+    stream = {};
+    stream_status = {};
+    stream_status.active = true;
+    const auto record = [](const char *stage, int code)
+    {
+        stream_status.stage = stage;
+        stream_status.error = code;
+    };
+    int code = prepare_decoder(record, 3, 6);
+    if (!code)
+        code = hardware_stream_reset();
+    if (code)
+        hardware_stream_close();
+    return code;
+#endif
+}
+int hardware_stream_send(const std::uint8_t *data, std::size_t bytes, std::uint64_t pts,
+                         std::uint64_t dts) noexcept
+{
+#ifndef TUBE5_HW_FRAME
+    (void)data;
+    (void)bytes;
+    (void)pts;
+    (void)dts;
+    return -1;
+#else
+    if (!stream_status.active || stream_status.error)
+        return stream_status.error ? stream_status.error : -EINVAL;
+    if (stream.ready || stream.borrowed)
+        return 2;
+    if (!data)
+    {
+        stream.draining = true;
+        return 0;
+    }
+    if (stream.draining)
+        return 1;
+    if (!bytes || bytes >= mib)
+        return stream_failure("AU SIZE", -EINVAL);
+    unsigned input = 0, offered = 0;
+    while (input < 6 && stream.input[input].tag)
+        ++input;
+    while (offered < 6 && stream.frame_used[offered])
+        ++offered;
+    if (input == 6 || offered == 6)
+        return stream_failure("POOL FULL", -ENOBUFS);
+    auto *packet = static_cast<unsigned char *>(resources.input.data) + input * mib;
+    std::memcpy(packet, data, bytes);
+    const auto tag = stream.next_tag++;
+    stream.input[input] = {tag, pts, dts};
+    VideoInput au{sizeof(VideoInput), packet, bytes, pts, dts, tag};
+    VideoFrame frame{sizeof(VideoFrame),
+                     static_cast<unsigned char *>(resources.frame.data) +
+                         offered * clip.frame_stride,
+                     clip.frame_stride, 0, 0};
+    VideoOutput output{};
+    output.size = sizeof(output);
+    const int code = sceVideodec2Decode(resources.decoder, &au, &frame, &output);
+    ++stream_status.submitted;
+    if (code)
+        return stream_failure("DECODE", code);
+    return stream_output(offered, frame, output);
+#endif
+}
+int hardware_stream_receive(VideoOutput &output, VideoPictureInfo &picture) noexcept
+{
+#ifndef TUBE5_HW_FRAME
+    (void)output;
+    (void)picture;
+    return -1;
+#else
+    if (!stream_status.active || stream_status.error)
+        return stream_status.error ? stream_status.error : -EINVAL;
+    if (stream.borrowed)
+        return 2;
+    if (!stream.ready && stream.draining)
+    {
+        bool pending = false;
+        for (const auto &input : stream.input)
+            pending |= input.tag != 0;
+        if (!pending)
+            return 1;
+        unsigned offered = 0;
+        while (offered < 6 && stream.frame_used[offered])
+            ++offered;
+        if (offered == 6)
+            return stream_failure("DRAIN POOL", -ENOBUFS);
+        VideoFrame frame{sizeof(VideoFrame),
+                         static_cast<unsigned char *>(resources.frame.data) +
+                             offered * clip.frame_stride,
+                         clip.frame_stride, 0, 0};
+        VideoOutput decoded{};
+        decoded.size = sizeof(decoded);
+        int code = sceVideodec2Flush(resources.decoder, &frame, &decoded);
+        if (code)
+            return stream_failure("FLUSH", code);
+        code = stream_output(offered, frame, decoded);
+        if (code)
+            return code;
+        if (!stream.ready)
+            return stream_failure("INCOMPLETE DRAIN", -EIO);
+    }
+    if (!stream.ready)
+        return 2;
+    output = stream.output;
+    picture = stream.picture;
+    stream.ready = false;
+    stream.borrowed = true;
+    ++stream_status.received;
+    return 0;
+#endif
+}
+void hardware_stream_release() noexcept
+{
+#ifdef TUBE5_HW_FRAME
+    if (stream.borrowed)
+    {
+        stream.frame_used[stream.returned] = false;
+        stream.borrowed = false;
+    }
 #endif
 }
 } // namespace tube5

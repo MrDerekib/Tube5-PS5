@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "media_player.hpp"
+#include "native_video_codec.hpp"
 #include <cmath>
 #include "audio_reader.hpp"
 #include "codec_diagnostics.hpp"
@@ -247,12 +248,17 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
         if (!std::isfinite(video_duration) || !std::isfinite(audio_duration) ||
             video_duration <= 0 || std::abs(video_duration - audio_duration) > 2.0)
             return fail("STREAMS", "audio/video duration mismatch");
+        native_codec_allow_open(true);
         (void)create_separate_players(source_, video, audio_source_, audio, &video_request,
                                       &audio_request, player_, audio_player_);
     }
     else
+    {
+        native_codec_allow_open(true);
         player_ =
             Kit_CreatePlayer(source_, video, audio, -1, &video_request, &audio_request, 1920, 1080);
+    }
+    native_codec_allow_open(false);
     if (!player_ || (audio_source_ && !audio_player_))
         return fail("DECODER", codec_diagnostic()[0] ? codec_diagnostic() : Kit_GetError());
     if (memory_out_of_memory())
@@ -545,6 +551,13 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
 
 bool MediaPlayer::check_network_failure() noexcept
 {
+    if (player_ && native_codec_error())
+    {
+        char detail[64]{};
+        std::snprintf(detail, sizeof(detail), "native decoder error %d", native_codec_error());
+        fail("HW DECODE", detail);
+        return true;
+    }
     if (!network_ || !player_ || opening())
         return false;
     if (memory_out_of_memory())
@@ -590,11 +603,12 @@ void MediaPlayer::diagnostic_status(char *text, std::size_t capacity) const noex
         Kit_GetPlayerVideoBufferState(player_, &frames, &frame_capacity, &packets,
                                       &packet_capacity);
     std::snprintf(text, capacity,
-                  "FR %u BUF %u/%u PKT %u/%u SEEK %u/%u RAW %u/%u RC%d S%d AUD %u/%zu U%u E%d",
-                  frames_uploaded_, frames, frame_capacity, packets, packet_capacity,
-                  seek_dispatches_, seek_requests_, raw_successes_, raw_attempts_, raw_result_,
-                  player_ ? Kit_GetPlayerState(player_) : KIT_CLOSED, audio_callbacks_.load(),
-                  audio_bytes_.load(), audio_underruns_.load(), audio_error_.load());
+                  "%s FR %u BUF %u/%u PKT %u/%u SEEK %u/%u RAW %u/%u RC%d S%d AUD %u/%zu U%u E%d",
+                  native_codec_active() ? "HW" : "SW", frames_uploaded_, frames, frame_capacity,
+                  packets, packet_capacity, seek_dispatches_, seek_requests_, raw_successes_,
+                  raw_attempts_, raw_result_, player_ ? Kit_GetPlayerState(player_) : KIT_CLOSED,
+                  audio_callbacks_.load(), audio_bytes_.load(), audio_underruns_.load(),
+                  audio_error_.load());
 }
 
 double MediaPlayer::position() const noexcept

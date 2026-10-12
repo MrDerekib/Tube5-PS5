@@ -152,6 +152,9 @@ fi
 # Tube5's conversion guard is required even when diagnostic wrappers are off.
 # Keep it scoped to the root player, not the template's separate examples.
 app_wrap_symbols=${APP_WRAP_SYMBOLS:-}
+if [[ " ${definitions[*]} " == *" TUBE5_HW_PLAYER "* ]]; then
+    app_wrap_symbols+=" avcodec_flush_buffers avcodec_free_context"
+fi
 if [[ $app_source_dir == src && -f $root/src/shared_playback_clock.cpp ]]; then
     app_wrap_symbols+=" Kit_CreateTimer Kit_CreateSecondaryTimer"
 fi

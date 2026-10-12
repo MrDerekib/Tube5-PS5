@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pipeline_diagnostics.hpp"
+#include "native_video_codec.hpp"
 #include "video_sync_diagnostics.hpp"
 #include "video_conversion.hpp"
 #include "network_source.hpp"
@@ -94,7 +95,11 @@ extern "C" int __wrap_avcodec_send_packet(AVCodecContext *context, const AVPacke
     const bool track = active.load() && context && context->codec_type == AVMEDIA_TYPE_VIDEO;
     if (track)
         ++sends;
-    const int result = __real_avcodec_send_packet(context, packet);
+    const int result =
+#ifdef TUBE5_HW_PLAYER
+        tube5::native_codec_owns(context) ? tube5::native_codec_send(context, packet) :
+#endif
+                                          __real_avcodec_send_packet(context, packet);
     if (track && result < 0 && result != AVERROR(EAGAIN) && result != AVERROR_EOF)
         send_error = result;
     return result;
@@ -115,7 +120,11 @@ extern "C" int __wrap_avcodec_receive_frame(AVCodecContext *context, AVFrame *fr
     // not queue pre-target audio/video or let them reset Kitchensink's clock.
     do
     {
-        result = __real_avcodec_receive_frame(context, frame);
+        result =
+#ifdef TUBE5_HW_PLAYER
+            tube5::native_codec_owns(context) ? tube5::native_codec_receive(context, frame) :
+#endif
+                                              __real_avcodec_receive_frame(context, frame);
         if (result < 0 || !active.load() || !tube5::seek_preroll::discard(context, frame))
             break;
         av_frame_unref(frame);

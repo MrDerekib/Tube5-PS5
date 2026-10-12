@@ -99,6 +99,9 @@ DIAG59 validada en FW13.20: fixture con 95 B frames; 150 imágenes, metadatos y
 CRC de muestras correctos, cero errores de orden, drain completo y cleanup cero.
 5.109 s totales; trabajo combinado máximo 17.538 ms, SLOW 0. Siguiente paso:
 integrar el backend hardware con el reproductor y su reloj/audio.
+DIAG60 implementa esa integración para H.264 1080p con audio y controles existentes,
+filtro Annex B, propiedad de frames y reset al buscar. Pruebas enfocadas de host
+y build nativa correctas; validación en consola pendiente. No habilita 1440p/4K.
 Después: integración
 1080p con audio/reloj/seeks, presentación GPU, VP9 SDR 1440p y 2160p. Conservar
 software como alternativa. No asumir AV1 por hardware ni HDR antes de pruebas.

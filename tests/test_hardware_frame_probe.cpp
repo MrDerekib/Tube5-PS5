@@ -467,7 +467,41 @@ int main()
         assert(!tube5::hardware_clip_close());
         no_resources();
     }
-    b_mode = corrupt_metadata = wrong_order = corrupt_pixels = false;
+    corrupt_metadata = wrong_order = corrupt_pixels = false;
+    reset_b_mock();
+    assert(!tube5::hardware_stream_begin());
+    assert(tube5::hardware_clip_begin(basset, log) == -EBUSY);
+    unsigned stream_frames = 0;
+    tube5::VideoOutput stream_output{};
+    tube5::VideoPictureInfo stream_info{};
+    for (unsigned i = 0; i < 8; ++i)
+    {
+        assert(!tube5::hardware_stream_send(payload, sizeof(payload),
+                                            static_cast<std::uint64_t>(order[i]) * 1000000 / 30,
+                                            static_cast<std::uint64_t>(i) * 1000000 / 30));
+        const int code = tube5::hardware_stream_receive(stream_output, stream_info);
+        assert(code == (i < 3 ? 2 : 0));
+        if (!code)
+        {
+            assert(stream_info.pts == static_cast<std::uint64_t>(stream_frames++) * 1000000 / 30);
+            assert(tube5::hardware_stream_send(payload, sizeof(payload), 0, 0) == 2);
+            tube5::hardware_stream_release();
+        }
+    }
+    assert(!tube5::hardware_stream_send(nullptr, 0, 0, 0));
+    while (tube5::hardware_stream_receive(stream_output, stream_info) == 0)
+    {
+        assert(stream_info.pts == static_cast<std::uint64_t>(stream_frames++) * 1000000 / 30);
+        tube5::hardware_stream_release();
+    }
+    assert(stream_frames == 8 && tube5::hardware_stream_status().received == 8);
+    const auto prior_resets = tube5::hardware_stream_status().resets;
+    assert(!tube5::hardware_stream_reset());
+    assert(!tube5::hardware_stream_status().error &&
+           tube5::hardware_stream_status().resets == prior_resets + 1);
+    tube5::hardware_stream_close();
+    no_resources();
+    b_mode = false;
     assert(unlink(basset) == 0);
     const auto child = fork();
     assert(child >= 0);

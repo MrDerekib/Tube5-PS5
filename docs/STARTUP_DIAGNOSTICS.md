@@ -1,5 +1,25 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-60-HWPLAYER: integración con el reproductor
+
+Activa VideoDec2 para H.264 1920×1080, conservando AAC, reloj, controles,
+SponsorBlock y presentación SDL del reproductor existente. Otras dimensiones
+siguen por software. No es presentación zero-copy: copia NV12 a un AVFrame
+propio y Kitchensink lo convierte a IYUV. El filtro `h264_mp4toannexb` incorpora
+SPS/PPS; se conservan PTS/DTS y se reinicia decoder/filtro al hacer seek.
+Los slots nativos se liberan antes de entregar el AVFrame al reproductor.
+
+El diagnóstico del player muestra `HW` o `SW`; el log
+`/download0/tube5-hardware-player.log` registra apertura, contadores, resets,
+EOF y cierre sin URLs. No ejecuta el preview hardware al arrancar.
+La opción local usa un nuevo clip propio 1080p/30 de 20 segundos con B frames
+y AAC, generado con `bash tools/prepare-hardware-player.sh`.
+
+Verificación enfocada: pool nativo con reordenación, drain y reset bajo ASan/
+UBSan; adaptador AVCC→Annex B con stand-in software de la API nativa, dos ciclos
+de 600 imágenes y seek/reinicio, PTS y propiedad del frame; compilación nativa.
+La integración real en PS5 queda pendiente de prueba del propietario.
+
 ## BOOT-DIAG-59-HWBFRAMES: reordenación y metadatos
 
 Fixture propio 1080p/30, cinco segundos, 5 I + 50 P + 95 B, numerado por imagen.

@@ -72,4 +72,19 @@ int hardware_clip_step(HardwareFrameConsumer consumer, void *context) noexcept;
 void hardware_clip_presented(std::uint64_t copy_us) noexcept;
 int hardware_clip_close(bool cancelled = false, int display_error = 0) noexcept;
 const HardwareClipStatus &hardware_clip_status() noexcept;
+struct HardwareStreamStatus
+{
+    bool active = false;
+    unsigned submitted = 0, received = 0, resets = 0;
+    int error = 0, cleanup_error = 0;
+    const char *stage = "IDLE";
+};
+int hardware_stream_begin() noexcept;
+int hardware_stream_send(const std::uint8_t *data, std::size_t bytes, std::uint64_t pts,
+                         std::uint64_t dts) noexcept;
+int hardware_stream_receive(VideoOutput &output, VideoPictureInfo &picture) noexcept;
+void hardware_stream_release() noexcept;
+int hardware_stream_reset() noexcept;
+int hardware_stream_close() noexcept;
+const HardwareStreamStatus &hardware_stream_status() noexcept;
 } // namespace tube5

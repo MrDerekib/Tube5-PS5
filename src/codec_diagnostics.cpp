@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "codec_diagnostics.hpp"
+#include "native_video_codec.hpp"
 
 namespace
 {
@@ -34,6 +35,8 @@ extern "C" int __wrap_avcodec_open2(AVCodecContext *context, const AVCodec *code
 {
     const int requested_threads = context ? context->thread_count : 0;
     const int result = __real_avcodec_open2(context, codec, options);
+    if (result >= 0)
+        tube5::native_codec_adopt(context);
     if (result < 0)
     {
         char detail[AV_ERROR_MAX_STRING_SIZE]{};

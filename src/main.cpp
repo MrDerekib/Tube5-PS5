@@ -51,7 +51,7 @@ std::array<char, 48> build_label{};
 #ifdef TUBE5_HW_PROBE
 tube5::HardwareVideoReport hardware_report;
 #endif
-#ifdef TUBE5_HW_FRAME
+#if defined(TUBE5_HW_FRAME) && !defined(TUBE5_HW_PLAYER)
 struct HardwarePreview
 {
     SDL_Texture *texture = nullptr;
@@ -683,7 +683,7 @@ int main()
             used += std::min<std::size_t>(length, sizeof(hardware_log) - used - 1);
     }
     (void)tube5::write_failure_log("/download0/tube5-hardware.log", hardware_log, used);
-#if defined(TUBE5_HW_FRAME) && !defined(TUBE5_HW_CLIP)
+#if defined(TUBE5_HW_FRAME) && !defined(TUBE5_HW_CLIP) && !defined(TUBE5_HW_PLAYER)
     if (hardware_report.module == 0 && hardware_report.compute == 0 &&
         hardware_report.query[0] == 0)
         (void)tube5::hardware_frame_cycles("/app0/assets/hw-frame.h264", "/download0");
@@ -799,7 +799,7 @@ int main()
     }
     Canvas canvas{canvas_pixels, true};
 #ifndef TUBE5_HOST
-#ifdef TUBE5_HW_FRAME
+#if defined(TUBE5_HW_FRAME) && !defined(TUBE5_HW_PLAYER)
     HardwarePreview hardware_preview;
 #ifdef TUBE5_HW_CLIP
     Uint64 hardware_clip_started_at = 0, hardware_clip_next_at = 0;
@@ -900,6 +900,8 @@ int main()
         error[0] = '\0';
 #ifdef TUBE5_HOST
         constexpr const char *clip = "assets/test-clip.mp4";
+#elif defined(TUBE5_HW_PLAYER)
+        constexpr const char *clip = "/app0/assets/hw-player-test.mp4";
 #else
         constexpr const char *clip = "/app0/assets/test-clip.mp4";
 #endif
@@ -1676,7 +1678,7 @@ int main()
                 std::snprintf(error, sizeof(error), "%s", media.error());
         }
 #ifndef TUBE5_HOST
-#ifdef TUBE5_HW_FRAME
+#if defined(TUBE5_HW_FRAME) && !defined(TUBE5_HW_PLAYER)
         if (hardware_preview.texture)
         {
 #ifdef TUBE5_HW_CLIP
