@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "media_player.hpp"
 #include "native_video_codec.hpp"
+#include "hardware_frame_probe.hpp"
+#include "video_sync_diagnostics.hpp"
 #ifdef TUBE5_GPU_PLAYER
 #include "gpu_presenter.hpp"
 #endif
@@ -27,6 +29,39 @@ extern "C"
 
 namespace tube5
 {
+void MediaPlayer::save_cadence_report(bool hardware, double end_position, double length) noexcept
+{
+#if defined(TUBE5_DIAGNOSTICS) && !defined(TUBE5_HOST)
+    const auto &s = hardware_stream_status(); // Workers are joined before this snapshot.
+    char report[1024]{};
+    const double fps = cadence_.total_us ? cadence_.intervals * 1000000.0 / cadence_.total_us : 0;
+    const int n = std::snprintf(
+        report, sizeof(report),
+        "TUBE5 PLAYBACK CADENCE V1\nBUILD %s\nSOURCE %dx%d HARDWARE %u END %.3f DURATION %.3f\n"
+        "UPLOADED %u INTERVALS %llu ACTIVE INTERVAL US %llu UPLOAD FPS %.3f MAX INTERVAL US %llu\n"
+        "MEDIA INTERVAL MS %lld INVALID PTS %u DISCONTINUITIES %u SYNC DROPS %u\n"
+        "SEEK %u/%u AUDIO CALLBACKS %u PCM BYTES %zu UNDERRUNS %u ERROR %d\n"
+        "DECODE CALLS %u AVG US %llu MAX US %llu\nUPLOAD CADENCE - NOT HDMI FLIP TIMING\n",
+        failure_log_build_label(), width_, height_, hardware ? 1u : 0u, end_position, length,
+        frames_uploaded_, static_cast<unsigned long long>(cadence_.intervals),
+        static_cast<unsigned long long>(cadence_.total_us), fps,
+        static_cast<unsigned long long>(cadence_.maximum_us),
+        static_cast<long long>(cadence_.media_ms), cadence_.invalid_pts, cadence_.discontinuities,
+        video_sync_drops(), seek_dispatches_, seek_requests_, audio_callbacks_.load(),
+        audio_bytes_.load(), audio_underruns_.load(), audio_error_.load(),
+        hardware ? s.decode_calls : 0u,
+        static_cast<unsigned long long>(
+            hardware && s.decode_calls ? s.decode_total_us / s.decode_calls : 0),
+        static_cast<unsigned long long>(hardware ? s.decode_max_us : 0));
+    if (n > 0)
+        (void)write_failure_log("/download0/tube5-playback-cadence.log", report,
+                                std::min<std::size_t>(n, sizeof(report) - 1));
+#else
+    (void)hardware;
+    (void)end_position;
+    (void)length;
+#endif
+}
 bool MediaPlayer::fail(const char *stage, const char *detail) noexcept
 {
     if (memory_out_of_memory())
@@ -388,6 +423,10 @@ void MediaPlayer::audio_callback(void *userdata, Uint8 *stream, int length) noex
 
 void MediaPlayer::close() noexcept
 {
+    const bool had_player = player_ != nullptr;
+    const bool hardware = had_player && native_codec_active();
+    const double end_position = had_player ? position() : 0;
+    const double length = had_player ? duration() : 0;
     // Interrupt blocked HTTP reads before joining any worker. UI cancellation
     // uses poll_open so it never joins a still-running opening thread.
     cancel_network_session();
@@ -407,6 +446,8 @@ void MediaPlayer::close() noexcept
     if (player_)
         Kit_ClosePlayer(player_);
     end_pipeline_diagnostic();
+    if (had_player)
+        save_cadence_report(hardware, end_position, length);
     player_ = nullptr;
     if (texture_)
         SDL_DestroyTexture(texture_);
@@ -423,6 +464,7 @@ void MediaPlayer::close() noexcept
     source_ = nullptr;
     paused_ = false;
     frames_uploaded_ = 0;
+    cadence_ = {};
     frames_presented_ = 0;
     raw_attempts_ = raw_successes_ = 0;
     raw_result_ = 0;
@@ -450,6 +492,7 @@ void MediaPlayer::toggle_pause() noexcept
 {
     if (!player_)
         return;
+    cadence_.interrupt();
     const bool was_paused = paused();
     SDL_PauseAudioDevice(audio_, 1);
     if (was_paused)
@@ -492,6 +535,7 @@ void MediaPlayer::seek_to(double destination) noexcept
     const bool was_paused = paused();
     const double target = std::clamp(destination, 0.0, std::max(0.0, duration() - 0.1));
     pending_seek_ = target;
+    cadence_.interrupt();
     seek_requested_at_ = SDL_GetTicks();
     last_frame_at_ = seek_requested_at_;
     if (was_paused)
@@ -528,6 +572,7 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
         (seek_dispatched_at_ == 0 || now - seek_dispatched_at_ >= 500))
     {
         SDL_PauseAudioDevice(audio_, 1);
+        cadence_.interrupt();
         reset_audio_reader();
         const bool vp9_seek = native_codec_prepare_seek(pending_seek_);
         if ((audio_player_ || vp9_seek) && native_codec_active())
@@ -601,6 +646,10 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
             {
                 frame_area_ = area;
                 ++frames_uploaded_;
+                const auto frequency = SDL_GetPerformanceFrequency();
+                if (frequency)
+                    cadence_.record(cadence_clock_us(SDL_GetPerformanceCounter(), frequency),
+                                    video_sync_frame_ms());
                 if (audio_seek_gate_.presented(native_codec_reset_generation(),
                                                native_codec_audio_reset_generation()))
                 {

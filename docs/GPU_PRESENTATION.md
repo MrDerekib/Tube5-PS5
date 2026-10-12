@@ -482,6 +482,41 @@ sincronización; el solapamiento puede ayudar, pero no garantiza 60 fps.
 No se da 4K/60 por validado ni se atribuye aún un límite absoluto al hardware.
 Logs privados: `.local/console-logs/diag89-*`.
 
+## VP9 4K/60: player integrado queda atrasado, DIAG90
+
+El control remuxa la misma fixture 4K/60 cuatro veces (12 segundos), con AAC,
+sin recodificar vídeo. Se verifican los hashes de sus 720 paquetes. El remux
+de ~106 MiB se genera con `tools/prepare-vp9-player.py --4k --fps 60` y queda
+fuera de Git; el generador y la fixture comprimida bastan para reproducirlo.
+`LOCAL` abre este control; YouTube 60 fps sigue deshabilitado.
+
+Se añaden tiempos de decode/copia y un informe de cadencia de uploads al cerrar
+el player, después de unir los workers. El test enfocado verifica conteo,
+discontinuidades de pausa/seek, timestamps y conversión del reloj sin multiplicar
+directamente un contador absoluto grande. La cadencia de uploads no equivale
+a medir flips HDMI; pausa y seek rompen los intervalos para no falsear su media.
+
+El propietario reportó imagen detenida con reloj avanzando; seek recupera
+brevemente la imagen y vuelve a detenerse. DIAG90 registró 1.527 imágenes
+recibidas, 1.495 entregadas por el adaptador, 32 preroll, cinco resets y EOF,
+con errores y cleanup cero. Solo se subieron 132 imágenes y Kitchensink
+descartó 1.359 por sincronización. Decode medio 16.977 µs, máximo 34.803 µs;
+copiar a AVFrame añade 1.611 µs de media, máximo 2.023 µs.
+La producción de frames queda por debajo del reloj de 60 fps y el descarte
+por retraso deja la última imagen visible. No es un decoder parado ni ENOMEM.
+
+El informe registra tres seeks, seis discontinuidades, 128 intervalos de upload,
+2.286.900 µs activos y 55,971 fps en esos tramos visibles. Esa cifra excluye las
+congelaciones cortadas por seek y NO establece reproducción sostenida a 56 fps.
+Audio: 957 underruns en 1.369 callbacks, error cero; este ensayo no valida
+estabilidad de audio/vídeo. Logs privados: `.local/console-logs/diag90-*`.
+
+Header tracing del control confirmó `tile_cols_log2=3` (ocho columnas) y
+`tile_rows_log2=0`. La referencia pública documenta mejoras con cuatro columnas
+frente a una, no frente a ocho; comparar nuestro control con cuatro columnas
+es una hipótesis de prueba, no una optimización garantizada. No relajar las
+tolerancias de sincronización para ocultar el retraso. 4K/60 sigue pendiente.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

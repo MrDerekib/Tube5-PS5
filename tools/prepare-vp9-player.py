@@ -10,13 +10,17 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--4k", dest="four_k", action="store_true")
+parser.add_argument("--fps", type=int, choices=(30, 60), default=30)
 options = parser.parse_args()
 
 root = pathlib.Path(__file__).resolve().parents[1]
-data = (root / "assets" / ("hw-vp9-4k.t5hc" if options.four_k else "hw-vp9-altref.t5hc")).read_bytes()
+if options.fps == 60 and not options.four_k:
+    parser.error("The current 60fps control is 4K only")
+name = "hw-vp9-4k60.t5hc" if options.fps == 60 else "hw-vp9-4k.t5hc" if options.four_k else "hw-vp9-altref.t5hc"
+data = (root / "assets" / name).read_bytes()
 assert data[:4] == b"T5HC"
 version, width, height, fps, count, flags = struct.unpack_from("<6I", data, 4)
-expected = (5, 3840, 2160, 30, 90, 2) if options.four_k else (4, 2560, 1440, 30, 90, 2)
+expected = (6, 3840, 2160, 60, 180, 2) if options.fps == 60 else (5, 3840, 2160, 30, 90, 2) if options.four_k else (4, 2560, 1440, 30, 90, 2)
 assert (version, width, height, fps, count, flags) == expected
 with tempfile.TemporaryDirectory(prefix="tube5-vp9-player-") as folder:
     ivf = pathlib.Path(folder) / "clip.ivf"
@@ -31,7 +35,7 @@ with tempfile.TemporaryDirectory(prefix="tube5-vp9-player-") as folder:
         offset += size
     assert offset == len(data)
     ivf.write_bytes(encoded)
-    destination = root / "assets" / ("hw-vp9-4k-player.mp4" if options.four_k else "hw-vp9-player.mp4")
+    destination = root / "assets" / ("hw-vp9-4k60-player.mp4" if options.fps == 60 else "hw-vp9-4k-player.mp4" if options.four_k else "hw-vp9-player.mp4")
     subprocess.run([
         "ffmpeg", "-v", "error", "-y", "-stream_loop", "3", "-i", str(ivf), "-f", "lavfi", "-i",
         "sine=frequency=440:sample_rate=48000", "-map", "0:v:0", "-map", "1:a:0",
@@ -44,4 +48,4 @@ with tempfile.TemporaryDirectory(prefix="tube5-vp9-player-") as folder:
             "-show_data_hash", "sha256", "-show_entries", "packet=data_hash",
             "-of", "json", str(path)]))["packets"]
     assert hashes(ivf) * 4 == hashes(destination)
-    print(f"{destination}: same 90 compressed VP9 packets repeated 4 times (12s); AAC audio added")
+    print(f"{destination}: same {count} compressed VP9 packets repeated 4 times (12s), {fps}fps; AAC audio added")

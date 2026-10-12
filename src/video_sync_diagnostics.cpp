@@ -12,6 +12,14 @@ std::atomic<int> time_num{0}, time_den{0}, frame_ms{-1}, clock_ms{-1};
 namespace tube5
 {
 using namespace video_sync_detail;
+int video_sync_frame_ms() noexcept
+{
+    return frame_ms.load();
+}
+unsigned video_sync_drops() noexcept
+{
+    return drops.load();
+}
 void reset_video_sync_diagnostic() noexcept
 {
     drops = waits = empty_reads = 0;

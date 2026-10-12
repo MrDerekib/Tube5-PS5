@@ -38,6 +38,8 @@ unsigned delivered = 0, eof_events = 0, skipped = 0;
 unsigned sample_y = 0, sample_u = 0, sample_v = 0;
 bool vp9_mode = false;
 unsigned native_width = 1920, native_height = 1080;
+std::uint64_t copy_total_us = 0, copy_max_us = 0;
+unsigned copy_calls = 0;
 tube5::SeekPreroll seek_preroll;
 struct Lock
 {
@@ -68,7 +70,8 @@ void snapshot(const char *stage)
         "%08X INPUT PTS %lld DTS "
         "%lld\nHIDDEN %u\n"
         "OUTPUT VALID %u ERR %u PICTURES %u RESERVED %u CODEC %X SIZE %ux%u PITCH %u/%u FORMAT %u\n"
-        "OUTPUT BYTES %llu CAPACITY %zu OFFERED %u RETURNED %u ACCEPTED %u\n",
+        "OUTPUT BYTES %llu CAPACITY %zu OFFERED %u RETURNED %u ACCEPTED %u\n"
+        "DECODE CALLS %u AVG US %llu MAX US %llu COPY CALLS %u AVG US %llu MAX US %llu\n",
         tube5::failure_log_build_label(), vp9_mode ? "VP9 PROFILE 0" : "H264", native_width,
         native_height, stage, s.stage, s.active ? 1u : 0u, static_cast<unsigned>(fatal.load()),
         static_cast<unsigned>(s.error), static_cast<unsigned>(s.cleanup_error), s.submitted,
@@ -79,7 +82,11 @@ void snapshot(const char *stage)
         s.last_output.padding, s.last_output.codec, s.last_output.width, s.last_output.height,
         s.last_output.pitch, s.last_output.pitch_bytes, s.last_output.format,
         static_cast<unsigned long long>(s.last_output.bytes), s.frame_capacity, s.last_offered,
-        s.last_returned, s.last_frame_accepted);
+        s.last_returned, s.last_frame_accepted, s.decode_calls,
+        static_cast<unsigned long long>(s.decode_calls ? s.decode_total_us / s.decode_calls : 0),
+        static_cast<unsigned long long>(s.decode_max_us), copy_calls,
+        static_cast<unsigned long long>(copy_calls ? copy_total_us / copy_calls : 0),
+        static_cast<unsigned long long>(copy_max_us));
     if (length > 0)
         (void)tube5::write_failure_log("/download0/tube5-hardware-player.log", text,
                                        std::min<std::size_t>(length, sizeof(text) - 1));
@@ -136,6 +143,7 @@ int collect()
         ++skipped;
         return AVERROR(EAGAIN);
     }
+    const auto copy_start = SDL_GetPerformanceCounter();
     av_frame_unref(pending);
     pending->format = AV_PIX_FMT_NV12;
     pending->width = native_width;
@@ -160,6 +168,14 @@ int collect()
         std::memcpy(pending->data[1] + static_cast<std::size_t>(y) * pending->linesize[1],
                     source + static_cast<std::size_t>(y) * output.pitch_bytes, native_width);
     tube5::hardware_stream_release();
+    const auto frequency = SDL_GetPerformanceFrequency();
+    if (frequency)
+    {
+        const std::uint64_t time = (SDL_GetPerformanceCounter() - copy_start) * 1000000 / frequency;
+        copy_total_us += time;
+        copy_max_us = std::max(copy_max_us, time);
+        ++copy_calls;
+    }
     const auto *context = owner.load();
     pending->pts = pending->best_effort_timestamp = pts;
     pending->pkt_dts = static_cast<std::int64_t>(info.dts);
@@ -315,6 +331,8 @@ void native_codec_adopt(AVCodecContext *context) noexcept
     seek_preroll.clear();
     native_width = context->width;
     native_height = context->height;
+    copy_calls = 0;
+    copy_total_us = copy_max_us = 0;
     fatal = 0;
     delivered = eof_events = skipped = 0;
     sample_y = sample_u = sample_v = 0;

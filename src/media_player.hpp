@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "audio_seek_gate.hpp"
+#include "playback_cadence.hpp"
 #include <SDL.h>
 #include <kitchensink2/kitchensink.h>
 #include <atomic>
@@ -110,6 +111,7 @@ class MediaPlayer final
     bool complete_open(SDL_Renderer *renderer) noexcept;
     void save_failure_report(const char *stage, double position, unsigned frames) noexcept;
     void save_audio_seek_report(const char *stage) noexcept;
+    void save_cadence_report(bool hardware, double end_position, double length) noexcept;
     char failure_log_status_[80]{};
     SDL_Thread *opening_thread_ = nullptr;
     std::atomic<bool> opening_done_{false};
@@ -136,6 +138,7 @@ class MediaPlayer final
     int height_ = 0;
     SDL_Rect frame_area_{};
     unsigned frames_uploaded_ = 0;
+    PlaybackCadence cadence_;
     unsigned frames_presented_ = 0;
     unsigned raw_attempts_ = 0;
     unsigned raw_successes_ = 0;

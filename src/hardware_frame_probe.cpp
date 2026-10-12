@@ -1265,7 +1265,12 @@ int hardware_stream_send(const std::uint8_t *data, std::size_t bytes, std::uint6
                      clip.frame_stride, 0, 0};
     VideoOutput output{};
     output.size = sizeof(output);
+    const auto decode_start = sceKernelGetProcessTime();
     const int code = sceVideodec2Decode(resources.decoder, &au, &frame, &output);
+    const auto decode_us = sceKernelGetProcessTime() - decode_start;
+    stream_status.decode_total_us += decode_us;
+    stream_status.decode_max_us = std::max(stream_status.decode_max_us, decode_us);
+    ++stream_status.decode_calls;
     ++stream_status.submitted;
     if (code)
         return stream_failure("DECODE", code);

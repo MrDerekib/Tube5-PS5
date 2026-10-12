@@ -89,6 +89,8 @@ struct HardwareStreamStatus
     unsigned submitted = 0, received = 0, resets = 0;
     unsigned accepted = 0, no_output = 0, last_nal_mask = 0;
     unsigned hidden = 0;
+    std::uint64_t decode_total_us = 0, decode_max_us = 0;
+    unsigned decode_calls = 0;
     VideoOutput last_output{};
     unsigned last_offered = 0, last_returned = 0, last_frame_accepted = 0;
     std::size_t frame_capacity = 0;
