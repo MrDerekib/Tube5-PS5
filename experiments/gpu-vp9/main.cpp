@@ -46,7 +46,7 @@ int show(const tube5::VideoOutput &frame, void *) noexcept
 } // namespace
 int main()
 {
-    tube5::failure_log_build_label("BOOT-DIAG-89-VP9-PHASES");
+    tube5::failure_log_build_label("BOOT-DIAG-92-VP9-DEPTH3");
     int result = sceSysmoduleLoadModule(207);
     if (!result)
     {
@@ -59,8 +59,8 @@ int main()
     if (!result)
     {
         (void)sceSystemServiceHideSplashScreen();
-        result = tube5::hardware_clip_begin("/app0/assets/hw-vp9-4k60.t5hc",
-                                            "/download0/tube5-vp9-4k60-decoder.log");
+        result = tube5::hardware_clip_begin("/app0/assets/hw-vp9-4k60-tc2.t5hc",
+                                            "/download0/tube5-vp9-depth3-decoder.log");
     }
     while (!result)
     {
@@ -78,6 +78,11 @@ int main()
                 ++late;
         }
         result = tube5::hardware_clip_step(show, nullptr);
+        if (result == 2)
+        {
+            result = 0; // Decoder priming/drain is not EOF; retained buffers stay owned.
+            continue;
+        }
         if (!result)
         {
             const auto &s = tube5::hardware_clip_status();
@@ -105,7 +110,7 @@ int main()
     char report[2560]{};
     const int n = std::snprintf(
         report, sizeof(report),
-        "TUBE5 VP9 CLIP V5\nBUILD BOOT-DIAG-89-VP9-PHASES\nRESULT %d CLEANUP %d GPU %s\n"
+        "TUBE5 VP9 DEPTH 3 SIX SLOTS FOUR TILE COLUMNS\nBUILD BOOT-DIAG-92-VP9-DEPTH3\nRESULT %d CLEANUP %d GPU %s\n"
         "SOURCE VP9 PROFILE 0 3840x2160 TARGET 1920x1080 FPS 60\n"
         "SHOWN %u CRC MATCHES %u ELAPSED BETWEEN FLIPS US %llu LATE %u\n"
         "PRESENT WORK P50/P95/MAX US %llu/%llu/%llu\n"
@@ -142,7 +147,7 @@ int main()
                 used += std::min<std::size_t>(added, sizeof(report) - used - 1);
         }
     if (used)
-        (void)tube5::write_failure_log("/download0/tube5-vp9-4k60.log", report, used);
+        (void)tube5::write_failure_log("/download0/tube5-vp9-depth3.log", report, used);
     for (;;)
         sceKernelUsleep(16000);
 }

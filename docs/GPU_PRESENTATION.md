@@ -544,6 +544,26 @@ y salida separados, retención/correlación de imágenes demoradas, CRC y drain
 al final. No cambiar profundidad en el player síncrono actual sin validar
 esas garantías, ni relajar sincronización para encubrir el retraso.
 
+### DIAG92: control aislado VP9 4K60, profundidad tres (pendiente de consola)
+
+`BOOT-DIAG-92-VP9-DEPTH3` reutiliza las 180 imágenes de la fixture de cuatro
+columnas de DIAG91, con profundidad tres y seis slots independientes. No cambia
+el player de producción ni habilita YouTube 60 fps. Cada input conserva su slot
+hasta la salida FIFO correspondiente; cada superficie aceptada queda retenida
+hasta que el consumidor termina. Las llamadas sin imagen continúan la carga de
+la cola, y EOF utiliza un drain acotado. El CRC software de cada imagen valida
+contenido y asociación; no se usa GetPictureInfo para VP9.
+
+Prueba host dedicada `--vp9-pipeline`, ASan/UBSan: priming de tres entradas,
+salidas demoradas, tres llamadas de drain, no reutilización de input/superficie,
+variante sin superficies aceptadas, rechazo de corrupción/desorden y cleanup.
+Build nativa y firma verificadas. Ejecutable y fixture preparados por FTP;
+activación pendiente de cierre de la app. Logs nuevos:
+`tube5-vp9-depth3.log` y `tube5-vp9-depth3-decoder.log`.
+El tiempo de una llamada de envío no equivale a latencia de una imagen con
+pipeline; la prueba registra cadencia de presentación, priming, drain e integridad.
+No hay resultado de rendimiento en consola todavía.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

@@ -27,11 +27,15 @@ unsigned decode_calls = 0, reset_calls = 0, last_luma = 16;
 bool b_mode = false, corrupt_metadata = false, wrong_order = false, corrupt_pixels = false;
 bool vp9_mode = false, retain_hidden = false;
 bool vp9_4k = false;
+bool vp9_pipeline = false;
+bool no_accepted_frames = false;
 struct Pending
 {
     tube5::VideoFrame frame{};
     std::uint64_t pts = 0, dts = 0, tag = 0;
     bool used = false;
+    const unsigned char *input = nullptr;
+    unsigned char input_value = 0;
 };
 std::array<Pending, 8> pending;
 tube5::VideoPictureInfo last_picture{};
@@ -78,12 +82,20 @@ int consume(const tube5::VideoOutput &output, void *context) noexcept
     ++*static_cast<unsigned *>(context);
     return 0;
 }
-void b_picture(tube5::VideoOutput *output)
+void b_picture(tube5::VideoOutput *output, const tube5::VideoFrame *fallback = nullptr)
 {
     const unsigned wanted = wrong_order ? 3 : b_next;
     for (auto &packet : pending)
-        if (packet.used && packet.pts == static_cast<std::uint64_t>(wanted) * 1000000 / 30)
+        if (packet.used && packet.pts == static_cast<std::uint64_t>(wanted) * 1000000 /
+                                            (vp9_pipeline ? 60 : 30))
         {
+            if (packet.input)
+                assert(packet.input[1] == packet.input_value); // No pending input overwritten.
+            if (!packet.frame.buffer)
+            {
+                assert(fallback);
+                packet.frame = *fallback;
+            }
             picture(&packet.frame, output);
             std::memset(packet.frame.buffer, 16 + wanted + (corrupt_pixels ? 1 : 0),
                         packet.frame.bytes);
@@ -269,7 +281,7 @@ extern "C" int sceVideodec2Reset(void *handle)
 extern "C" int sceVideodec2Decode(void *handle, tube5::VideoInput *input, tube5::VideoFrame *frame,
                                   tube5::VideoOutput *output)
 {
-    if (vp9_mode)
+    if (vp9_mode && !vp9_pipeline)
     {
         assert(handle == &decoder && decoder && (input->attached || vp9_4k) && input->bytes == 101);
         if (*static_cast<unsigned char *>(input->au) == 0x84)
@@ -290,10 +302,17 @@ extern "C" int sceVideodec2Decode(void *handle, tube5::VideoInput *input, tube5:
             return code;
         auto &packet = pending[b_submitted];
         assert(!packet.used);
+        for (const auto &retained : pending)
+            if (retained.used && retained.frame.buffer)
+                assert(retained.frame.buffer != frame->buffer);
         packet = {*frame, input->pts, input->dts, input->attached, true};
-        frame->accepted = 1;
+        packet.input = static_cast<const unsigned char *>(input->au);
+        packet.input_value = packet.input[1];
+        frame->accepted = no_accepted_frames ? 0 : 1;
+        if (no_accepted_frames)
+            packet.frame.buffer = nullptr;
         if (++b_submitted >= 4)
-            b_picture(output);
+            b_picture(output, frame);
         return 0;
     }
     assert(handle == &decoder && decoder && input->size == 48 && input->bytes > 100 &&
@@ -314,7 +333,7 @@ extern "C" int sceVideodec2Flush(void *, tube5::VideoFrame *frame, tube5::VideoO
     if (const int code = next())
         return code;
     if (b_mode)
-        b_picture(output);
+        b_picture(output, frame);
     else
         picture(frame, output);
     return 0;
@@ -331,10 +350,13 @@ extern "C" int sceVideodec2GetPictureInfo(const tube5::VideoOutput *output,
 int main(int argc, char **argv)
 {
     if (argc == 2 &&
-        (std::strcmp(argv[1], "--vp9-4k") == 0 || std::strcmp(argv[1], "--vp9-4k60") == 0))
+        (std::strcmp(argv[1], "--vp9-4k") == 0 || std::strcmp(argv[1], "--vp9-4k60") == 0 ||
+         std::strcmp(argv[1], "--vp9-pipeline") == 0))
     {
         vp9_mode = vp9_4k = true;
-        const bool sixty = std::strcmp(argv[1], "--vp9-4k60") == 0;
+        vp9_pipeline = b_mode = std::strcmp(argv[1], "--vp9-pipeline") == 0;
+        const bool sixty = vp9_pipeline || std::strcmp(argv[1], "--vp9-4k60") == 0;
+        const unsigned count = vp9_pipeline ? 8 : 2;
         char folder[] = "/tmp/tube5-vp9-4k-XXXXXX";
         assert(mkdtemp(folder));
         char asset[200]{}, log[200]{};
@@ -342,20 +364,21 @@ int main(int argc, char **argv)
         std::snprintf(log, sizeof(log), "%s/decoder.log", folder);
         const int fd = open(asset, O_CREAT | O_WRONLY | O_EXCL, 0600);
         assert(fd >= 0 && write(fd, "T5HC", 4) == 4);
-        for (auto value : {sixty ? 6u : 5u, 3840u, 2160u, sixty ? 60u : 30u, 2u, 2u})
+        for (auto value : {sixty ? 6u : 5u, 3840u, 2160u, sixty ? 60u : 30u, count, 2u})
             write32(fd, value);
-        std::uint32_t crc = UINT32_MAX;
-        for (unsigned y = 0; y < 2160; y += 31)
-            for (unsigned x = 0; x < 3840; x += 31)
-            {
-                crc ^= 16u;
-                for (unsigned bit = 0; bit < 8; ++bit)
-                    crc = (crc >> 1) ^ ((crc & 1u) ? UINT32_C(0xedb88320) : 0);
-            }
         unsigned char payload[101]{};
         payload[0] = 0x86;
-        for (unsigned index = 0; index < 2; ++index)
+        for (unsigned index = 0; index < count; ++index)
         {
+            std::uint32_t crc = UINT32_MAX;
+            for (unsigned y = 0; y < 2160; y += 31)
+                for (unsigned x = 0; x < 3840; x += 31)
+                {
+                    crc ^= 16u + (vp9_pipeline ? index : 0);
+                    for (unsigned bit = 0; bit < 8; ++bit)
+                        crc = (crc >> 1) ^ ((crc & 1u) ? UINT32_C(0xedb88320) : 0);
+                }
+            payload[1] = index;
             for (auto value : {101u, index, index, crc ^ UINT32_MAX})
                 write32(fd, value);
             assert(write(fd, payload, sizeof(payload)) == sizeof(payload));
@@ -370,21 +393,62 @@ int main(int argc, char **argv)
             ++*static_cast<unsigned *>(context);
             return 0;
         };
-        assert(!tube5::hardware_clip_step(consume4k, &shown));
-        tube5::hardware_clip_presented(1);
-        assert(!tube5::hardware_clip_step(consume4k, &shown));
-        tube5::hardware_clip_presented(1);
+        for (unsigned steps = 0; shown < count; ++steps)
+        {
+            assert(steps < count + 12);
+            const int rc = tube5::hardware_clip_step(consume4k, &shown);
+            assert(rc == 0 || (vp9_pipeline && rc == 2));
+            if (!rc)
+                tube5::hardware_clip_presented(1);
+        }
         assert(tube5::hardware_clip_step(consume4k, &shown) == 1);
-        assert(shown == 2 && tube5::hardware_clip_status().crc_matches == 2);
+        assert(shown == count && tube5::hardware_clip_status().crc_matches == count);
+        if (vp9_pipeline)
+        {
+            assert(tube5::hardware_clip_status().no_output == 3);
+            assert(tube5::hardware_clip_status().drain_calls == 3);
+        }
 #ifdef TUBE5_HW_TIMING
         const auto &timing = tube5::hardware_clip_status();
-        assert(timing.last_read_us > 0 && timing.last_decode_us > 0 && timing.last_crc_us > 0 &&
+        assert((vp9_pipeline || timing.last_read_us > 0) && timing.last_decode_us > 0 && timing.last_crc_us > 0 &&
                timing.last_consumer_us > 0 &&
                timing.last_step_us >= timing.last_read_us + timing.last_decode_us +
                                           timing.last_crc_us + timing.last_consumer_us);
 #endif
         assert(!tube5::hardware_clip_close());
         no_resources();
+        if (vp9_pipeline)
+        {
+            reset_b_mock();
+            no_accepted_frames = true;
+            assert(!tube5::hardware_clip_begin(asset, log));
+            unsigned delivered = 0;
+            for (unsigned steps = 0; delivered < count; ++steps)
+            {
+                assert(steps < count + 12);
+                const int rc = tube5::hardware_clip_step(consume4k, &delivered);
+                assert(rc == 0 || rc == 2);
+            }
+            assert(tube5::hardware_clip_step(consume4k, &delivered) == 1);
+            assert(tube5::hardware_clip_status().crc_matches == count);
+            assert(!tube5::hardware_clip_close());
+            no_resources();
+            no_accepted_frames = false;
+        }
+        if (vp9_pipeline)
+            for (bool bad_order : {false, true})
+            {
+                reset_b_mock();
+                corrupt_pixels = !bad_order;
+                wrong_order = bad_order;
+                assert(!tube5::hardware_clip_begin(asset, log));
+                int rc = 0;
+                for (unsigned i = 0; i < 4 && rc >= 0; ++i)
+                    rc = tube5::hardware_clip_step(consume4k, &shown);
+                assert(rc == -EILSEQ); // FIFO misassociation or altered pixels cannot pass CRC.
+                assert(!tube5::hardware_clip_close());
+                no_resources();
+            }
         if (sixty)
         {
             const int wrong = open(asset, O_WRONLY);

@@ -59,7 +59,7 @@ struct Resources
 Resources resources; // Deliberately no destructor: failed hardware teardown is quarantined.
 struct Clip
 {
-    bool vp9 = false, compound_vp9 = false;
+    bool vp9 = false, compound_vp9 = false, pipeline = false;
     unsigned width = 1920, height = 1080;
     int descriptor = -1;
     std::uint32_t offsets[300]{}, sizes[300]{};
@@ -629,6 +629,9 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
     clip_status.bframes = version == 2;
     clip.vp9 = version >= 3 && version <= 6;
     clip.compound_vp9 = version == 4;
+#ifdef TUBE5_VP9_DEEP_PROBE
+    clip.pipeline = version == 6; // Isolated visible-only fixture; not the production stream.
+#endif
     clip.width = version >= 5 ? 3840 : clip.vp9 ? 2560 : 1920;
     clip.height = version >= 5 ? 2160 : clip.vp9 ? 1440 : 1080;
     if (std::memcmp(header, "T5HC", 4) || (version < 1 || version > 6) ||
@@ -680,7 +683,8 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
     requested.level = clip.width == 3840 ? 51 : 50;
     requested.width = clip.width;
     requested.height = clip.height;
-    int code = prepare_decoder(record, clip_status.bframes ? 3 : 1, clip_status.bframes ? 6 : 1,
+    const bool pipeline = clip_status.bframes || clip.pipeline;
+    int code = prepare_decoder(record, pipeline ? 3 : 1, pipeline ? 6 : 1,
                                clip.vp9 ? &requested : nullptr);
     if (code)
         return fail(code);
@@ -707,6 +711,8 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     };
     if (s.decoded == s.frames)
         return s.submitted == s.frames ? 1 : fail("EARLY EOF", -EINVAL);
+    const auto step_start = sceKernelGetProcessTime();
+    s.last_read_us = s.last_crc_us = s.last_log_us = 0;
     if (!clip.started)
         clip.started = sceKernelGetProcessTime();
     unsigned offered = 0;
@@ -732,6 +738,15 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
         if (::lseek(clip.descriptor, clip.offsets[index], SEEK_SET) < 0 ||
             read_exact(clip.descriptor, data, clip.sizes[index]))
             return fail("READ", -EIO);
+        s.last_read_us = sceKernelGetProcessTime() - step_start;
+        if (clip.vp9)
+        {
+            Vp9Packet packet{};
+            if (!split_vp9_packet(data, clip.sizes[index], packet) || packet.count != 1 ||
+                !packet.parts[0].displayable || packet.parts[0].existing)
+                return fail("PIPELINE VISIBLE FIXTURE", -EINVAL);
+            ++s.coded_frames;
+        }
         clip.input_tag[input_slot] = index + 1;
         VideoInput input{sizeof(VideoInput),
                          data,
@@ -756,6 +771,7 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
         code = sceVideodec2Flush(r.decoder, &frame, &output);
     }
     const auto decode_us = sceKernelGetProcessTime() - decode_start;
+    s.last_decode_us = decode_us;
     s.decode_max_us = std::max(s.decode_max_us, decode_us);
     if (frame.accepted)
         clip.frame_used[offered] = true;
@@ -766,6 +782,7 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
         ++s.no_output;
         s.elapsed_us = sceKernelGetProcessTime() - clip.started;
         clip_snapshot();
+        s.last_step_us = sceKernelGetProcessTime() - step_start;
         return 2; // Priming/reordering: continue input without flushing the stream.
     }
     unsigned returned = 0;
@@ -774,9 +791,11 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
         ++returned;
     const auto required = static_cast<std::uint64_t>(output.pitch_bytes) * output.height * 3 / 2;
     if (returned == 6 || (!clip.frame_used[returned] && returned != offered) ||
-        output.pictures != 1 || output.codec != 1 || output.format != 0 || output.padding ||
-        output.width != 1920 || output.height < 1080 || output.height > 1088 ||
-        (output.height & 1u) || output.pitch_bytes < 1920 || output.pitch_bytes > 4096 ||
+        output.pictures != 1 || output.codec != (clip.vp9 ? 0x00245bfdu : 1u) ||
+        output.format != 0 || output.padding ||
+        output.width != clip.width || output.height < clip.height ||
+        output.height > (clip.vp9 ? clip.height : 1088) ||
+        (output.height & 1u) || output.pitch_bytes < clip.width || output.pitch_bytes > 4096 ||
         (output.pitch_bytes & 1u) || output.bytes > clip.frame_stride || required > output.bytes)
         return fail("OUTPUT B", -EINVAL);
     struct GuardedInfo
@@ -787,7 +806,17 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     } picture;
     picture.info.size = sizeof(picture.info);
     picture.info.pts = picture.info.dts = picture.info.attached = UINT64_MAX;
-    code = sceVideodec2GetPictureInfo(&output, &picture.info, nullptr);
+    if (clip.vp9)
+    {
+        // VP9 has no display reorder in this fixture. Keep compressed input alive
+        // until its FIFO output arrives; the software CRC independently proves mapping.
+        picture.info.valid = 1;
+        picture.info.attached = s.decoded + 1;
+        picture.info.pts = picture.info.dts =
+            static_cast<std::uint64_t>(s.decoded) * 1000000 / s.fps;
+    }
+    else
+        code = sceVideodec2GetPictureInfo(&output, &picture.info, nullptr);
     s.last_pts = picture.info.pts;
     s.last_dts = picture.info.dts;
     s.last_attached = picture.info.attached;
@@ -812,8 +841,9 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     }
     unsigned sum = 0;
     std::uint32_t crc = UINT32_MAX;
-    for (unsigned y = 0; y < 1080; y += 31)
-        for (unsigned x = 0; x < 1920; x += 31)
+    const auto crc_start = sceKernelGetProcessTime();
+    for (unsigned y = 0; y < clip.height; y += 31)
+        for (unsigned x = 0; x < clip.width; x += 31)
         {
             const unsigned value =
                 static_cast<unsigned char *>(output.buffer)[y * output.pitch_bytes + x];
@@ -823,6 +853,7 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
                 crc = (crc >> 1) ^ ((crc & 1u) ? UINT32_C(0xedb88320) : 0);
         }
     crc ^= UINT32_MAX;
+    s.last_crc_us = sceKernelGetProcessTime() - crc_start;
     clip.last_crc = crc;
     clip.expected_crc = clip.crc[packet];
     if (crc != clip.crc[packet])
@@ -837,8 +868,8 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     const auto convert_start = sceKernelGetProcessTime();
     code = consumer(output, context);
     const auto convert_us = sceKernelGetProcessTime() - convert_start;
+    s.last_consumer_us = convert_us;
     s.convert_max_us = std::max(s.convert_max_us, convert_us);
-    clip.last_work_us = decode_us + convert_us;
     if (code)
         return fail("CONSUMER B", code);
     clip.frame_used[returned] = false;
@@ -847,6 +878,8 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     clip.stage = "B FRAME COPIED";
     if (s.decoded % 30 == 0 || s.decoded == s.frames)
         clip_snapshot();
+    s.last_step_us = sceKernelGetProcessTime() - step_start;
+    clip.last_work_us = s.last_step_us;
     return 0;
 }
 #endif
@@ -863,7 +896,7 @@ int hardware_clip_step(HardwareFrameConsumer consumer, void *context) noexcept
         return -EINVAL;
     if (s.error)
         return s.error;
-    if (s.bframes)
+    if (s.bframes || clip.pipeline)
         return hardware_bclip_step(consumer, context);
     if (s.submitted == s.frames)
         return 1;
