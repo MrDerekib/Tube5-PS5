@@ -655,6 +655,36 @@ el player visible-only, no YouTube 4K60 ni hidden. Logs privados `diag95-*`.
 Pendiente con la misma build: pausa, seek +/-5/barra y reentrada; después validar
 hidden/existing antes de activar la ruta asíncrona para vídeos reales.
 
+DIAG95 controles: diez seeks solicitados/ejecutados, doce resets nativos,
+150 imágenes de preroll omitidas, EOF y cleanup cero. 1.290 uploads, 1.268
+intervalos activos, 59,458 fps, seis drops, PTS válidos. Audio post-seek:
+reset vídeo/audio 11/11, gate liberado y delta 159.744 bytes PCM; error cero.
+195 underruns en prueba con maniobras no equivalen al caso continuo (siete).
+Logs privados `diag95-controls-*`; no atribuir audio completamente pulido.
+
+### DIAG96: correlación de hidden en pipeline, probe aislado
+
+`BOOT-DIAG-96-VP9-HIDDEN-FIFO` usa una fixture nueva T5HC v7: VP9 Profile 0
+4K60, cuatro columnas, 180 imágenes visibles y 12 hidden en 12 superframes,
+192 cabeceras verificadas. Two-pass libvpx alt-ref, tres segundos, 1.377.864
+bytes. CRC software por imagen visible. No show-existing en este control.
+Generador: `python3 tools/prepare-vp9-clip.py --4k --fps 60 --altref --tile-columns 2`.
+
+El probe divide cada superframe en AUs con slots independientes, conserva
+tag/índice del paquete y flag displayable de cada AU pendiente y ensaya FIFO
+de salida. Las superficies hidden se liberan sin presentar; solo las visibles
+se comparan con CRC y se muestran. No supone validada la hipótesis de una
+superficie por AU: una salida ausente debe fallar por bounds/CRC/drain, no
+activar el player ni perder silenciosamente la asociación de PTS. Profundidad
+tres, cuatro slots y límites de memoria previos. El stream del player mantiene
+su guard para hidden hasta obtener evidencia de consola.
+
+Prueba host focal `--vp9-hidden-pipeline`, ASan/UBSan: superframes, hidden con
+padding legítimo, FIFO/CRC, buffers pendientes, drain, corrupción y salida
+oculta ausente. Build/firma correctas. Fixture y ejecutable transferidos; el
+propietario confirmó app cerrada para activar, con DIAG95 respaldada.
+La prueba arranca sola y conserva logs `tube5-vp9-depth3*.log`, build distinta.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

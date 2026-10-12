@@ -46,7 +46,7 @@ int show(const tube5::VideoOutput &frame, void *) noexcept
 } // namespace
 int main()
 {
-    tube5::failure_log_build_label("BOOT-DIAG-93-VP9-4SLOTS");
+    tube5::failure_log_build_label("BOOT-DIAG-96-VP9-HIDDEN-FIFO");
     int result = sceSysmoduleLoadModule(207);
     if (!result)
     {
@@ -59,7 +59,7 @@ int main()
     if (!result)
     {
         (void)sceSystemServiceHideSplashScreen();
-        result = tube5::hardware_clip_begin("/app0/assets/hw-vp9-4k60-tc2.t5hc",
+        result = tube5::hardware_clip_begin("/app0/assets/hw-vp9-4k60-altref-tc2.t5hc",
                                             "/download0/tube5-vp9-depth3-decoder.log");
     }
     while (!result)
@@ -110,13 +110,13 @@ int main()
     char report[2560]{};
     const int n = std::snprintf(
         report, sizeof(report),
-        "TUBE5 VP9 DEPTH 3 FOUR SLOTS FOUR TILE COLUMNS\nBUILD BOOT-DIAG-93-VP9-4SLOTS\nRESULT %d CLEANUP %d GPU %s\n"
+        "TUBE5 VP9 HIDDEN FIFO DEPTH 3 FOUR SLOTS\nBUILD BOOT-DIAG-96-VP9-HIDDEN-FIFO\nRESULT %d CLEANUP %d GPU %s\n"
         "SOURCE VP9 PROFILE 0 3840x2160 TARGET 1920x1080 FPS 60\n"
         "SHOWN %u CRC MATCHES %u ELAPSED BETWEEN FLIPS US %llu LATE %u\n"
         "PRESENT WORK P50/P95/MAX US %llu/%llu/%llu\n"
         "FLIP INTERVAL P50/P95/MAX US %llu/%llu/%llu\n"
         "CODED %u HIDDEN %u SUPERFRAMES %u EXISTING %u\nVISIBLE FRAME PROOF - NO "
-        "AUDIO/YOUTUBE/HIDDEN TEST\n",
+        "AUDIO/YOUTUBE TEST - HIDDEN CORRELATION PROBE\n",
         result, cleanup, tube5::gpu_presenter_error()[0] ? tube5::gpu_presenter_error() : "OK",
         shown, status.crc_matches, static_cast<unsigned long long>(elapsed), late,
         static_cast<unsigned long long>(shown > 1 ? work[1 + (shown - 2) / 2] : 0),

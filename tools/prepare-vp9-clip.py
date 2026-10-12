@@ -15,8 +15,8 @@ parser.add_argument("--4k", dest="four_k", action="store_true", help="generate o
 parser.add_argument("--fps", type=int, choices=(30, 60), default=30)
 parser.add_argument("--tile-columns", type=int, choices=(0, 1, 2, 3), default=None, help="log2 of tile-column count; 2 means four columns")
 options = parser.parse_args()
-if options.four_k and options.altref:
-    parser.error("The first 4K proof is visible-frame only")
+if options.four_k and options.altref and options.fps != 60:
+    parser.error("The new 4K hidden proof is 60fps only")
 if options.fps == 60 and not options.four_k:
     parser.error("The current 60fps proof is 4K only")
 if options.tile_columns is not None and (not options.four_k or options.fps != 60):
@@ -50,8 +50,8 @@ with tempfile.TemporaryDirectory(prefix="tube5-vp9-") as folder:
             "-bsf:v", "trace_headers", "-f", "null", "-"
         ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, check=True)
         columns = [int(value) for value in re.findall(r"tile_cols_log2[^\n]*= (\d+)", trace.stderr)]
-        assert len(columns) == count and set(columns) == {options.tile_columns}, "Header did not match requested tile layout"
-        print(f"Verified {count} headers: tile_cols_log2={options.tile_columns}, {1 << options.tile_columns} columns")
+        assert len(columns) >= count and set(columns) == {options.tile_columns}, "Header did not match requested tile layout"
+        print(f"Verified {len(columns)} headers: tile_cols_log2={options.tile_columns}, {1 << options.tile_columns} columns")
     data = ivf.read_bytes()
     assert data[:4] == b"DKIF" and data[8:12] == b"VP90"
     packets, offset = [], 32
@@ -96,7 +96,8 @@ with tempfile.TemporaryDirectory(prefix="tube5-vp9-") as folder:
         "ffmpeg", "-v", "error", "-i", str(ivf), "-f", "rawvideo", "-pix_fmt",
         "nv12", "pipe:1"
     ], stdout=subprocess.PIPE)
-    encoded = bytearray(b"T5HC" + struct.pack("<6I", 6 if fps == 60 else 5 if options.four_k else 4 if options.altref else 3, w, h, fps, count, 2))
+    version = 7 if options.four_k and options.altref else 6 if fps == 60 else 5 if options.four_k else 4 if options.altref else 3
+    encoded = bytearray(b"T5HC" + struct.pack("<6I", version, w, h, fps, count, 2))
     for index, packet in enumerate(packets):
         frame = bytearray()
         needed = w * h * 3 // 2
@@ -111,6 +112,8 @@ with tempfile.TemporaryDirectory(prefix="tube5-vp9-") as folder:
     assert not decoder.stdout.read(1) and decoder.wait() == 0
     assert len(encoded) < (32 if fps == 60 else 16) * 1024 * 1024
     destination = root / "assets" / ("hw-vp9-4k60.t5hc" if fps == 60 else "hw-vp9-4k.t5hc" if options.four_k else "hw-vp9-altref.t5hc" if options.altref else "hw-vp9-clip.t5hc")
+    if options.four_k and options.altref:
+        destination = destination.with_name(destination.stem + "-altref" + destination.suffix)
     if options.tile_columns is not None:
         destination = destination.with_name(destination.stem + f"-tc{options.tile_columns}" + destination.suffix)
     destination.write_bytes(encoded)

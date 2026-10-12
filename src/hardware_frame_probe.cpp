@@ -67,6 +67,9 @@ struct Clip
     std::uint32_t pts_index[300]{}, crc[300]{};
     bool frame_used[6]{};
     unsigned input_tag[6]{};
+    unsigned input_packet[6]{};
+    bool input_displayable[6]{};
+    unsigned part_index = 0, next_coded_tag = 1;
     std::size_t frame_stride = 0;
     char log[256]{};
     const char *stage = "IDLE";
@@ -631,17 +634,17 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
     clip_status.frames = little32(header + 20);
     const auto version = little32(header + 4);
     clip_status.bframes = version == 2;
-    clip.vp9 = version >= 3 && version <= 6;
-    clip.compound_vp9 = version == 4;
+    clip.vp9 = version >= 3 && version <= 7;
+    clip.compound_vp9 = version == 4 || version == 7;
 #ifdef TUBE5_VP9_DEEP_PROBE
-    clip.pipeline = version == 6; // Isolated visible-only fixture; not the production stream.
+    clip.pipeline = version == 6 || version == 7; // Diagnostic fixtures, not production.
 #endif
     clip.width = version >= 5 ? 3840 : clip.vp9 ? 2560 : 1920;
     clip.height = version >= 5 ? 2160 : clip.vp9 ? 1440 : 1080;
-    if (std::memcmp(header, "T5HC", 4) || (version < 1 || version > 6) ||
-        (version != 6 && metadata.st_size > static_cast<off_t>(16 * mib)) ||
+    if (std::memcmp(header, "T5HC", 4) || (version < 1 || version > 7) ||
+        (version < 6 && metadata.st_size > static_cast<off_t>(16 * mib)) ||
         little32(header + 8) != clip.width || little32(header + 12) != clip.height ||
-        clip_status.fps != (version == 6 ? 60u : 30u) || !clip_status.frames ||
+        clip_status.fps != (version >= 6 ? 60u : 30u) || !clip_status.frames ||
         clip_status.frames > 300 ||
         little32(header + 24) != (clip.vp9              ? 2u
                                   : clip_status.bframes ? 1u
@@ -744,27 +747,53 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
             read_exact(clip.descriptor, data, clip.sizes[index]))
             return fail("READ", -EIO);
         s.last_read_us = sceKernelGetProcessTime() - step_start;
+        const std::uint8_t *au_data = data;
+        std::size_t au_bytes = clip.sizes[index];
+        bool displayable = true;
+        unsigned part_count = 1;
         if (clip.vp9)
         {
             Vp9Packet packet{};
-            if (!split_vp9_packet(data, clip.sizes[index], packet) || packet.count != 1 ||
-                !packet.parts[0].displayable || packet.parts[0].existing)
-                return fail("PIPELINE VISIBLE FIXTURE", -EINVAL);
+            if (!split_vp9_packet(data, clip.sizes[index], packet) ||
+                clip.part_index >= packet.count ||
+                (!clip.compound_vp9 && packet.count != 1))
+                return fail("PIPELINE FIXTURE LAYOUT", -EINVAL);
+            unsigned visible = 0;
+            for (unsigned i = 0; i < packet.count; ++i)
+                visible += packet.parts[i].displayable;
+            if (visible != 1 || !packet.parts[packet.count - 1].displayable)
+                return fail("PIPELINE FIXTURE DISPLAY", -EINVAL);
+            const auto &part = packet.parts[clip.part_index];
+            au_data = part.data;
+            au_bytes = part.bytes;
+            displayable = part.displayable;
+            part_count = packet.count;
+            if (!clip.part_index)
+                s.superframes += packet.count > 1;
+            s.hidden_frames += !displayable;
+            s.existing_frames += part.existing;
             ++s.coded_frames;
         }
-        clip.input_tag[input_slot] = index + 1;
+        const unsigned tag = clip.vp9 ? clip.next_coded_tag++ : index + 1;
+        clip.input_tag[input_slot] = tag;
+        clip.input_packet[input_slot] = index;
+        clip.input_displayable[input_slot] = displayable;
         VideoInput input{sizeof(VideoInput),
-                         data,
-                         clip.sizes[index],
+                         const_cast<std::uint8_t *>(au_data),
+                         au_bytes,
                          static_cast<std::uint64_t>(clip.pts_index[index]) * 1000000 / s.fps,
                          static_cast<std::uint64_t>(index) * 1000000 / s.fps,
-                         index + 1};
+                         tag};
         clip.stage = "DECODE B";
         if (index % 30 == 0)
             clip_snapshot();
         decode_start = sceKernelGetProcessTime();
         code = sceVideodec2Decode(r.decoder, &input, &frame, &output);
-        ++s.submitted;
+        if (++clip.part_index == part_count)
+        {
+            clip.part_index = 0;
+            ++s.submitted;
+        }
     }
     else
     {
@@ -777,6 +806,9 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     }
     const auto decode_us = sceKernelGetProcessTime() - decode_start;
     s.last_decode_us = decode_us;
+    s.last_valid = output.valid;
+    s.last_accepted = frame.accepted;
+    s.last_output_pictures = output.pictures;
     s.decode_max_us = std::max(s.decode_max_us, decode_us);
     if (frame.accepted)
         clip.frame_used[offered] = true;
@@ -797,7 +829,7 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     const auto required = static_cast<std::uint64_t>(output.pitch_bytes) * output.height * 3 / 2;
     if (returned == clip.slots || (!clip.frame_used[returned] && returned != offered) ||
         output.pictures != 1 || output.codec != (clip.vp9 ? 0x00245bfdu : 1u) ||
-        output.format != 0 || output.padding ||
+        output.format != 0 || (!clip.vp9 && output.padding) ||
         output.width != clip.width || output.height < clip.height ||
         output.height > (clip.vp9 ? clip.height : 1088) ||
         (output.height & 1u) || output.pitch_bytes < clip.width || output.pitch_bytes > 4096 ||
@@ -813,12 +845,20 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     picture.info.pts = picture.info.dts = picture.info.attached = UINT64_MAX;
     if (clip.vp9)
     {
-        // VP9 has no display reorder in this fixture. Keep compressed input alive
-        // until its FIFO output arrives; the software CRC independently proves mapping.
+        unsigned oldest = clip.slots;
+        for (unsigned i = 0; i < clip.slots; ++i)
+            if (clip.input_tag[i] &&
+                (oldest == clip.slots || clip.input_tag[i] < clip.input_tag[oldest]))
+                oldest = i;
+        if (oldest == clip.slots)
+            return fail("PIPELINE FIFO EMPTY", -EINVAL);
+        // This probe tests the hypothesis that each coded AU has a FIFO surface.
+        // Hidden outputs are suppressed; visible software CRC detects misassociation.
+        const unsigned index = clip.input_packet[oldest];
         picture.info.valid = 1;
-        picture.info.attached = s.decoded + 1;
-        picture.info.pts = picture.info.dts =
-            static_cast<std::uint64_t>(s.decoded) * 1000000 / s.fps;
+        picture.info.attached = clip.input_tag[oldest];
+        picture.info.pts = static_cast<std::uint64_t>(clip.pts_index[index]) * 1000000 / s.fps;
+        picture.info.dts = static_cast<std::uint64_t>(index) * 1000000 / s.fps;
     }
     else
         code = sceVideodec2GetPictureInfo(&output, &picture.info, nullptr);
@@ -828,17 +868,28 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     if (code || picture.before != UINT64_C(0xc0dec0dec0dec0de) ||
         picture.after != UINT64_C(0xc0dec0dec0dec0de) || picture.info.valid != 1 ||
         picture.info.size != sizeof(picture.info) || !picture.info.attached ||
-        picture.info.attached > s.submitted)
+        (!clip.vp9 && picture.info.attached > s.submitted))
         return fail("PICTURE INFO", code ? code : -EINVAL);
     ++s.metadata;
-    const unsigned packet = static_cast<unsigned>(picture.info.attached - 1);
     unsigned input_slot = 0;
     while (input_slot < clip.slots && clip.input_tag[input_slot] != picture.info.attached)
         ++input_slot;
-    if (input_slot == clip.slots ||
+    if (input_slot == clip.slots)
+        return fail("PICTURE INPUT SLOT", -EINVAL);
+    const unsigned packet = clip.vp9 ? clip.input_packet[input_slot]
+                                    : static_cast<unsigned>(picture.info.attached - 1);
+    if (
         picture.info.pts != static_cast<std::uint64_t>(clip.pts_index[packet]) * 1000000 / s.fps ||
         picture.info.dts != static_cast<std::uint64_t>(packet) * 1000000 / s.fps)
         return fail("PICTURE TAG", -EINVAL);
+    if (clip.vp9 && !clip.input_displayable[input_slot])
+    {
+        clip.frame_used[returned] = false;
+        clip.input_tag[input_slot] = 0;
+        clip.stage = "PIPELINE HIDDEN SUPPRESSED";
+        s.last_step_us = sceKernelGetProcessTime() - step_start;
+        return 2;
+    }
     if (clip.pts_index[packet] != s.decoded)
     {
         ++s.order_errors;

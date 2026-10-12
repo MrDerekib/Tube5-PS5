@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "hardware_frame_probe.hpp"
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cerrno>
@@ -29,6 +30,8 @@ bool vp9_mode = false, retain_hidden = false;
 bool vp9_4k = false;
 bool vp9_pipeline = false;
 bool no_accepted_frames = false;
+bool vp9_hidden_fixture = false;
+bool missing_hidden_output = false;
 struct Pending
 {
     tube5::VideoFrame frame{};
@@ -85,20 +88,34 @@ int consume(const tube5::VideoOutput &output, void *context) noexcept
 void b_picture(tube5::VideoOutput *output, const tube5::VideoFrame *fallback = nullptr)
 {
     const unsigned wanted = wrong_order ? 3 : b_next;
+    std::uint64_t oldest = UINT64_MAX;
+    for (const auto &packet : pending)
+        if (packet.used)
+            oldest = std::min(oldest, packet.tag);
     for (auto &packet : pending)
-        if (packet.used && packet.pts == static_cast<std::uint64_t>(wanted) * 1000000 /
-                                            (vp9_pipeline ? 60 : 30))
+        if (packet.used && (vp9_hidden_fixture ? packet.tag == oldest
+                            : packet.pts == static_cast<std::uint64_t>(wanted) * 1000000 /
+                                            (vp9_pipeline ? 60 : 30)))
         {
             if (packet.input)
                 assert(packet.input[1] == packet.input_value); // No pending input overwritten.
+            if (missing_hidden_output && packet.input[0] == 0x84)
+            {
+                packet.used = false;
+                ++b_next;
+                return;
+            }
             if (!packet.frame.buffer)
             {
                 assert(fallback);
                 packet.frame = *fallback;
             }
             picture(&packet.frame, output);
-            std::memset(packet.frame.buffer, 16 + wanted + (corrupt_pixels ? 1 : 0),
+            const unsigned luma_index = vp9_hidden_fixture ? packet.input_value : wanted;
+            std::memset(packet.frame.buffer, 16 + luma_index + (corrupt_pixels ? 1 : 0),
                         packet.frame.bytes);
+            if (vp9_hidden_fixture && packet.input[0] == 0x84)
+                output->padding = 1;
             last_picture = {};
             last_picture.size = sizeof(last_picture);
             last_picture.valid = 1;
@@ -416,12 +433,14 @@ int main(int argc, char **argv)
     }
     if (argc == 2 &&
         (std::strcmp(argv[1], "--vp9-4k") == 0 || std::strcmp(argv[1], "--vp9-4k60") == 0 ||
-         std::strcmp(argv[1], "--vp9-pipeline") == 0))
+         std::strcmp(argv[1], "--vp9-pipeline") == 0 ||
+         std::strcmp(argv[1], "--vp9-hidden-pipeline") == 0))
     {
         vp9_mode = vp9_4k = true;
-        vp9_pipeline = b_mode = std::strcmp(argv[1], "--vp9-pipeline") == 0;
+        vp9_hidden_fixture = std::strcmp(argv[1], "--vp9-hidden-pipeline") == 0;
+        vp9_pipeline = b_mode = vp9_hidden_fixture || std::strcmp(argv[1], "--vp9-pipeline") == 0;
         const bool sixty = vp9_pipeline || std::strcmp(argv[1], "--vp9-4k60") == 0;
-        const unsigned count = vp9_pipeline ? 8 : 2;
+        const unsigned count = vp9_hidden_fixture ? 3 : vp9_pipeline ? 8 : 2;
         char folder[] = "/tmp/tube5-vp9-4k-XXXXXX";
         assert(mkdtemp(folder));
         char asset[200]{}, log[200]{};
@@ -429,7 +448,7 @@ int main(int argc, char **argv)
         std::snprintf(log, sizeof(log), "%s/decoder.log", folder);
         const int fd = open(asset, O_CREAT | O_WRONLY | O_EXCL, 0600);
         assert(fd >= 0 && write(fd, "T5HC", 4) == 4);
-        for (auto value : {sixty ? 6u : 5u, 3840u, 2160u, sixty ? 60u : 30u, count, 2u})
+        for (auto value : {vp9_hidden_fixture ? 7u : sixty ? 6u : 5u, 3840u, 2160u, sixty ? 60u : 30u, count, 2u})
             write32(fd, value);
         unsigned char payload[101]{};
         payload[0] = 0x86;
@@ -444,9 +463,21 @@ int main(int argc, char **argv)
                         crc = (crc >> 1) ^ ((crc & 1u) ? UINT32_C(0xedb88320) : 0);
                 }
             payload[1] = index;
-            for (auto value : {101u, index, index, crc ^ UINT32_MAX})
+            for (auto value : {vp9_hidden_fixture ? 206u : 101u, index, index, crc ^ UINT32_MAX})
                 write32(fd, value);
+            if (vp9_hidden_fixture)
+            {
+                unsigned char hidden[101]{};
+                hidden[0] = 0x84;
+                hidden[1] = index;
+                assert(write(fd, hidden, sizeof(hidden)) == sizeof(hidden));
+            }
             assert(write(fd, payload, sizeof(payload)) == sizeof(payload));
+            if (vp9_hidden_fixture)
+            {
+                const unsigned char suffix[]{0xc1, 101, 101, 0xc1};
+                assert(write(fd, suffix, sizeof(suffix)) == sizeof(suffix));
+            }
         }
         close(fd);
         assert(!tube5::hardware_clip_begin(asset, log));
@@ -472,6 +503,12 @@ int main(int argc, char **argv)
         {
             assert(tube5::hardware_clip_status().no_output == 3);
             assert(tube5::hardware_clip_status().drain_calls == 3);
+            if (vp9_hidden_fixture)
+            {
+                assert(tube5::hardware_clip_status().hidden_frames == count);
+                assert(tube5::hardware_clip_status().superframes == count);
+                assert(tube5::hardware_clip_status().coded_frames == count * 2);
+            }
         }
 #ifdef TUBE5_HW_TIMING
         const auto &timing = tube5::hardware_clip_status();
@@ -482,7 +519,22 @@ int main(int argc, char **argv)
 #endif
         assert(!tube5::hardware_clip_close());
         no_resources();
-        if (vp9_pipeline)
+        if (vp9_hidden_fixture)
+            for (bool absent : {false, true})
+            {
+                reset_b_mock();
+                corrupt_pixels = !absent;
+                missing_hidden_output = absent;
+                assert(!tube5::hardware_clip_begin(asset, log));
+                unsigned delivered = 0;
+                int rc = 0;
+                for (unsigned i = 0; i < count * 2 + 12 && rc >= 0; ++i)
+                    rc = tube5::hardware_clip_step(consume4k, &delivered);
+                assert(absent ? rc == -ENOBUFS || rc == -EILSEQ : rc == -EILSEQ);
+                assert(!tube5::hardware_clip_close());
+                no_resources();
+            }
+        if (vp9_pipeline && !vp9_hidden_fixture)
         {
             reset_b_mock();
             no_accepted_frames = true;
@@ -500,7 +552,7 @@ int main(int argc, char **argv)
             no_resources();
             no_accepted_frames = false;
         }
-        if (vp9_pipeline)
+        if (vp9_pipeline && !vp9_hidden_fixture)
             for (bool bad_order : {false, true})
             {
                 reset_b_mock();
