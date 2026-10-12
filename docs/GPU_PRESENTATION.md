@@ -517,6 +517,33 @@ frente a una, no frente a ocho; comparar nuestro control con cuatro columnas
 es una hipótesis de prueba, no una optimización garantizada. No relajar las
 tolerancias de sincronización para ocultar el retraso. 4K/60 sigue pendiente.
 
+## VP9 4K/60: cuatro columnas no resuelven el control, DIAG91
+
+Se cambió únicamente `tile-columns` del encoder a 2 (cuatro columnas);
+fuente testsrc2, dimensiones, fps, duración, encoder/preset/CRF, GOP, audio,
+pipeline y sincronización se mantuvieron. Header tracing verificó las 180
+cabeceras. Se generaron CRC software propios; el remux de 12 segundos mantiene
+los hashes de cuatro repeticiones de la nueva fuente. La fixture pesa
+27.623.175 bytes frente a 27.674.629 antes (~0,19% menos). El remux grande
+queda fuera de Git, generado con `--tile-columns 2` en ambos preparadores.
+
+El propietario confirmó que la imagen vuelve a pararse. Sin pausa ni seek,
+el decoder entregó las 720 imágenes, con EOF y cleanup cero. Decode medio
+16.838 µs, máximo 36.129 µs; copia media 1.580 µs, máximo 1.969 µs.
+La diferencia respecto a DIAG90 es pequeña y sus condiciones de interacción
+no fueron idénticas; no se atribuye una mejora significativa al cambio.
+Solo se subieron 46 imágenes, 673 se descartaron por sincronización. Sus
+45 intervalos abarcan 788.812 µs; el dato de 57,048 fps mide ese breve tramo
+inicial, no los 12 segundos ni una reproducción sostenida.
+Audio: 505 underruns en 630 callbacks, error cero. La prueba falla el objetivo
+de reproducción 4K/60 fluida pese a la integridad y cierre correctos.
+
+Logs privados: `.local/console-logs/diag91-*`. El siguiente control propuesto
+es mayor profundidad de pipeline en un probe aislado, con buffers de entrada
+y salida separados, retención/correlación de imágenes demoradas, CRC y drain
+al final. No cambiar profundidad en el player síncrono actual sin validar
+esas garantías, ni relajar sincronización para encubrir el retraso.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

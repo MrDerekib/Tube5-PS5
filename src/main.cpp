@@ -911,6 +911,8 @@ int main()
         error[0] = '\0';
 #ifdef TUBE5_HOST
         constexpr const char *clip = "assets/test-clip.mp4";
+#elif defined(TUBE5_VP9_4K60_TC2_CONTROL)
+        constexpr const char *clip = "/app0/assets/hw-vp9-4k60-player-tc2.mp4";
 #elif defined(TUBE5_VP9_4K60_PLAYER_CONTROL)
         constexpr const char *clip = "/app0/assets/hw-vp9-4k60-player.mp4";
 #elif defined(TUBE5_VP9_4K_PLAYER_CONTROL)

@@ -11,12 +11,17 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--4k", dest="four_k", action="store_true")
 parser.add_argument("--fps", type=int, choices=(30, 60), default=30)
+parser.add_argument("--tile-columns", type=int, choices=(0, 1, 2, 3), default=None)
 options = parser.parse_args()
 
 root = pathlib.Path(__file__).resolve().parents[1]
 if options.fps == 60 and not options.four_k:
     parser.error("The current 60fps control is 4K only")
 name = "hw-vp9-4k60.t5hc" if options.fps == 60 else "hw-vp9-4k.t5hc" if options.four_k else "hw-vp9-altref.t5hc"
+if options.tile_columns is not None:
+    if not options.four_k or options.fps != 60:
+        parser.error("The tile-layout control is currently 4K60 only")
+    name = pathlib.Path(name).stem + f"-tc{options.tile_columns}.t5hc"
 data = (root / "assets" / name).read_bytes()
 assert data[:4] == b"T5HC"
 version, width, height, fps, count, flags = struct.unpack_from("<6I", data, 4)
@@ -36,6 +41,8 @@ with tempfile.TemporaryDirectory(prefix="tube5-vp9-player-") as folder:
     assert offset == len(data)
     ivf.write_bytes(encoded)
     destination = root / "assets" / ("hw-vp9-4k60-player.mp4" if options.fps == 60 else "hw-vp9-4k-player.mp4" if options.four_k else "hw-vp9-player.mp4")
+    if options.tile_columns is not None:
+        destination = destination.with_name(destination.stem + f"-tc{options.tile_columns}" + destination.suffix)
     subprocess.run([
         "ffmpeg", "-v", "error", "-y", "-stream_loop", "3", "-i", str(ivf), "-f", "lavfi", "-i",
         "sine=frequency=440:sample_rate=48000", "-map", "0:v:0", "-map", "1:a:0",

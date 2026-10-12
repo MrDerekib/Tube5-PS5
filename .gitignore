@@ -41,3 +41,4 @@ dist/
 /IMG_4260.MOV
 # Large reproducible diagnostic remux; generate with prepare-vp9-player.py.
 /assets/hw-vp9-4k60-player.mp4
+/assets/hw-vp9-4k60-player-tc2.mp4
