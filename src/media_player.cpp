@@ -182,7 +182,7 @@ bool MediaPlayer::open(SDL_Renderer *renderer, const char *path) noexcept
         return fail("SOURCE", youtube_                         ? youtube_stream_.error()
                               : tube5::network_open_error()[0] ? tube5::network_open_error()
                                                                : Kit_GetError());
-    return complete_open(renderer);
+    return complete_open(renderer, path);
 }
 
 int MediaPlayer::open_source_worker(void *userdata) noexcept
@@ -265,14 +265,17 @@ MediaPlayer::OpenResult MediaPlayer::poll_open(SDL_Renderer *renderer) noexcept
         save_failure_report("SOURCE_OPEN", 0.0, 0);
         return OpenResult::failed;
     }
-    return complete_open(renderer) ? OpenResult::ready : OpenResult::failed;
+    return complete_open(renderer, opening_path_) ? OpenResult::ready : OpenResult::failed;
 }
 
-bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
+bool MediaPlayer::complete_open(SDL_Renderer *renderer, const char *source_path) noexcept
 {
     bool vp9_pipeline = false;
 #ifdef TUBE5_VP9_PIPELINE_CONTROL
-    vp9_pipeline = !std::strcmp(opening_path_, "/app0/assets/hw-vp9-4k60-player-tc2.mp4");
+    vp9_pipeline = source_path &&
+                   !std::strcmp(source_path, "/app0/assets/hw-vp9-4k60-player-tc2.mp4");
+#else
+    (void)source_path;
 #endif
     memory_set_stage("PLAYER_SETUP");
     if (memory_out_of_memory())
@@ -329,6 +332,9 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
     native_codec_allow_open(false);
     if (!player_ || (audio_source_ && !audio_player_))
         return fail("DECODER", codec_diagnostic()[0] ? codec_diagnostic() : Kit_GetError());
+    if (vp9_pipeline && (!native_codec_active() || hardware_stream_status().depth != 3 ||
+                         hardware_stream_status().slots != 4))
+        return fail("PIPELINE CONTROL", "depth 3 / four slots not activated");
     if (memory_out_of_memory())
         return fail("DECODER MEMORY", "ENOMEM - CIERRA Y REABRE TUBE5");
     Kit_PlayerInfo info{};

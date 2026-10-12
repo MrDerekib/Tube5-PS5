@@ -624,6 +624,23 @@ valida que el manejo síncrono previo permanece intacto. Build y firma correctas
 staging FTP realizado, activación pendiente de cierre. En consola probar LOCAL:
 primero reproducción continua; después pausa/seek y reentrada, conservar logs.
 
+Resultado DIAG94: el propietario informó congelación. Logs prueban que el control
+**no activó** el pipeline: profundidad uno, un slot, pico pendiente uno y cero
+drain. Decode medio 16.873 µs/copia 1.547 µs; 720 imágenes entregadas, solo 41
+uploads y 679 drops. EOF/cleanup cero. Este resultado no invalida profundidad
+tres: la selección consultaba `opening_path_`, que solo rellena `begin_open`;
+LOCAL usa `open`, síncrono, y no establece ese campo. Logs privados `diag94-*`.
+
+DIAG95 (`BOOT-DIAG-95-VP9-LOCAL-PIPELINE`) pasa el path real explícitamente a
+`complete_open` desde ambas rutas, evitando depender del campo de apertura
+asíncrona. Solo el mismo control local activa profundidad tres/cuatro slots.
+Añade un guard después de crear el player: si ese control no obtiene decoder
+nativo a profundidad tres/cuatro slots, falla de forma explícita en vez de
+realizar otra prueba con configuración incorrecta. No cambia decoder,
+sincronización, audio ni selección de formatos YouTube. Verificación focal:
+compilación de ambos call sites y guard de configuración en runtime; los tests
+del decoder ya pasados no se repiten por esta corrección de ruta.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

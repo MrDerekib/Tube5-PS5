@@ -108,7 +108,7 @@ class MediaPlayer final
 
   private:
     static int open_source_worker(void *userdata) noexcept;
-    bool complete_open(SDL_Renderer *renderer) noexcept;
+    bool complete_open(SDL_Renderer *renderer, const char *source_path) noexcept;
     void save_failure_report(const char *stage, double position, unsigned frames) noexcept;
     void save_audio_seek_report(const char *stage) noexcept;
     void save_cadence_report(bool hardware, double end_position, double length) noexcept;
