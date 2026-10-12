@@ -211,7 +211,8 @@ int cleanup()
     return 0;
 }
 template <class Recorder>
-int prepare_decoder(Recorder record, unsigned depth = 1, unsigned slots = 1)
+int prepare_decoder(Recorder record, unsigned depth = 1, unsigned slots = 1,
+                    const tube5::VideoDecoderConfig *requested = nullptr)
 {
     auto &r = resources;
     tube5::VideoComputeMemory compute{};
@@ -242,6 +243,14 @@ int prepare_decoder(Recorder record, unsigned depth = 1, unsigned slots = 1)
     config.level = 51;
     config.width = 1920;
     config.height = 1088;
+    if (requested)
+    {
+        config.codec = requested->codec;
+        config.profile = requested->profile;
+        config.level = requested->level;
+        config.width = requested->width;
+        config.height = requested->height;
+    }
     config.dpb = 4;
     config.depth = depth;
     config.queue = reinterpret_cast<std::uintptr_t>(r.queue);
@@ -254,9 +263,15 @@ int prepare_decoder(Recorder record, unsigned depth = 1, unsigned slots = 1)
     record("DECODER QUERY", code);
     if (code)
         return code;
+    record("DECODER CPU BYTES", static_cast<int>(memory.cpu_bytes));
+    record("DECODER GPU BYTES", static_cast<int>(memory.gpu_bytes));
+    record("DECODER SHARED BYTES", static_cast<int>(memory.shared_bytes));
+    record("DECODER FRAME BYTES", static_cast<int>(memory.frame_bytes));
+    record("DECODER ALIGNMENT", static_cast<int>(memory.alignment));
     r.cpu_bytes = rounded(memory.cpu_bytes, 64 * mib);
     const auto gpu_bytes = rounded(memory.gpu_bytes, 128 * mib);
-    const auto shared_bytes = rounded(memory.shared_bytes, 64 * mib);
+    // VP9 1440p on FW 13.20 requests ~101 MiB here; retain the total budget below.
+    const auto shared_bytes = rounded(memory.shared_bytes, 128 * mib);
     const auto frame_bytes = rounded(memory.frame_bytes, 16 * mib);
     if (!r.cpu_bytes || !gpu_bytes || (memory.shared_bytes && !shared_bytes) || !frame_bytes ||
         !memory.alignment || memory.alignment > page ||
@@ -304,22 +319,32 @@ int prepare_decoder(Recorder record, unsigned depth = 1, unsigned slots = 1)
 namespace tube5
 {
 int hardware_frame_probe(const char *asset, const char *log, HardwareFrameConsumer consumer,
-                         void *consumer_context) noexcept
+                         void *consumer_context, HardwareFrameMode mode) noexcept
 {
 #ifndef TUBE5_HW_FRAME
     (void)asset;
     (void)log;
     (void)consumer;
     (void)consumer_context;
+    (void)mode;
     return -1;
 #else
     auto &r = resources;
     if (r.quarantined || clip_status.active || stream_status.active)
         return -EBUSY;
+    const bool vp9 = mode == HardwareFrameMode::vp9_1440;
+    const unsigned width = vp9 ? 2560u : 1920u, height = vp9 ? 1440u : 1080u;
+    VideoDecoderConfig requested{};
+    requested.codec = vp9 ? 0x00245bfdu : 1u;
+    requested.profile = vp9 ? 0u : 100u;
+    requested.level = vp9 ? 50u : 51u;
+    requested.width = width;
+    requested.height = vp9 ? height : 1088u;
     char report[3072]{};
     std::size_t used = static_cast<std::size_t>(std::snprintf(
-        report, sizeof(report), "TUBE5 HARDWARE FRAME V1\nBUILD %s\n1080P AVC IDR - %s\n",
-        failure_log_build_label(), consumer ? "DISPLAY CONSUMER" : "NO DISPLAY TEST"));
+        report, sizeof(report), "TUBE5 HARDWARE FRAME V2\nBUILD %s\n%ux%u %s KEYFRAME - %s\n",
+        failure_log_build_label(), width, height, vp9 ? "VP9 PROFILE 0" : "AVC HIGH",
+        consumer ? "DISPLAY CONSUMER" : "NO DISPLAY TEST"));
     const auto record = [&](const char *stage, int code)
     {
         const int count = std::snprintf(report + used, sizeof(report) - used, "%s %08X\n", stage,
@@ -337,7 +362,7 @@ int hardware_frame_probe(const char *asset, const char *log, HardwareFrameConsum
         if (fd < 0 || fstat(fd, &metadata) || !S_ISREG(metadata.st_mode) || metadata.st_size <= 0 ||
             metadata.st_size > static_cast<off_t>(mib))
             return -EINVAL;
-        int code = prepare_decoder(record);
+        int code = prepare_decoder(record, 1, 1, &requested);
         if (code)
             return code;
         std::size_t loaded = 0;
@@ -383,14 +408,16 @@ int hardware_frame_probe(const char *asset, const char *log, HardwareFrameConsum
                           owned ? 1u : 0u, static_cast<unsigned long long>(output.bytes));
         if (count > 0)
             used += std::min<std::size_t>(count, sizeof(report) - used - 1);
-        if (code || !output.valid || output.error || output.codec != 1 || !owned ||
-            output.bytes > r.frame.bytes || output.width != 1920 || output.height < 1080 ||
-            output.height > 1088 || output.pitch_bytes < 1920 || output.pitch_bytes > 4096 ||
+        if (code || !output.valid || output.error || output.codec != requested.codec || !owned ||
+            output.format != 0 || output.pictures != 1 || (output.height & 1u) ||
+            output.bytes > r.frame.bytes || output.width != width || output.height < height ||
+            output.height > static_cast<unsigned>(requested.height) || output.pitch_bytes < width ||
+            output.pitch_bytes > 4096 ||
             static_cast<std::uint64_t>(output.pitch_bytes) * output.height * 3 / 2 > r.frame.bytes)
             return code ? code : -EINVAL;
         unsigned changed = 0, samples = 0, sum = 0, minimum = 255, maximum = 0;
-        for (unsigned y = 0; y < 1080; y += 31)
-            for (unsigned x = 0; x < 1920; x += 31)
+        for (unsigned y = 0; y < height; y += 31)
+            for (unsigned x = 0; x < width; x += 31)
             {
                 const unsigned value =
                     static_cast<unsigned char *>(output.buffer)[y * output.pitch_bytes + x];

@@ -178,6 +178,36 @@ continuo. La ruta 1080p integrada queda como nueva baseline; resoluciones
 superiores requieren revisar formatos YouTube y límites del decoder, además
 de dimensiones y propiedad de los buffers.
 
+## VP9 1440p: primer frame, DIAG76
+
+En FW 13.20 se validó un keyframe propio VP9 Profile 0 de 2560×1440,
+generado mediante `tools/prepare-vp9-frame.sh`. El decoder devolvió NV12 de
+2560×1440 y pitch 2560; el CRC de muestras Y/U/V fue `19DECBFB`, idéntico al
+decode software de referencia. El presenter GPU mostró la imagen y su píxel
+central CPU/GPU coincidió (`0/0/252`). Subida del frame: 509 µs; una sola
+composición: 27.925 µs, no una medida de rendimiento continuo.
+
+DIAG74/75 se detenían en nuestro límite de memoria compartida de 64 MiB:
+la consulta nativa requiere `0x064D2400` bytes, aproximadamente 101 MiB.
+DIAG76 permite hasta 128 MiB en ese bloque, manteniendo el presupuesto total
+de 256 MiB, la validación de tamaños/alineación y la propiedad de buffers.
+Create, decode y cleanup devolvieron cero. La memoria flexible final fue
+1 MiB inferior a la inicial; una ejecución no demuestra ausencia de fugas
+y el heap gráfico permanece abierto para mostrar la imagen.
+
+La prueba aislada está en `experiments/gpu-vp9/`, se compila con
+`tools/build-vp9-probe.sh` y escribe `tube5-vp9-1440.log` y
+`tube5-vp9-1440-decoder.log` en `/download0/`. El frame 1440p se presenta
+escalado a una salida 1920×1080: todavía no valida reproducción continua,
+YouTube VP9, audio, seek, salida HDMI 1440p ni 4K. La baseline funcional
+DIAG73 queda respaldada en consola.
+
+Referencia pública de configuración VP9: ProsperoTV, commit
+`f3142ce3ccb4a1d125b08a58fde1b5723325e4ea`; investigación de VideoDec2,
+commit `c6439d9f7a3c1bb6dcc4f66f3e7e0f728d3e9dd1`. El siguiente paso es
+validar una secuencia VP9, incluidos los cuadros ocultos y superframes,
+antes de habilitar los formatos superiores en el selector YouTube.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

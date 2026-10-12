@@ -12,7 +12,7 @@ extern "C" std::uint64_t sceKernelGetProcessTime();
 namespace
 {
 constexpr std::size_t ui_bytes = 1920u * 1080u * 4u;
-constexpr std::size_t video_bytes = 4096u * 1080u * 3u / 2u;
+constexpr std::size_t video_bytes = 4096u * 1440u * 3u / 2u;
 EGLDisplay display = EGL_NO_DISPLAY;
 EGLSurface surface = EGL_NO_SURFACE;
 GLuint vao = 0, programs[2]{}, buffers[2]{}, textures[2]{};
@@ -223,7 +223,7 @@ bool gpu_upload_nv12(unsigned char *const *planes, const int *pitch, int width, 
                      bool bt709, bool full_range) noexcept
 {
     if (!ready || !planes || !pitch || !planes[0] || !planes[1] || width <= 0 || height <= 0 ||
-        width > 1920 || height > 1080 || (width & 1) || (height & 1) || pitch[0] < width ||
+        width > 2560 || height > 1440 || (width & 1) || (height & 1) || pitch[0] < width ||
         pitch[1] < width || pitch[0] > 4096 || pitch[1] > 4096)
         return fail("NV12 LAYOUT", 22);
     const std::size_t y_bytes = static_cast<std::size_t>(pitch[0]) * height;
