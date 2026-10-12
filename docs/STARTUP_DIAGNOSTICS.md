@@ -20,7 +20,14 @@ y muestras PCM después del seek; `H1` en contadores indica espera y `H0` libre.
 Verificación enfocada ASan/UBSan: barrera con ambos órdenes de reset y frames
 viejos, lector PCM simulando 100s→10s (libera antiguo/preserva nuevo), reset del
 adaptador nativo con el control 150 frames, y build nativa correcta. Consola
-pendiente: mismo vídeo 1080p, varios retrocesos con unos segundos entre ellos.
+Prueba FW13.20: el propietario indica que ya no parece perder audio.
+El snapshot POST SEEK de DIAG63 confirma HOLD 0, 33 resets de vídeo y audio,
+188416 bytes PCM entregados durante la ventana posterior (aproximadamente
+0.98 segundos a 48000 Hz estéreo S16), ERROR 0. El decoder registra 4887 frames
+entregados y 34 resets, sin errores nativos. Los 817 underruns son acumulativos
+e incluyen los callbacks silenciados durante esperas; no demuestran por sí solos
+un nuevo fallo audible. Resultado favorable provisional: no prueba todos los
+patrones de seek ni sesiones largas. Conservar logs privados fuera de Git.
 
 ## BOOT-DIAG-62-HWCONTROL: mismo vídeo validado, reproductor real
 
