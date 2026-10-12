@@ -61,6 +61,7 @@ struct Clip
 {
     bool vp9 = false, compound_vp9 = false, pipeline = false;
     unsigned width = 1920, height = 1080;
+    unsigned slots = 1;
     int descriptor = -1;
     std::uint32_t offsets[300]{}, sizes[300]{};
     std::uint32_t pts_index[300]{}, crc[300]{};
@@ -684,7 +685,8 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
     requested.width = clip.width;
     requested.height = clip.height;
     const bool pipeline = clip_status.bframes || clip.pipeline;
-    int code = prepare_decoder(record, pipeline ? 3 : 1, pipeline ? 6 : 1,
+    clip.slots = clip.pipeline ? 4 : clip_status.bframes ? 6 : 1;
+    int code = prepare_decoder(record, pipeline ? 3 : 1, clip.slots,
                                clip.vp9 ? &requested : nullptr);
     if (code)
         return fail(code);
@@ -716,9 +718,9 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     if (!clip.started)
         clip.started = sceKernelGetProcessTime();
     unsigned offered = 0;
-    while (offered < 6 && clip.frame_used[offered])
+    while (offered < clip.slots && clip.frame_used[offered])
         ++offered;
-    if (offered == 6)
+    if (offered == clip.slots)
         return fail("FRAME POOL", -ENOBUFS);
     auto *offered_buffer = static_cast<unsigned char *>(r.frame.data) + offered * clip.frame_stride;
     VideoFrame frame{sizeof(VideoFrame), offered_buffer, clip.frame_stride, 0, 0};
@@ -729,9 +731,9 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     if (s.submitted < s.frames)
     {
         unsigned input_slot = 0;
-        while (input_slot < 6 && clip.input_tag[input_slot])
+        while (input_slot < clip.slots && clip.input_tag[input_slot])
             ++input_slot;
-        if (input_slot == 6)
+        if (input_slot == clip.slots)
             return fail("INPUT POOL", -ENOBUFS);
         const unsigned index = s.submitted;
         auto *data = static_cast<unsigned char *>(r.input.data) + input_slot * mib;
@@ -786,11 +788,11 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
         return 2; // Priming/reordering: continue input without flushing the stream.
     }
     unsigned returned = 0;
-    while (returned < 6 && output.buffer != static_cast<unsigned char *>(r.frame.data) +
+    while (returned < clip.slots && output.buffer != static_cast<unsigned char *>(r.frame.data) +
                                                 returned * clip.frame_stride)
         ++returned;
     const auto required = static_cast<std::uint64_t>(output.pitch_bytes) * output.height * 3 / 2;
-    if (returned == 6 || (!clip.frame_used[returned] && returned != offered) ||
+    if (returned == clip.slots || (!clip.frame_used[returned] && returned != offered) ||
         output.pictures != 1 || output.codec != (clip.vp9 ? 0x00245bfdu : 1u) ||
         output.format != 0 || output.padding ||
         output.width != clip.width || output.height < clip.height ||
@@ -828,9 +830,9 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
     ++s.metadata;
     const unsigned packet = static_cast<unsigned>(picture.info.attached - 1);
     unsigned input_slot = 0;
-    while (input_slot < 6 && clip.input_tag[input_slot] != picture.info.attached)
+    while (input_slot < clip.slots && clip.input_tag[input_slot] != picture.info.attached)
         ++input_slot;
-    if (input_slot == 6 ||
+    if (input_slot == clip.slots ||
         picture.info.pts != static_cast<std::uint64_t>(clip.pts_index[packet]) * 1000000 / s.fps ||
         picture.info.dts != static_cast<std::uint64_t>(packet) * 1000000 / s.fps)
         return fail("PICTURE TAG", -EINVAL);

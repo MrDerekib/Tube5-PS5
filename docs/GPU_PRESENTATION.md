@@ -562,7 +562,22 @@ activación pendiente de cierre de la app. Logs nuevos:
 `tube5-vp9-depth3.log` y `tube5-vp9-depth3-decoder.log`.
 El tiempo de una llamada de envío no equivale a latencia de una imagen con
 pipeline; la prueba registra cadencia de presentación, priming, drain e integridad.
-No hay resultado de rendimiento en consola todavía.
+Resultado DIAG92: pantalla negra, ninguna entrada enviada. Query de profundidad
+tres: CPU 12.992.992, GPU 198.852.864, shared 255.169.792 y frame 12.541.952
+bytes. Seis superficies más inputs/compute superan el límite total de 512 MiB;
+el guard devolvió `-EINVAL` antes de crear el decoder. La etiqueta de fallo
+`DECODER ALIGNMENT` es la última consulta registrada, no prueba de alineación
+incorrecta. Cleanup cero, memoria flexible antes/después idéntica. Logs privados
+en `.local/console-logs/diag92-*`. No hay medición de rendimiento.
+
+DIAG93 (`BOOT-DIAG-93-VP9-4SLOTS`) reduce solo el pool del probe VP9 a cuatro
+slots (profundidad más uno), mantiene el presupuesto y consulta sus necesidades
+reales antes de asignar. Los límites de búsqueda de buffers usan el tamaño real
+del pool; H.264 conserva seis slots y el stream VP9 de producción no cambia.
+La prueba host de retención, FIFO/CRC, priming/drain, rechazo de corrupción y
+cleanup pasa con cuatro slots, ASan/UBSan. Compilación/firma verificadas;
+pendiente de activación y prueba en consola. Reutiliza los logs `depth3` con
+etiqueta de build nueva.
 
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
