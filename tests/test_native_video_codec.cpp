@@ -38,6 +38,18 @@ int hardware_stream_begin() noexcept
 int hardware_stream_send(const unsigned char *data, std::size_t size, std::uint64_t pts,
                          std::uint64_t dts) noexcept
 {
+    if (data)
+    {
+        unsigned aud = 0, slice = 0;
+        for (std::size_t i = 0; i + 3 < size; ++i)
+            if (!data[i] && !data[i + 1] && data[i + 2] == 1)
+            {
+                const auto type = data[i + 3] & 31u;
+                aud += type == 9;
+                slice += type == 1 || type == 5;
+            }
+        assert(aud == 1 && slice > 0);
+    }
     AVPacket *packet = av_packet_alloc();
     if (data)
     {

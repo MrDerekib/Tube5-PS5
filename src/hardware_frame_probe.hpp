@@ -76,6 +76,9 @@ struct HardwareStreamStatus
 {
     bool active = false;
     unsigned submitted = 0, received = 0, resets = 0;
+    unsigned accepted = 0, no_output = 0, last_nal_mask = 0;
+    std::size_t last_au_bytes = 0;
+    std::uint64_t last_input_pts = 0, last_input_dts = 0;
     int error = 0, cleanup_error = 0;
     const char *stage = "IDLE";
 };

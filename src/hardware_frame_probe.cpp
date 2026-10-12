@@ -875,11 +875,17 @@ static int stream_failure(const char *stage, int code)
 static int stream_output(unsigned offered, const VideoFrame &frame, const VideoOutput &output)
 {
     if (frame.accepted)
+    {
+        ++stream_status.accepted;
         stream.frame_used[offered] = true;
+    }
     if (output.error)
         return stream_failure("OUTPUT ERROR", -EIO);
     if (!output.valid)
+    {
+        ++stream_status.no_output;
         return 0;
+    }
     unsigned returned = 0;
     while (returned < 6 && output.buffer != static_cast<unsigned char *>(resources.frame.data) +
                                                 returned * clip.frame_stride)
@@ -1011,6 +1017,13 @@ int hardware_stream_send(const std::uint8_t *data, std::size_t bytes, std::uint6
         return stream_failure("POOL FULL", -ENOBUFS);
     auto *packet = static_cast<unsigned char *>(resources.input.data) + input * mib;
     std::memcpy(packet, data, bytes);
+    stream_status.last_au_bytes = bytes;
+    stream_status.last_input_pts = pts;
+    stream_status.last_input_dts = dts;
+    stream_status.last_nal_mask = 0;
+    for (std::size_t i = 0; i + 3 < bytes; ++i)
+        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1)
+            stream_status.last_nal_mask |= 1u << (data[i + 3] & 31u);
     const auto tag = stream.next_tag++;
     stream.input[input] = {tag, pts, dts};
     VideoInput au{sizeof(VideoInput), packet, bytes, pts, dts, tag};

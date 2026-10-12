@@ -1,5 +1,22 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-61-HWAUD: delimitación del H.264
+
+DIAG60 abrió el decoder real, pero en consola envió seis paquetes sin recibir
+ninguna imagen y terminó con `POOL FULL` (-ENOBUFS), sin fallos de asignación;
+la liberación nativa terminó correctamente. No se considera validada.
+
+El MP4 de prueba omite AUD mientras que el fixture validado de DIAG59 los
+incluye. DIAG61 encadena `h264_mp4toannexb,h264_metadata=aud=insert` para añadir
+delimitadores de unidades de acceso sin recodificar ni sustituir el vídeo.
+Es una hipótesis de corrección, no una causa confirmada del bloqueo nativo.
+Referencia: [filtro oficial de FFmpeg](https://ffmpeg.org/ffmpeg-bitstream-filters.html#h264_005fmetadata).
+El log añade buffers aceptados, respuestas sin imagen, tamaño y máscara NAL
+del último paquete, PTS/DTS de entrada. No aumenta el pool ni hace flush durante
+la reproducción. Pruebas enfocadas: un AUD y al menos un slice por paquete,
+dos ciclos completos del adaptador con drain/reset, y pruebas del pool nativo
+bajo ASan/UBSan. Build nativa correcta; consola pendiente.
+
 ## BOOT-DIAG-60-HWPLAYER: integración con el reproductor
 
 Activa VideoDec2 para H.264 1920×1080, conservando AAC, reloj, controles,

@@ -50,11 +50,14 @@ void snapshot(const char *stage)
         "TUBE5 HARDWARE PLAYER V1\nBUILD %s\nPLAYER HARDWARE H264 1080P - NV12 TO IYUV\n"
         "STAGE %s NATIVE STAGE %s ACTIVE %u ERROR %08X NATIVE ERROR %08X CLEANUP %08X\n"
         "SUBMITTED %u RECEIVED %u DELIVERED %u RESETS %u EOF EVENTS %u SKIPPED PREROLL %u\n"
-        "LAST PTS %lld\n",
+        "LAST PTS %lld\nACCEPTED %u NO OUTPUT %u LAST AU %zu NAL MASK %08X INPUT PTS %lld DTS "
+        "%lld\n",
         tube5::failure_log_build_label(), stage, s.stage, s.active ? 1u : 0u,
         static_cast<unsigned>(fatal.load()), static_cast<unsigned>(s.error),
         static_cast<unsigned>(s.cleanup_error), s.submitted, s.received, delivered, s.resets,
-        eof_events, skipped, static_cast<long long>(last_pts));
+        eof_events, skipped, static_cast<long long>(last_pts), s.accepted, s.no_output,
+        s.last_au_bytes, s.last_nal_mask, static_cast<long long>(s.last_input_pts),
+        static_cast<long long>(s.last_input_dts));
     if (length > 0)
         (void)tube5::write_failure_log("/download0/tube5-hardware-player.log", text,
                                        std::min<std::size_t>(length, sizeof(text) - 1));
@@ -217,8 +220,9 @@ void native_codec_adopt(AVCodecContext *context) noexcept
     Lock lock;
     fatal = 0;
     delivered = eof_events = skipped = 0;
-    const AVBitStreamFilter *filter = av_bsf_get_by_name("h264_mp4toannexb");
-    int code = filter ? av_bsf_alloc(filter, &bsf) : AVERROR(ENOSYS);
+    // Native fixtures include AUDs; MP4 streams commonly omit them. Preserve
+    // compressed pictures while giving the native parser explicit AU boundaries.
+    int code = av_bsf_list_parse_str("h264_mp4toannexb,h264_metadata=aud=insert", &bsf);
     if (!code)
         code = avcodec_parameters_from_context(bsf->par_in, context);
     if (!code)
