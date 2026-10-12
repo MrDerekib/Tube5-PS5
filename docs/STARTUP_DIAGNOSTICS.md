@@ -1,5 +1,19 @@
 # Diagnóstico de arranque en PS5
 
+## BOOT-DIAG-64-GPUACCESS: acceso AGC sin rendering
+
+Probe independiente del player, al arrancar. Carga los módulos del sistema
+`libSceAgc.sprx`/`libSceAgcDriver.sprx`, comprueba 12 exports AGC y 3 driver,
+inicializa AGC con la ABI pública version=8 y consulta defaults sin leerlos.
+Retiene las referencias por proceso para no descargar globals inicializados.
+No redistribuye módulos Sony, no crea shaders/colas ni envía comandos GPU;
+VideoOut y reproducción siguen en la ruta existente.
+`/download0/tube5-gpu.log` guarda etapa previa a cada operación y resultado.
+Máscaras completas: AGC 0xFFF, driver 0x7. ACCESS READY solo valida acceso,
+no rendering ni ahorro de CPU. Prueba de consola: abrir y permanecer en menú.
+Pruebas enfocadas ASan/UBSan: éxito, cada módulo ausente, export ausente,
+fallo de init y defaults nulos; build nativa correcta. FW13.20 pendiente.
+
 ## BOOT-DIAG-63-HWAUDIOSEEK: resincronización del audio separado
 
 DIAG62 reproduce vídeo directo de YouTube a 1080p según el propietario;

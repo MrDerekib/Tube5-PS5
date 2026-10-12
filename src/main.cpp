@@ -19,6 +19,7 @@
 #include "failure_log.hpp"
 #include "hardware_video_probe.hpp"
 #include "hardware_frame_probe.hpp"
+#include "gpu_probe.hpp"
 #include "nv12_rgba.hpp"
 #include "sponsor_notice.hpp"
 #include "youtube_search.hpp"
@@ -656,6 +657,9 @@ int main()
         if (character >= 'a' && character <= 'z')
             character = static_cast<char>(character - 'a' + 'A');
     tube5::failure_log_build_label(build_label.data());
+#if defined(TUBE5_GPU_PROBE) && !defined(TUBE5_HOST)
+    (void)tube5::probe_gpu("/download0/tube5-gpu.log");
+#endif
 #ifdef TUBE5_HW_PROBE
     tube5::query_hardware_video(hardware_report);
     char hardware_log[1024]{}, hardware_line[192]{};

@@ -114,8 +114,11 @@ añade barrera de resets/primer frame y protección PCM, con pruebas enfocadas
 correctas. DIAG63 tiene resultado favorable en consola: ambos resets sincronizados,
 HOLD 0 y PCM posterior al seek, sin error; el propietario no aprecia el fallo.
 Pendiente estabilidad de sesiones largas con hardware. No habilita 1440p/4K.
-Después: integración
-1080p con audio/reloj/seeks, presentación GPU, VP9 SDR 1440p y 2160p. Conservar
+Prioridad actual acordada: reducir copias y validar presentación GPU a 1080p
+antes de subir resolución. DIAG64 añade un probe AGC de acceso/inicialización
+sin submissions y mantiene el reproductor sin cambios; consola pendiente.
+Plan acotado y ownership: [presentación GPU](GPU_PRESENTATION.md).
+Después: VP9 SDR 1440p y 2160p. Conservar
 software como alternativa. No asumir AV1 por hardware ni HDR antes de pruebas.
 Referencias: ProsperoLight y ps5-hardware-video-decoding-research de
 BlackBearReloaded; estas validaciones externas no prueban FW13.20.
