@@ -208,6 +208,34 @@ commit `c6439d9f7a3c1bb6dcc4f66f3e7e0f728d3e9dd1`. El siguiente paso es
 validar una secuencia VP9, incluidos los cuadros ocultos y superframes,
 antes de habilitar los formatos superiores en el selector YouTube.
 
+## VP9 1440p: secuencia visible de 3 segundos, DIAG77
+
+`tools/prepare-vp9-clip.py` genera únicamente la nueva secuencia necesaria:
+90 frames VP9 Profile 0 a 30 fps, sin lag, alt-ref, cuadros ocultos ni
+show-existing. Su contenedor T5HC versión 3 incluye tamaños, índices de
+presentación y CRC de muestras de luminancia obtenidos del decode software.
+El parser valida la estructura completa y los límites antes de crear el
+decoder. Se reutiliza la ruta síncrona de profundidad 1; para VP9 esta prueba
+exige una imagen por entrada y no hace flush entre paquetes.
+
+En consola FW 13.20, DIAG77 entregó y presentó los 90 frames, con 90 CRC
+correctos y 89 cambios de luminancia. `RESULT 0`, `CLEANUP 0`, sin cuarentena,
+sin falta de salida ni errores de orden. Entre el primer y último flip
+transcurrieron 2.978.435 µs para 89 intervalos (aproximadamente 29,9 fps).
+Intervalos p50/p95/máximo: 33.320/35.312/47.180 µs. Trabajo de presentación
+p50/p95/máximo, excluyendo el primer frame: 1.918/1.962/2.027 µs.
+El primer frame incluye inicialización/compilación; el contador del decoder
+registró un frame lento. `LATE 0` mide retraso al iniciar una iteración,
+no ausencia de variación entre flips. El informe del presenter captura
+solo el primer frame en esta secuencia; no es un resumen de los 90 uploads.
+
+La diferencia final de memoria flexible fue nuevamente 1 MiB con el contexto
+GPU aún abierto. Esta prueba corta no establece estabilidad prolongada o
+ausencia de fugas. Los informes específicos son `tube5-vp9-clip.log` y
+`tube5-vp9-clip-decoder.log` en `/download0/`. La salida sigue siendo 1080p;
+pendientes VP9 con cuadros ocultos/superframes, integración YouTube/audio,
+seek y 4K. DIAG76 queda respaldada junto a la baseline funcional DIAG73.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

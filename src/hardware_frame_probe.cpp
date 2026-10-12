@@ -58,6 +58,8 @@ struct Resources
 Resources resources; // Deliberately no destructor: failed hardware teardown is quarantined.
 struct Clip
 {
+    bool vp9 = false;
+    unsigned width = 1920, height = 1080;
     int descriptor = -1;
     std::uint32_t offsets[300]{}, sizes[300]{};
     std::uint32_t pts_index[300]{}, crc[300]{};
@@ -95,7 +97,7 @@ void clip_snapshot()
     char report[1800]{};
     const int length = std::snprintf(
         report, sizeof(report),
-        "TUBE5 HARDWARE CLIP V1\nBUILD %s\n1080P AVC HIGH %s - DISPLAY CONSUMER\n"
+        "TUBE5 HARDWARE CLIP V1\nBUILD %s\n%s - DISPLAY CONSUMER\n"
         "STAGE %s FAILURE %s ERROR %08X ACTIVE %u CANCELLED %u\n"
         "FRAMES %u FPS %u SUBMITTED %u DECODED %u COMPOSED %u CHANGED %u SLOW %u\n"
         "DECODE MAX US %llu CONVERT MAX US %llu COPY MAX US %llu WORK MAX US %llu ELAPSED US %llu\n"
@@ -103,10 +105,13 @@ void clip_snapshot()
         "NO OUTPUT %u DRAIN %u METADATA %u CRC MATCH %u INPUT REORDERS %u ORDER ERR %u\n"
         "PTS %llu DTS %llu ATTACHED %llu CRC LAST %08X EXPECTED %08X\n"
         "FLEX BEFORE %llu RC %08X AFTER %llu RC %08X\n",
-        tube5::failure_log_build_label(), s.bframes ? "IPB" : "IP", clip.stage, clip.failure_stage,
-        static_cast<unsigned>(s.error), s.active ? 1u : 0u, s.cancelled ? 1u : 0u, s.frames, s.fps,
-        s.submitted, s.decoded, s.presented, s.changed_frames, s.slow_frames,
-        static_cast<unsigned long long>(s.decode_max_us),
+        tube5::failure_log_build_label(),
+        clip.vp9    ? "1440P VP9 PROFILE 0 VISIBLE FRAMES"
+        : s.bframes ? "1080P AVC HIGH IPB"
+                    : "1080P AVC HIGH IP",
+        clip.stage, clip.failure_stage, static_cast<unsigned>(s.error), s.active ? 1u : 0u,
+        s.cancelled ? 1u : 0u, s.frames, s.fps, s.submitted, s.decoded, s.presented,
+        s.changed_frames, s.slow_frames, static_cast<unsigned long long>(s.decode_max_us),
         static_cast<unsigned long long>(s.convert_max_us),
         static_cast<unsigned long long>(s.copy_max_us),
         static_cast<unsigned long long>(s.work_max_us),
@@ -586,17 +591,22 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
     clip_status.frames = little32(header + 20);
     const auto version = little32(header + 4);
     clip_status.bframes = version == 2;
-    if (std::memcmp(header, "T5HC", 4) || (version != 1 && version != 2) ||
-        little32(header + 8) != 1920 || little32(header + 12) != 1080 || clip_status.fps != 30 ||
-        !clip_status.frames || clip_status.frames > 300 ||
-        little32(header + 24) != (clip_status.bframes ? 1u : 0u))
+    clip.vp9 = version == 3;
+    clip.width = clip.vp9 ? 2560 : 1920;
+    clip.height = clip.vp9 ? 1440 : 1080;
+    if (std::memcmp(header, "T5HC", 4) || (version != 1 && version != 2 && version != 3) ||
+        little32(header + 8) != clip.width || little32(header + 12) != clip.height ||
+        clip_status.fps != 30 || !clip_status.frames || clip_status.frames > 300 ||
+        little32(header + 24) != (clip.vp9              ? 2u
+                                  : clip_status.bframes ? 1u
+                                                        : 0u))
         return fail(-EINVAL);
     std::uint64_t offset = sizeof(header);
     bool seen_pts[300]{};
     for (unsigned i = 0; i < clip_status.frames; ++i)
     {
         unsigned char entry[16]{};
-        const unsigned entry_bytes = clip_status.bframes ? 16 : 4;
+        const unsigned entry_bytes = (clip_status.bframes || clip.vp9) ? 16 : 4;
         if (offset + entry_bytes > static_cast<std::uint64_t>(metadata.st_size) ||
             ::lseek(clip.descriptor, static_cast<off_t>(offset), SEEK_SET) < 0 ||
             read_exact(clip.descriptor, entry, entry_bytes))
@@ -604,9 +614,10 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
         offset += entry_bytes;
         clip.sizes[i] = little32(entry);
         clip.pts_index[i] = clip_status.bframes ? little32(entry + 4) : i;
-        clip.crc[i] = clip_status.bframes ? little32(entry + 12) : 0;
+        clip.crc[i] = (clip_status.bframes || clip.vp9) ? little32(entry + 12) : 0;
         if (clip.pts_index[i] >= clip_status.frames || seen_pts[clip.pts_index[i]] ||
-            (clip_status.bframes && little32(entry + 8) != i))
+            ((clip_status.bframes || clip.vp9) && little32(entry + 8) != i) ||
+            (clip.vp9 && little32(entry + 4) != i))
             return fail(-EINVAL);
         seen_pts[clip.pts_index[i]] = true;
         clip_status.input_reorders += clip.pts_index[i] != i;
@@ -624,7 +635,14 @@ int hardware_clip_begin(const char *asset, const char *log) noexcept
         clip_status.error = code;
         clip_snapshot();
     };
-    int code = prepare_decoder(record, clip_status.bframes ? 3 : 1, clip_status.bframes ? 6 : 1);
+    VideoDecoderConfig requested{};
+    requested.codec = 0x00245bfd;
+    requested.profile = 0;
+    requested.level = 50;
+    requested.width = 2560;
+    requested.height = 1440;
+    int code = prepare_decoder(record, clip_status.bframes ? 3 : 1, clip_status.bframes ? 6 : 1,
+                               clip.vp9 ? &requested : nullptr);
     if (code)
         return fail(code);
     code = sceVideodec2Reset(resources.decoder);
@@ -840,6 +858,8 @@ int hardware_clip_step(HardwareFrameConsumer consumer, void *context) noexcept
         return fail("DECODE", code ? code : -EIO);
     if (!output.valid)
     {
+        if (clip.vp9)
+            return fail("VP9 VISIBLE FRAME REQUIRED", -EINVAL);
         output = {};
         output.size = sizeof(output);
         code = sceVideodec2Flush(r.decoder, &frame, &output);
@@ -847,16 +867,33 @@ int hardware_clip_step(HardwareFrameConsumer consumer, void *context) noexcept
     const auto decode_us = sceKernelGetProcessTime() - decode_start;
     s.decode_max_us = std::max(s.decode_max_us, decode_us);
     const auto required = static_cast<std::uint64_t>(output.pitch_bytes) * output.height * 3 / 2;
-    if (code || output.error || !output.valid || output.pictures != 1 || output.codec != 1 ||
-        output.format != 0 || output.buffer != r.frame.data || output.width != 1920 ||
-        output.height < 1080 || output.height > 1088 || (output.height & 1u) ||
-        output.pitch_bytes < 1920 || output.pitch_bytes > 4096 || (output.pitch_bytes & 1u) ||
-        output.bytes > r.frame.bytes || required > output.bytes)
+    if (code || output.error || !output.valid || output.pictures != 1 ||
+        output.codec != (clip.vp9 ? 0x00245bfdu : 1u) || output.format != 0 ||
+        output.buffer != r.frame.data || output.width != clip.width ||
+        output.height < clip.height || output.height > (clip.vp9 ? clip.height : 1088u) ||
+        (output.height & 1u) || output.pitch_bytes < clip.width || output.pitch_bytes > 4096 ||
+        (output.pitch_bytes & 1u) || output.bytes > r.frame.bytes || required > output.bytes)
         return fail("OUTPUT", code ? code : -EINVAL);
     unsigned sum = 0;
-    for (unsigned y = 0; y < 1080; y += 31)
-        for (unsigned x = 0; x < 1920; x += 31)
-            sum += static_cast<unsigned char *>(output.buffer)[y * output.pitch_bytes + x];
+    std::uint32_t crc = UINT32_MAX;
+    for (unsigned y = 0; y < clip.height; y += 31)
+        for (unsigned x = 0; x < clip.width; x += 31)
+        {
+            const unsigned value =
+                static_cast<unsigned char *>(output.buffer)[y * output.pitch_bytes + x];
+            sum += value;
+            crc ^= value;
+            for (unsigned bit = 0; bit < 8; ++bit)
+                crc = (crc >> 1) ^ ((crc & 1u) ? UINT32_C(0xedb88320) : 0);
+        }
+    if (clip.vp9)
+    {
+        clip.last_crc = crc ^ UINT32_MAX;
+        clip.expected_crc = clip.crc[index];
+        if (clip.last_crc != clip.expected_crc)
+            return fail("VP9 PICTURE CRC", -EILSEQ);
+        ++s.crc_matches;
+    }
     if (!s.decoded)
         clip.first_sum = sum;
     else if (sum != clip.last_sum)
