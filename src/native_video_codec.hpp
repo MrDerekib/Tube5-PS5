@@ -7,7 +7,7 @@ struct AVFrame;
 namespace tube5
 {
 #ifdef TUBE5_HW_PLAYER
-void native_codec_allow_open(bool allow) noexcept;
+void native_codec_allow_open(bool allow, bool vp9_pipeline = false) noexcept;
 void native_codec_adopt(AVCodecContext *context) noexcept;
 bool native_codec_owns(const AVCodecContext *context) noexcept;
 int native_codec_send(AVCodecContext *context, const AVPacket *packet) noexcept;
@@ -22,7 +22,7 @@ bool native_codec_full_range() noexcept;
 unsigned native_codec_reset_generation() noexcept;
 unsigned native_codec_audio_reset_generation() noexcept;
 #else
-inline void native_codec_allow_open(bool) noexcept
+inline void native_codec_allow_open(bool, bool = false) noexcept
 {
 }
 inline void native_codec_adopt(AVCodecContext *) noexcept

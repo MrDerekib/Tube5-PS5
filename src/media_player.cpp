@@ -270,6 +270,10 @@ MediaPlayer::OpenResult MediaPlayer::poll_open(SDL_Renderer *renderer) noexcept
 
 bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
 {
+    bool vp9_pipeline = false;
+#ifdef TUBE5_VP9_PIPELINE_CONTROL
+    vp9_pipeline = !std::strcmp(opening_path_, "/app0/assets/hw-vp9-4k60-player-tc2.mp4");
+#endif
     memory_set_stage("PLAYER_SETUP");
     if (memory_out_of_memory())
         return fail("SOURCE MEMORY", "ENOMEM - CIERRA Y REABRE TUBE5");
@@ -312,13 +316,13 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
         if (!std::isfinite(video_duration) || !std::isfinite(audio_duration) ||
             video_duration <= 0 || std::abs(video_duration - audio_duration) > 2.0)
             return fail("STREAMS", "audio/video duration mismatch");
-        native_codec_allow_open(true);
+        native_codec_allow_open(true, vp9_pipeline);
         (void)create_separate_players(source_, video, audio_source_, audio, &video_request,
                                       &audio_request, player_, audio_player_);
     }
     else
     {
-        native_codec_allow_open(true);
+        native_codec_allow_open(true, vp9_pipeline);
         player_ =
             Kit_CreatePlayer(source_, video, audio, -1, &video_request, &audio_request, 1920, 1080);
     }

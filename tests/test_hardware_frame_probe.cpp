@@ -296,7 +296,8 @@ extern "C" int sceVideodec2Decode(void *handle, tube5::VideoInput *input, tube5:
     }
     if (b_mode)
     {
-        assert(handle == &decoder && decoder && input->attached == b_submitted + 1 &&
+        assert(handle == &decoder && decoder &&
+               (vp9_pipeline ? input->attached != 0 : input->attached == b_submitted + 1) &&
                input->bytes == 101);
         if (const int code = next())
             return code;
@@ -349,6 +350,70 @@ extern "C" int sceVideodec2GetPictureInfo(const tube5::VideoOutput *output,
 }
 int main(int argc, char **argv)
 {
+    if (argc == 2 && std::strcmp(argv[1], "--vp9-async-stream") == 0)
+    {
+        vp9_mode = vp9_4k = vp9_pipeline = b_mode = true;
+        assert(!tube5::hardware_stream_begin(tube5::HardwareFrameMode::vp9_2160, true));
+        unsigned char payload[101]{};
+        payload[0] = 0x86;
+        tube5::VideoOutput output{};
+        tube5::VideoPictureInfo info{};
+        const auto verify = [&](unsigned i)
+        {
+            assert(output.width == 3840 && output.height == 2160);
+            assert(info.pts == static_cast<std::uint64_t>(i) * 1000000 / 60);
+            assert(*static_cast<const unsigned char *>(output.buffer) == 16 + i);
+            assert(tube5::hardware_stream_receive(output, info) == 2);
+            assert(tube5::hardware_stream_send(payload, sizeof(payload), 0, 0) == 2);
+            tube5::hardware_stream_release();
+        };
+        for (bool unaccepted : {false, true})
+        {
+            no_accepted_frames = unaccepted;
+            unsigned received = 0;
+            for (unsigned i = 0; i < 8; ++i)
+            {
+                payload[1] = i;
+                assert(!tube5::hardware_stream_send(payload, sizeof(payload),
+                           static_cast<std::uint64_t>(i) * 1000000 / 60, i));
+                const int rc = tube5::hardware_stream_receive(output, info);
+                if (i < 3)
+                    assert(rc == 2);
+                else
+                {
+                    assert(!rc && info.dts == received);
+                    verify(received++);
+                }
+            }
+            assert(!tube5::hardware_stream_send(nullptr, 0, 0, 0));
+            while (received < 8)
+            {
+                assert(!tube5::hardware_stream_receive(output, info) && info.dts == received);
+                verify(received++);
+            }
+            assert(tube5::hardware_stream_receive(output, info) == 1);
+            assert(tube5::hardware_stream_status().pending_peak == 4);
+            assert(tube5::hardware_stream_status().depth == 3);
+            assert(tube5::hardware_stream_status().slots == 4);
+            assert(!tube5::hardware_stream_reset());
+            reset_b_mock();
+            // Seek/reset while inputs and retained surfaces are still in flight.
+            for (unsigned i = 0; i < 3; ++i)
+            {
+                payload[1] = i;
+                assert(!tube5::hardware_stream_send(payload, sizeof(payload),
+                           static_cast<std::uint64_t>(i) * 1000000 / 60, i));
+                assert(tube5::hardware_stream_receive(output, info) == 2);
+            }
+            assert(!tube5::hardware_stream_reset());
+            reset_b_mock();
+        }
+        assert(tube5::hardware_stream_send(payload, sizeof(payload), 0, 0, false) == -ENOTSUP);
+        assert(!tube5::hardware_stream_close());
+        no_resources();
+        std::puts("VP9 async stream FIFO, retained buffers, backpressure, drain, seek reset and hidden guard passed");
+        return 0;
+    }
     if (argc == 2 &&
         (std::strcmp(argv[1], "--vp9-4k") == 0 || std::strcmp(argv[1], "--vp9-4k60") == 0 ||
          std::strcmp(argv[1], "--vp9-pipeline") == 0))

@@ -600,6 +600,30 @@ metadatos, flags de hidden/existing, buffers retenidos, drenaje y reset de seek.
 No basta cambiar la profundidad del stream síncrono; mantener presupuesto y
 validar los casos de no-output y audio antes de habilitar formatos YouTube 60 fps.
 
+### DIAG94: primera integración en el player (pendiente de consola)
+
+`BOOT-DIAG-94-VP9-PIPELINE-PLAYER` aplica profundidad tres/cuatro slots solo al
+path local exacto `hw-vp9-4k60-player-tc2.mp4`, control de 12 segundos con AAC.
+Mantiene las rutas anteriores de YouTube/VP9 a profundidad uno. La selección de
+formatos YouTube no cambia. FIFO por tag de entrada preserva PTS/DTS del frame
+demorado y retiene AU/superficies; cada release sigue después de copiar el NV12.
+Reset vacía el FIFO tras reset nativo, conserva configuración/profundidad y
+permite empezar una nueva generación de seek. EOF hace drain acotado a doce
+intentos por generación, no un flush por llamada sin output.
+
+El control no contiene hidden frames. En modo asíncrono se rechazan expresamente
+los hidden hasta validar si todos producen salida y cómo correlacionar los que
+no la producen; no extrapolar la prueba visible a VP9 real. La ruta síncrona
+anterior conserva su manejo probado de hidden/existing. Las instantáneas
+añaden profundidad, slots, pico pendiente y llamadas de drain.
+
+Host `--vp9-async-stream`, ASan/UBSan: FIFO/PTS/DTS, input retenido, superficies
+retenidas o no aceptadas, backpressure durante préstamo, EOF, reinicios con
+entradas en vuelo y guard de hidden. Comprobación focal de `--vp9-stream-4k`
+valida que el manejo síncrono previo permanece intacto. Build y firma correctas;
+staging FTP realizado, activación pendiente de cierre. En consola probar LOCAL:
+primero reproducción continua; después pausa/seek y reentrada, conservar logs.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

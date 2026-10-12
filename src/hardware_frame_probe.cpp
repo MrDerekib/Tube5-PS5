@@ -81,14 +81,17 @@ struct Clip
 Clip clip;
 struct Stream
 {
-    bool vp9 = false;
+    bool vp9 = false, pipeline = false;
     unsigned width = 1920, height = 1080;
+    unsigned slots = 1;
     unsigned sync_input = 0;
+    unsigned drain_attempts = 0;
     bool displayable = true;
     bool frame_used[6]{};
     struct Input
     {
         std::uint64_t tag = 0, pts = 0, dts = 0;
+        bool displayable = true;
     } input[6];
     std::uint64_t next_tag = 1;
     tube5::VideoOutput output{};
@@ -1104,7 +1107,7 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
     if (!output.valid)
     {
         ++stream_status.no_output;
-        if (stream.vp9)
+        if (stream.vp9 && !stream.pipeline)
         {
             if (stream.displayable || frame.accepted)
                 return stream_failure("VP9 SYNC NO OUTPUT", -EINVAL);
@@ -1114,12 +1117,12 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
         return 0;
     }
     unsigned returned = 0;
-    while (returned < 6 && output.buffer != static_cast<unsigned char *>(resources.frame.data) +
+    while (returned < stream.slots && output.buffer != static_cast<unsigned char *>(resources.frame.data) +
                                                 returned * clip.frame_stride)
         ++returned;
     stream_status.last_returned = returned;
     const auto bytes = static_cast<std::uint64_t>(output.pitch_bytes) * output.height * 3 / 2;
-    if (returned == 6 || (!stream.frame_used[returned] && returned != offered) ||
+    if (returned == stream.slots || (!stream.frame_used[returned] && returned != offered) ||
         output.codec != (stream.vp9 ? 0x00245bfdu : 1u) || output.pictures != 1 ||
         // VP9 hidden pictures legitimately set byte 11 to 1 on FW 13.20.
         // It is not a layout/error field; keep all actual surface bounds checks.
@@ -1139,8 +1142,20 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
     int code = 0;
     if (stream.vp9)
     {
-        // Depth-one VP9 is synchronous; preserve the submitted packet's metadata.
-        const auto &submitted = stream.input[stream.sync_input];
+        unsigned oldest = stream.sync_input;
+        if (stream.pipeline)
+        {
+            oldest = stream.slots;
+            for (unsigned i = 0; i < stream.slots; ++i)
+                if (stream.input[i].tag &&
+                    (oldest == stream.slots || stream.input[i].tag < stream.input[oldest].tag))
+                    oldest = i;
+            if (oldest == stream.slots)
+                return stream_failure("VP9 FIFO EMPTY", -EINVAL);
+        }
+        // VP9 preserves coded order. CRC proved FIFO for the visible-only control;
+        // production hidden streams remain depth one until independently validated.
+        const auto &submitted = stream.input[oldest];
         info.picture.valid = 1;
         info.picture.pts = submitted.pts;
         info.picture.dts = submitted.dts;
@@ -1152,13 +1167,14 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
         info.before != UINT64_C(0xc0dec0dec0dec0de) || info.after != UINT64_C(0xc0dec0dec0dec0de))
         return stream_failure("PICTURE INFO", code ? code : -EINVAL);
     unsigned input = 0;
-    while (input < 6 && stream.input[input].tag != info.picture.attached)
+    while (input < stream.slots && stream.input[input].tag != info.picture.attached)
         ++input;
-    if (input == 6 || !info.picture.attached || stream.input[input].pts != info.picture.pts ||
+    if (input == stream.slots || !info.picture.attached || stream.input[input].pts != info.picture.pts ||
         stream.input[input].dts != info.picture.dts)
         return stream_failure("PICTURE TAG", -EINVAL);
+    const bool displayable = stream.input[input].displayable;
     stream.input[input] = {};
-    if (stream.vp9 && !stream.displayable)
+    if (stream.vp9 && !displayable)
     {
         stream.frame_used[returned] = false;
         ++stream_status.hidden;
@@ -1203,9 +1219,13 @@ int hardware_stream_reset() noexcept
         return stream_failure("RESET", code);
     const auto next_tag = stream.next_tag;
     const auto vp9 = stream.vp9;
+    const auto pipeline = stream.pipeline;
+    const auto slots = stream.slots;
     const auto width = stream.width, height = stream.height;
     stream = {};
     stream.vp9 = vp9;
+    stream.pipeline = pipeline;
+    stream.slots = slots;
     stream.width = width;
     stream.height = height;
     stream.next_tag = next_tag;
@@ -1214,10 +1234,11 @@ int hardware_stream_reset() noexcept
     return 0;
 #endif
 }
-int hardware_stream_begin(HardwareFrameMode mode) noexcept
+int hardware_stream_begin(HardwareFrameMode mode, bool vp9_pipeline) noexcept
 {
 #ifndef TUBE5_HW_FRAME
     (void)mode;
+    (void)vp9_pipeline;
     return -1;
 #else
     if (stream_status.active || clip_status.active || resources.quarantined || resources.decoder ||
@@ -1225,10 +1246,17 @@ int hardware_stream_begin(HardwareFrameMode mode) noexcept
         return -EBUSY;
     stream = {};
     stream.vp9 = mode != HardwareFrameMode::avc1080;
+    stream.pipeline = stream.vp9 && vp9_pipeline;
+    // The async diagnostic is restricted to the validated 4K visible fixture.
+    if (vp9_pipeline && mode != HardwareFrameMode::vp9_2160)
+        return -EINVAL;
+    stream.slots = stream.pipeline ? 4 : stream.vp9 ? 1 : 6;
     stream.width = mode == HardwareFrameMode::vp9_2160 ? 3840 : stream.vp9 ? 2560 : 1920;
     stream.height = mode == HardwareFrameMode::vp9_2160 ? 2160 : stream.vp9 ? 1440 : 1080;
     stream_status = {};
     stream_status.active = true;
+    stream_status.depth = stream.pipeline || !stream.vp9 ? 3 : 1;
+    stream_status.slots = stream.slots;
     const auto record = [](const char *stage, int code)
     {
         stream_status.stage = stage;
@@ -1240,7 +1268,7 @@ int hardware_stream_begin(HardwareFrameMode mode) noexcept
     requested.level = stream.width == 3840 ? 51 : 50;
     requested.width = stream.width;
     requested.height = stream.height;
-    int code = prepare_decoder(record, stream.vp9 ? 1 : 3, stream.vp9 ? 1 : 6,
+    int code = prepare_decoder(record, stream_status.depth, stream.slots,
                                stream.vp9 ? &requested : nullptr);
     if (!code)
         code = hardware_stream_reset();
@@ -1273,12 +1301,14 @@ int hardware_stream_send(const std::uint8_t *data, std::size_t bytes, std::uint6
         return 1;
     if (!bytes || bytes >= mib)
         return stream_failure("AU SIZE", -EINVAL);
+    if (stream.pipeline && !displayable)
+        return stream_failure("VP9 ASYNC HIDDEN NOT VALIDATED", -ENOTSUP);
     unsigned input = 0, offered = 0;
-    while (input < 6 && stream.input[input].tag)
+    while (input < stream.slots && stream.input[input].tag)
         ++input;
-    while (offered < 6 && stream.frame_used[offered])
+    while (offered < stream.slots && stream.frame_used[offered])
         ++offered;
-    if (input == 6 || offered == 6)
+    if (input == stream.slots || offered == stream.slots)
         return stream_failure("POOL FULL", -ENOBUFS);
     auto *packet = static_cast<unsigned char *>(resources.input.data) + input * mib;
     std::memcpy(packet, data, bytes);
@@ -1290,7 +1320,11 @@ int hardware_stream_send(const std::uint8_t *data, std::size_t bytes, std::uint6
         if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1)
             stream_status.last_nal_mask |= 1u << (data[i + 3] & 31u);
     const auto tag = stream.next_tag++;
-    stream.input[input] = {tag, pts, dts};
+    stream.input[input] = {tag, pts, dts, displayable};
+    unsigned pending_count = 0;
+    for (const auto &pending : stream.input)
+        pending_count += pending.tag != 0;
+    stream_status.pending_peak = std::max(stream_status.pending_peak, pending_count);
     stream.sync_input = input;
     stream.displayable = displayable;
     VideoInput au{sizeof(VideoInput), packet, bytes, pts, dts, tag};
@@ -1323,7 +1357,7 @@ int hardware_stream_receive(VideoOutput &output, VideoPictureInfo &picture) noex
         return stream_status.error ? stream_status.error : -EINVAL;
     if (stream.borrowed)
         return 2;
-    if (!stream.ready && stream.draining)
+    while (!stream.ready && stream.draining)
     {
         bool pending = false;
         for (const auto &input : stream.input)
@@ -1331,10 +1365,13 @@ int hardware_stream_receive(VideoOutput &output, VideoPictureInfo &picture) noex
         if (!pending)
             return 1;
         unsigned offered = 0;
-        while (offered < 6 && stream.frame_used[offered])
+        while (offered < stream.slots && stream.frame_used[offered])
             ++offered;
-        if (offered == 6)
+        if (offered == stream.slots)
             return stream_failure("DRAIN POOL", -ENOBUFS);
+        ++stream_status.drain_calls;
+        if (++stream.drain_attempts > 12)
+            return stream_failure("DRAIN LIMIT", -EIO);
         VideoFrame frame{sizeof(VideoFrame),
                          static_cast<unsigned char *>(resources.frame.data) +
                              offered * clip.frame_stride,
@@ -1347,7 +1384,7 @@ int hardware_stream_receive(VideoOutput &output, VideoPictureInfo &picture) noex
         code = stream_output(offered, frame, decoded);
         if (code)
             return code;
-        if (!stream.ready)
+        if (!stream.ready && !stream.pipeline)
             return stream_failure("INCOMPLETE DRAIN", -EIO);
     }
     if (!stream.ready)

@@ -23,6 +23,7 @@ extern "C"
 namespace
 {
 std::atomic<bool> allow_open{false};
+std::atomic<bool> allow_pipeline{false};
 std::atomic<AVCodecContext *> owner{nullptr};
 std::atomic<int> fatal{0};
 std::atomic<unsigned> reset_generation{0};
@@ -71,7 +72,8 @@ void snapshot(const char *stage)
         "%lld\nHIDDEN %u\n"
         "OUTPUT VALID %u ERR %u PICTURES %u RESERVED %u CODEC %X SIZE %ux%u PITCH %u/%u FORMAT %u\n"
         "OUTPUT BYTES %llu CAPACITY %zu OFFERED %u RETURNED %u ACCEPTED %u\n"
-        "DECODE CALLS %u AVG US %llu MAX US %llu COPY CALLS %u AVG US %llu MAX US %llu\n",
+        "DECODE CALLS %u AVG US %llu MAX US %llu COPY CALLS %u AVG US %llu MAX US %llu\n"
+        "PIPELINE DEPTH %u SLOTS %u PENDING PEAK %u DRAIN CALLS %u\n",
         tube5::failure_log_build_label(), vp9_mode ? "VP9 PROFILE 0" : "H264", native_width,
         native_height, stage, s.stage, s.active ? 1u : 0u, static_cast<unsigned>(fatal.load()),
         static_cast<unsigned>(s.error), static_cast<unsigned>(s.cleanup_error), s.submitted,
@@ -86,7 +88,8 @@ void snapshot(const char *stage)
         static_cast<unsigned long long>(s.decode_calls ? s.decode_total_us / s.decode_calls : 0),
         static_cast<unsigned long long>(s.decode_max_us), copy_calls,
         static_cast<unsigned long long>(copy_calls ? copy_total_us / copy_calls : 0),
-        static_cast<unsigned long long>(copy_max_us));
+        static_cast<unsigned long long>(copy_max_us), s.depth, s.slots, s.pending_peak,
+        s.drain_calls);
     if (length > 0)
         (void)tube5::write_failure_log("/download0/tube5-hardware-player.log", text,
                                        std::min<std::size_t>(length, sizeof(text) - 1));
@@ -250,9 +253,10 @@ int pump()
 } // namespace
 namespace tube5
 {
-void native_codec_allow_open(bool allow) noexcept
+void native_codec_allow_open(bool allow, bool vp9_pipeline) noexcept
 {
     allow_open = allow;
+    allow_pipeline = allow && vp9_pipeline;
 }
 bool native_codec_owns(const AVCodecContext *context) noexcept
 {
@@ -359,7 +363,8 @@ void native_codec_adopt(AVCodecContext *context) noexcept
     if (!code)
         code = hardware_stream_begin(!vp9                     ? HardwareFrameMode::avc1080
                                      : context->width == 3840 ? HardwareFrameMode::vp9_2160
-                                                              : HardwareFrameMode::vp9_1440);
+                                                              : HardwareFrameMode::vp9_1440,
+                                     vp9 && context->width == 3840 && allow_pipeline.load());
     if (code)
     {
         fatal = code;
