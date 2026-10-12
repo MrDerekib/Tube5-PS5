@@ -19,7 +19,7 @@ GetPictureInfo usa un bloque de 120 bytes (prefix valid/PTS/DTS/attached, con
 offsets verificados y guardas). Solo se leen esos campos. Layout y firma
 contrastados con [PortPS5](https://github.com/ymatrix1/PortPS5/blob/main/core/libs/prx/libSceVideodec2/Export.cpp)
 y [shadPS4](https://github.com/shadps4-emu/shadPS4/blob/main/src/core/libraries/videodec/videodec2.h);
-son implementaciones públicas, no validación de esta API en nuestra consola.
+son referencias públicas del layout. La validación real del prefijo se recoge abajo.
 Los tags deben identificar una entrada viva y sus PTS/DTS deben coincidir con
 el fixture. Se exige orden de presentación ascendente y CRC idéntico al software;
 si no se cumple, el probe se detiene y guarda la causa. Todavía no implementa una
@@ -29,7 +29,14 @@ Informe habitual tube5-hardware-clip.log: incluye llenado/drain, lecturas de
 metadatos, orden y CRC, además de memoria y tiempos. Pruebas host sanitizadas:
 salida diferida a un slot anterior, permutación de entradas, drain al EOF,
 cancelación con buffers retenidos, metadatos inválidos, orden incorrecto y
-pixeles distintos de la referencia. Prueba real de B frames/ABI pendiente.
+pixeles distintos de la referencia. PS5 FW13.20: 150 entradas, imágenes y copias
+al framebuffer; 150 metadatos válidos y 150 CRC de muestras idénticos al software.
+145 entradas reordenadas, cero errores de orden; tres salidas vacías al llenar
+y tres flush finales, sin pérdida de imágenes. GetPictureInfo acepta 120 bytes,
+con PTS/DTS/attached válidos y guardas intactas. Tiempo total 5109279 us, trabajo
+combinado máximo 17538 us, SLOW 0. Cleanup cero, sin cuarentena; mismo coste
+inicial de 1 MiB flexible. Snapshot en .local/boot-diag-59/ps5-hardware-clip.log.
+Valida este clip I/P/B, no sesiones largas ni audio/seeks/streams.
 Con depth 3, DECODE MAX mide la duración de las llamadas al API (ocupación de
 submit/espera), no la latencia interna de decodificación de cada imagen.
 Las lecturas de archivo y escritura de logs se excluyen de ese contador;
