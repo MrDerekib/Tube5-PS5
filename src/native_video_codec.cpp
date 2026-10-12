@@ -299,8 +299,10 @@ void native_codec_adopt(AVCodecContext *context) noexcept
         return;
     const bool avc = context->codec_id == AV_CODEC_ID_H264 && context->width == 1920 &&
                      context->height == 1080 && context->profile <= 100 && context->level <= 51;
-    const bool vp9 = context->codec_id == AV_CODEC_ID_VP9 && context->width == 2560 &&
-                     context->height == 1440 && context->profile <= 0;
+    const bool vp9 = context->codec_id == AV_CODEC_ID_VP9 &&
+                     ((context->width == 2560 && context->height == 1440) ||
+                      (context->width == 3840 && context->height == 2160)) &&
+                     context->profile <= 0;
     if ((!avc && !vp9) ||
         (context->pix_fmt != AV_PIX_FMT_NONE && context->pix_fmt != AV_PIX_FMT_YUV420P))
         return;
@@ -337,8 +339,9 @@ void native_codec_adopt(AVCodecContext *context) noexcept
     if (!input || !filtered || !pending)
         code = AVERROR(ENOMEM);
     if (!code)
-        code =
-            hardware_stream_begin(vp9 ? HardwareFrameMode::vp9_1440 : HardwareFrameMode::avc1080);
+        code = hardware_stream_begin(!vp9                     ? HardwareFrameMode::avc1080
+                                     : context->width == 3840 ? HardwareFrameMode::vp9_2160
+                                                              : HardwareFrameMode::vp9_1440);
     if (code)
     {
         fatal = code;

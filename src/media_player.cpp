@@ -312,7 +312,7 @@ bool MediaPlayer::complete_open(SDL_Renderer *renderer) noexcept
     frame_area_ = SDL_Rect{0, 0, width_, height_};
     if (width_ <= 0 || height_ <= 0 ||
 #ifdef TUBE5_GPU_PLAYER
-        width_ > 2560 || height_ > 1440)
+        width_ > 3840 || height_ > 2160)
 #else
         width_ > 1920 || height_ > 1080)
 #endif

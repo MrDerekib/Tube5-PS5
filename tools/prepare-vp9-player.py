@@ -6,12 +6,18 @@ import struct
 import subprocess
 import tempfile
 import json
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--4k", dest="four_k", action="store_true")
+options = parser.parse_args()
 
 root = pathlib.Path(__file__).resolve().parents[1]
-data = (root / "assets/hw-vp9-altref.t5hc").read_bytes()
+data = (root / "assets" / ("hw-vp9-4k.t5hc" if options.four_k else "hw-vp9-altref.t5hc")).read_bytes()
 assert data[:4] == b"T5HC"
 version, width, height, fps, count, flags = struct.unpack_from("<6I", data, 4)
-assert (version, width, height, fps, count, flags) == (4, 2560, 1440, 30, 90, 2)
+expected = (5, 3840, 2160, 30, 90, 2) if options.four_k else (4, 2560, 1440, 30, 90, 2)
+assert (version, width, height, fps, count, flags) == expected
 with tempfile.TemporaryDirectory(prefix="tube5-vp9-player-") as folder:
     ivf = pathlib.Path(folder) / "clip.ivf"
     encoded = bytearray(struct.pack("<4sHH4sHHIIII", b"DKIF", 0, 32, b"VP90", width, height, fps, 1, count, 0))
@@ -25,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix="tube5-vp9-player-") as folder:
         offset += size
     assert offset == len(data)
     ivf.write_bytes(encoded)
-    destination = root / "assets/hw-vp9-player.mp4"
+    destination = root / "assets" / ("hw-vp9-4k-player.mp4" if options.four_k else "hw-vp9-player.mp4")
     subprocess.run([
         "ffmpeg", "-v", "error", "-y", "-stream_loop", "3", "-i", str(ivf), "-f", "lavfi", "-i",
         "sine=frequency=440:sample_rate=48000", "-map", "0:v:0", "-map", "1:a:0",

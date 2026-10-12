@@ -370,6 +370,36 @@ La fuente sí es 4K, pero la salida permanece en 1920×1080. Pendientes
 integración 4K en el player real, audio/seek, YouTube, cuadros ocultos,
 salida HDMI 4K y 60 fps. DIAG84 funcional queda respaldada en consola.
 
+## VP9 4K: reproductor local con AAC y controles, DIAG86
+
+La ruta nativa síncrona añade el modo VP9 Profile 0 3840×2160, nivel máximo
+5.1, manteniendo H.264 1080p y VP9 1440p. El reset preserva las dimensiones
+configuradas. El presenter ya acepta 4K; el player mantiene frames NV12 a
+resolución de origen con presentación 1080p. El test enfocado del stream 4K
+cubre propiedad, ocultos simulados, timestamps, resets, EOF y cleanup, además
+del rechazo de buffers inválidos, con ASan/UBSan.
+
+`tools/prepare-vp9-player.py --4k` remuxa cuatro repeticiones de los 90 paquetes
+de DIAG85, sin recodificación, con AAC y timestamps continuos: 12 segundos.
+Los hashes de los 360 paquetes se comparan con la fuente. En DIAG86, `LOCAL`
+abre `hw-vp9-4k-player.mp4`; YouTube 4K todavía no está habilitado.
+
+El propietario confirmó reproducción, pausa, saltos y reapertura. Los logs
+de la última sesión muestran 1.028 imágenes recibidas, 866 entregadas,
+162 descartadas como preroll, 19 resets y EOF. Decoder, adaptador y cierre:
+cero errores. Salida nativa NV12 3840×2160, pitch 3840, superficie
+12.550.144 bytes dentro de su capacidad. Audio después del último salto:
+`HOLD 0`, resets 17/17, 180.224 bytes PCM adicionales y error cero.
+Los 370 underruns en 1.080 callbacks incluyen espera de seek y no establecen
+ausencia de cortes audibles. Subida GPU máxima del proceso: 1.546 µs; el
+máximo de composición incluye arranque. La comparación de color integrada
+sigue no medida (`ERRORS -1`), no se equipara al CRC de DIAG85.
+
+La fixture no contiene ocultos ni superframes reales de 4K: su comportamiento
+nativo continúa pendiente, junto a YouTube 4K/AAC separado, sesiones largas,
+salida HDMI 4K y 60 fps. Los logs privados se conservan en
+`.local/console-logs/diag86-*`. DIAG84 funcional permanece respaldada.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

@@ -81,6 +81,7 @@ Clip clip;
 struct Stream
 {
     bool vp9 = false;
+    unsigned width = 1920, height = 1080;
     unsigned sync_input = 0;
     bool displayable = true;
     bool frame_used[6]{};
@@ -360,12 +361,18 @@ int hardware_frame_probe(const char *asset, const char *log, HardwareFrameConsum
     auto &r = resources;
     if (r.quarantined || clip_status.active || stream_status.active)
         return -EBUSY;
-    const bool vp9 = mode == HardwareFrameMode::vp9_1440;
-    const unsigned width = vp9 ? 2560u : 1920u, height = vp9 ? 1440u : 1080u;
+    const bool vp9 = mode != HardwareFrameMode::avc1080;
+    const bool four_k = mode == HardwareFrameMode::vp9_2160;
+    const unsigned width = four_k ? 3840u
+                           : vp9  ? 2560u
+                                  : 1920u,
+                   height = four_k ? 2160u
+                            : vp9  ? 1440u
+                                   : 1080u;
     VideoDecoderConfig requested{};
     requested.codec = vp9 ? 0x00245bfdu : 1u;
     requested.profile = vp9 ? 0u : 100u;
-    requested.level = vp9 ? 50u : 51u;
+    requested.level = four_k ? 51u : vp9 ? 50u : 51u;
     requested.width = width;
     requested.height = vp9 ? height : 1088u;
     char report[3072]{};
@@ -1051,11 +1058,9 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
         output.codec != (stream.vp9 ? 0x00245bfdu : 1u) || output.pictures != 1 ||
         // VP9 hidden pictures legitimately set byte 11 to 1 on FW 13.20.
         // It is not a layout/error field; keep all actual surface bounds checks.
-        output.format != 0 || (!stream.vp9 && output.padding) ||
-        output.width != (stream.vp9 ? 2560u : 1920u) ||
-        output.height < (stream.vp9 ? 1440u : 1080u) ||
-        output.height > (stream.vp9 ? 1440u : 1088u) || (output.height & 1u) ||
-        output.pitch_bytes < output.width || output.pitch_bytes > 4096 ||
+        output.format != 0 || (!stream.vp9 && output.padding) || output.width != stream.width ||
+        output.height < stream.height || output.height > (stream.vp9 ? stream.height : 1088u) ||
+        (output.height & 1u) || output.pitch_bytes < output.width || output.pitch_bytes > 4096 ||
         (output.pitch_bytes & 1u) || output.bytes > clip.frame_stride || bytes > output.bytes)
         return stream_failure("OUTPUT LAYOUT", -EINVAL);
     struct Guarded
@@ -1133,8 +1138,11 @@ int hardware_stream_reset() noexcept
         return stream_failure("RESET", code);
     const auto next_tag = stream.next_tag;
     const auto vp9 = stream.vp9;
+    const auto width = stream.width, height = stream.height;
     stream = {};
     stream.vp9 = vp9;
+    stream.width = width;
+    stream.height = height;
     stream.next_tag = next_tag;
     ++stream_status.resets;
     stream_status.stage = "READY";
@@ -1151,7 +1159,9 @@ int hardware_stream_begin(HardwareFrameMode mode) noexcept
         resources.queue)
         return -EBUSY;
     stream = {};
-    stream.vp9 = mode == HardwareFrameMode::vp9_1440;
+    stream.vp9 = mode != HardwareFrameMode::avc1080;
+    stream.width = mode == HardwareFrameMode::vp9_2160 ? 3840 : stream.vp9 ? 2560 : 1920;
+    stream.height = mode == HardwareFrameMode::vp9_2160 ? 2160 : stream.vp9 ? 1440 : 1080;
     stream_status = {};
     stream_status.active = true;
     const auto record = [](const char *stage, int code)
@@ -1162,9 +1172,9 @@ int hardware_stream_begin(HardwareFrameMode mode) noexcept
     VideoDecoderConfig requested{};
     requested.codec = 0x00245bfd;
     requested.profile = 0;
-    requested.level = 50;
-    requested.width = 2560;
-    requested.height = 1440;
+    requested.level = stream.width == 3840 ? 51 : 50;
+    requested.width = stream.width;
+    requested.height = stream.height;
     int code = prepare_decoder(record, stream.vp9 ? 1 : 3, stream.vp9 ? 1 : 6,
                                stream.vp9 ? &requested : nullptr);
     if (!code)

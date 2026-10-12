@@ -40,7 +40,8 @@ using HardwareFrameConsumer = int (*)(const VideoOutput &, void *) noexcept;
 enum class HardwareFrameMode
 {
     avc1080,
-    vp9_1440
+    vp9_1440,
+    vp9_2160
 };
 struct VideoPictureInfo
 {

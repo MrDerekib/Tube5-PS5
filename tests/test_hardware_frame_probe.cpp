@@ -381,10 +381,14 @@ int main(int argc, char **argv)
         std::puts("VP9 4K clip schema, frame bounds, CRC and cleanup passed");
         return 0;
     }
-    if (argc == 2 && std::strcmp(argv[1], "--vp9") == 0)
+    if (argc == 2 &&
+        (std::strcmp(argv[1], "--vp9") == 0 || std::strcmp(argv[1], "--vp9-stream-4k") == 0))
     {
         vp9_mode = true;
-        assert(!tube5::hardware_stream_begin(tube5::HardwareFrameMode::vp9_1440));
+        vp9_4k = std::strcmp(argv[1], "--vp9-stream-4k") == 0;
+        const auto mode =
+            vp9_4k ? tube5::HardwareFrameMode::vp9_2160 : tube5::HardwareFrameMode::vp9_1440;
+        assert(!tube5::hardware_stream_begin(mode));
         unsigned char bytes[101]{};
         tube5::VideoOutput output{};
         tube5::VideoPictureInfo info{};
@@ -397,7 +401,8 @@ int main(int argc, char **argv)
         bytes[0] = 0x86;
         assert(!tube5::hardware_stream_send(bytes, sizeof(bytes), 100, 80));
         assert(!tube5::hardware_stream_receive(output, info));
-        assert(output.width == 2560 && output.height == 1440 && info.pts == 100 && info.dts == 80);
+        assert(output.width == (vp9_4k ? 3840u : 2560u) &&
+               output.height == (vp9_4k ? 2160u : 1440u) && info.pts == 100 && info.dts == 80);
         assert(tube5::hardware_stream_send(bytes, sizeof(bytes), 200, 180) == 2);
         tube5::hardware_stream_release();
         assert(tube5::hardware_stream_status().hidden == 2);
@@ -409,7 +414,7 @@ int main(int argc, char **argv)
         assert(tube5::hardware_stream_receive(output, info) == 1);
         assert(!tube5::hardware_stream_close());
         no_resources();
-        assert(!tube5::hardware_stream_begin(tube5::HardwareFrameMode::vp9_1440));
+        assert(!tube5::hardware_stream_begin(mode));
         bytes[0] = 0x84;
         retain_hidden = true;
         assert(tube5::hardware_stream_send(bytes, sizeof(bytes), 0, 0, false) == -EINVAL);
@@ -417,7 +422,7 @@ int main(int argc, char **argv)
         no_resources();
         retain_hidden = false;
         invalid = true;
-        assert(!tube5::hardware_stream_begin(tube5::HardwareFrameMode::vp9_1440));
+        assert(!tube5::hardware_stream_begin(mode));
         bytes[0] = 0x86;
         assert(tube5::hardware_stream_send(bytes, sizeof(bytes), 0, 0) == -EINVAL);
         assert(!tube5::hardware_stream_close());
