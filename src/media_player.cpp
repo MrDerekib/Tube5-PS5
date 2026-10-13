@@ -210,7 +210,7 @@ int MediaPlayer::open_source_worker(void *userdata) noexcept
     return 0;
 }
 
-bool MediaPlayer::begin_open(const char *path, const char *audio_path) noexcept
+bool MediaPlayer::begin_open(const char *path, const char *audio_path, bool vp9_pipeline) noexcept
 {
     if (memory_blocked_)
         return false;
@@ -220,6 +220,7 @@ bool MediaPlayer::begin_open(const char *path, const char *audio_path) noexcept
     if (!path || std::strlen(path) >= sizeof(opening_path_))
         return fail("SOURCE", "invalid or oversized URL");
     std::snprintf(opening_path_, sizeof(opening_path_), "%s", path);
+    opening_vp9_pipeline_ = vp9_pipeline;
     if (audio_path && *audio_path)
     {
         if (std::strlen(audio_path) >= sizeof(opening_audio_path_) ||
@@ -270,9 +271,9 @@ MediaPlayer::OpenResult MediaPlayer::poll_open(SDL_Renderer *renderer) noexcept
 
 bool MediaPlayer::complete_open(SDL_Renderer *renderer, const char *source_path) noexcept
 {
-    bool vp9_pipeline = false;
+    bool vp9_pipeline = opening_vp9_pipeline_;
 #ifdef TUBE5_VP9_PIPELINE_CONTROL
-    vp9_pipeline = source_path &&
+    vp9_pipeline |= source_path &&
                    (!std::strcmp(source_path, "/app0/assets/hw-vp9-4k60-player-tc2.mp4") ||
                     !std::strcmp(source_path, "/app0/assets/hw-vp9-4k60-player-altref-tc2.mp4"));
 #else
@@ -472,6 +473,7 @@ void MediaPlayer::close() noexcept
     youtube_audio_stream_.close();
     audio_source_ = nullptr;
     opening_audio_path_[0] = 0;
+    opening_vp9_pipeline_ = false;
     source_ = nullptr;
     paused_ = false;
     frames_uploaded_ = 0;

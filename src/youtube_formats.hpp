@@ -9,6 +9,7 @@ struct YouTubeQuality
 {
     unsigned height = 0;
     bool playable = false, separate = false, candidate = false;
+    unsigned fps = 0;
 };
 struct YouTubeFormats
 {
@@ -32,7 +33,13 @@ struct YouTubeFormats
 bool youtube_media_host(std::string_view url, std::array<char, 256> &host) noexcept;
 // Auto chooses <=360p. Explicit height may select combined AVC/AAC <=1080p;
 // Explicit height can select separate H.264 <=1080p/30fps + default AAC.
-// 1440p/2160p are VP9 Profile 0 SDR <=30fps at 2560x1440/3840x2160 + AAC only.
+// 1440p/2160p are VP9 Profile 0 SDR + AAC; 2160p60 is an explicit test opt-in.
 bool parse_youtube_formats(std::string_view json, YouTubeFormats &out,
-                           unsigned requested_height = 0) noexcept;
+                           unsigned requested_height = 0, bool allow_4k60 = false) noexcept;
+inline bool youtube_vp9_pipeline_requested(const YouTubeFormats &formats) noexcept
+{
+    return formats.selected_vp9 && formats.selected_height == 2160 &&
+           formats.selected_fps > 30 && formats.selected_fps <= 60 &&
+           formats.source[0] && formats.audio_source[0];
+}
 } // namespace tube5

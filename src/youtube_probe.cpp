@@ -349,8 +349,12 @@ int YouTubeProbe::worker(void *opaque) noexcept
                           "YOUTUBE: RESPUESTA NO ES METADATOS OEMBED");
         else if (out.mode == ProbeMode::formats && !probe.cancelled_)
         {
+            bool allow_4k60 = false;
+#ifdef TUBE5_YT_4K60_CONTROL
+            allow_4k60 = true;
+#endif
             if (!parse_youtube_formats({body.bytes.get(), body.used}, out.formats,
-                                       out.requested_height))
+                                       out.requested_height, allow_4k60))
                 std::snprintf(out.error.data(), out.error.size(),
                               "PLAYER: JSON INVALIDO O FUERA DE LIMITES");
             else if (std::strcmp(out.formats.status.data(), "OK") != 0)

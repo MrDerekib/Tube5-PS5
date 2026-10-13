@@ -55,6 +55,34 @@ int main()
     }
     assert(tube5::parse_youtube_formats(fixture("vp9"), formats));
     assert(!formats.source[0]); // Auto remains <=360p.
+    for (const auto *container : {"webm", "mp4"})
+    {
+        const auto json = fixture("vp09.00.51.08", container, 60, 2160, 3840);
+        assert(tube5::parse_youtube_formats(json, formats, 2160, true));
+        assert(formats.selected_fps == 60 && formats.source[0] && formats.audio_source[0]);
+        assert(formats.qualities[0].fps == 60);
+        assert(tube5::youtube_vp9_pipeline_requested(formats));
+        assert(tube5::parse_youtube_formats(json, formats, 2160));
+        assert(!formats.source[0] && !tube5::youtube_vp9_pipeline_requested(formats));
+        assert(tube5::parse_youtube_formats(json, formats, 0, true));
+        assert(!formats.source[0]); // Opt-in never changes auto/default quality.
+    }
+    for (const auto &json : {fixture("vp9.2", "webm", 60, 2160, 3840),
+                             fixture("av01.0", "mp4", 60, 2160, 3840),
+                             fixture("vp9", "webm", 120, 2160, 3840),
+                             fixture("vp9", "webm", 60),
+                             fixture("avc1.640028", "mp4", 60, 2160, 3840)})
+    {
+        assert(tube5::parse_youtube_formats(json, formats, 2160, true));
+        assert(!formats.source[0]);
+    }
+    std::string mixed = fixture("vp9", "webm", 60, 2160, 3840);
+    mixed.insert(mixed.find('[') + 1,
+                 R"({"itag":313,"height":2160,"width":3840,"fps":30,"mimeType":"video/webm; codecs=vp9","url":"https://rr1.googlevideo.com/videoplayback?video=30"},)");
+    assert(tube5::parse_youtube_formats(mixed, formats, 2160, true));
+    assert(formats.selected_fps == 60 && tube5::youtube_vp9_pipeline_requested(formats));
+    assert(tube5::parse_youtube_formats(mixed, formats, 2160));
+    assert(formats.selected_fps == 30 && !tube5::youtube_vp9_pipeline_requested(formats));
     const unsigned char webm[]{0x1a, 0x45, 0xdf, 0xa3};
     const unsigned char mp4[]{0, 0, 0, 24, 'f', 't', 'y', 'p'};
     assert(tube5::youtube_container(webm, 4) == tube5::YouTubeContainer::webm);

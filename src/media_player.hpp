@@ -31,7 +31,8 @@ class MediaPlayer final
         failed,
         cancelled
     };
-    bool begin_open(const char *path, const char *audio_path = nullptr) noexcept;
+    bool begin_open(const char *path, const char *audio_path = nullptr,
+                    bool vp9_pipeline = false) noexcept;
     OpenResult poll_open(SDL_Renderer *renderer) noexcept;
     void cancel_open() noexcept;
     bool opening() const noexcept
@@ -116,6 +117,7 @@ class MediaPlayer final
     SDL_Thread *opening_thread_ = nullptr;
     std::atomic<bool> opening_done_{false};
     bool opening_cancelled_ = false;
+    bool opening_vp9_pipeline_ = false;
     bool network_ = false;
     bool youtube_ = false;
     YouTubeStream youtube_stream_;

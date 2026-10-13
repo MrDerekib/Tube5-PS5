@@ -106,7 +106,7 @@ bool youtube_media_host(std::string_view url, std::array<char, 256> &host) noexc
     return true;
 }
 bool parse_youtube_formats(std::string_view json, YouTubeFormats &out,
-                           unsigned requested_height) noexcept
+                           unsigned requested_height, bool allow_4k60) noexcept
 {
     out = {};
     if (json.empty() || json.size() > youtube_player_limit)
@@ -184,11 +184,15 @@ bool parse_youtube_formats(std::string_view json, YouTubeFormats &out,
                  (height == 2160 && integer_member(format, "width") == 3840)) &&
                 (mime.starts_with("video/webm;") || mime.starts_with("video/mp4;")) &&
                 vp9_profile0(mime, height == 2160 ? 51 : 50);
-            const bool candidate = separate && fps && fps <= 30 && (h264_video || vp9_video) &&
+            const bool supported_fps = fps &&
+                (fps <= 30 || (allow_4k60 && vp9_video && height == 2160 && fps <= 60));
+            const bool candidate = separate && supported_fps && (h264_video || vp9_video) &&
                                    !aac &&
                                    string_member(format, "type") != "FORMAT_STREAM_TYPE_OTF";
             const bool adaptive = status == "OK" && candidate && youtube_media_host(url, host);
-            if (requested_height && adaptive && height == requested_height && !selected_video)
+            if (requested_height && adaptive && height == requested_height &&
+                (!selected_video || (allow_4k60 && height == 2160 &&
+                                     fps > integer_member(selected_video, "fps"))))
                 selected_video = format;
             if (status == "OK" && separate && !height && mime.starts_with("audio/mp4;") && aac &&
                 string_member(format, "type") != "FORMAT_STREAM_TYPE_OTF" &&
@@ -226,6 +230,8 @@ bool parse_youtube_formats(std::string_view json, YouTubeFormats &out,
                 out.qualities[q].playable |= eligible;
                 out.qualities[q].separate |= separate;
                 out.qualities[q].candidate |= candidate;
+                if (candidate)
+                    out.qualities[q].fps = std::max(out.qualities[q].fps, fps);
             }
             if (eligible && (requested_height ? height == requested_height : height <= 360) &&
                 height > out.selected_height)

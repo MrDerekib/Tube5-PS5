@@ -852,6 +852,39 @@ adelantado también pasa con límites separados. Build/firma verificadas;
 solo executable/etiqueta nuevos, mismo clip de 12 segundos. Staging pendiente
 de cierre confirmado; siguiente prueba +5 y reentrada en consola.
 
+Resultado DIAG102: 49/49 seeks, EOF y error/cleanup cero. 3.570 AUs, 3.197
+visibles recibidos, 1.509 preroll omitidos, 1.688 entregados; 227 hidden (177
+superficies, 50 omitidos) y política cero. Profundidad tres, cuatro superficies,
+seis slots AU, pico pendiente cinco: evidencia concreta de que cuatro AUs
+no bastaban en este control. 1.483 uploads, 59,608 fps en intervalos activos,
+máximo 18.195 µs y cero sync drops. Audio reset vídeo/audio 49/49, hold liberado,
+error cero; 1.072 underruns en una prueba con 49 maniobras no caracterizan
+reproducción continua ni garantizan sonido pulido. Logs privados `diag102-*`.
+
+### DIAG103: primera prueba directa YouTube VP9 4K60 SDR
+
+`BOOT-DIAG-103-YT-4K60` permite explícitamente formatos VP9 Profile 0 SDR
+3840x2160 hasta 60 fps + AAC. El parser mantiene por defecto máximo 30 fps;
+el probe de esta build activa el opt-in. Elegir 2160p prefiere el candidato
+SDR de mayor fps válido; calidad automática sigue <=360p. 1440p y AVC no
+amplían su límite de 30 fps, HDR/10bits/AV1/120fps permanecen excluidos.
+El listado muestra fps del candidato para distinguir la prueba 2160p60.
+
+La apertura recibe un hint explícito desde metadata seleccionada (VP9,
+2160p, 31..60 fps, vídeo+audio), no deduce nada de URLs firmadas. Solo ese
+formato activa profundidad tres/cuatro superficies/seis AUs; las otras
+calidades mantienen su ruta previa. Hint se limpia al cerrar/cancelar, y el
+guard comprueba configuración nativa real antes de iniciar. Local hidden
+de 12 s permanece disponible como control, sin nueva fixture.
+
+Host focal ASan/UBSan del selector VP9: opt-in/on/off, MP4/WebM, preferencia
+60 sobre 30, hint correcto, auto unchanged, rechazo HDR/Profile2/AV1/120 y
+otras alturas. Compilación nativa verifica la propagación main/open/setup;
+build/firma correctas. Staging FTP preparado, activación pendiente de cierre.
+Prueba candidata: `LXb3EKWsInQ` (Costa Rica), seleccionar 2160p/60 SDR, primero
+continuo y después controles; todavía no validado con streams reales ni
+show-existing en consola. No modificados exploit, payloads ni hypervisor.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

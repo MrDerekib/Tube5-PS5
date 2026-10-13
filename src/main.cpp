@@ -328,8 +328,13 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
             const auto &quality = formats.qualities[i];
             canvas.rectangle(120, y, 1540, 43, i == quality_selected ? accent : panel);
             char label[128]{};
+            char resolution[40]{};
+            if (quality.fps)
+                std::snprintf(resolution, sizeof(resolution), "%uP %u FPS", quality.height, quality.fps);
+            else
+                std::snprintf(resolution, sizeof(resolution), "%uP", quality.height);
             std::snprintf(
-                label, sizeof(label), "%uP - %s", quality.height,
+                label, sizeof(label), "%s - %s", resolution,
                 quality.playable
                     ? (quality.height >= 1440 ? "LISTA: VP9 + AAC" : "LISTA: MP4 H.264 + AAC")
                 : quality.candidate ? (quality.height >= 1440 ? "CONSULTAR: VP9 + AUDIO SEPARADO"
@@ -932,7 +937,8 @@ int main()
             !((network_test || direct_playback)
                   ? media.begin_open(
                         source, direct_playback ? youtube_probe.result().formats.audio_source.data()
-                                                : nullptr)
+                                                : nullptr,
+                        direct_playback && tube5::youtube_vp9_pipeline_requested(youtube_probe.result().formats))
                   : media.open(renderer, clip)))
         {
             std::snprintf(error, sizeof(error), "%s",
