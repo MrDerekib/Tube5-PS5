@@ -880,7 +880,9 @@ de 12 s permanece disponible como control, sin nueva fixture.
 Host focal ASan/UBSan del selector VP9: opt-in/on/off, MP4/WebM, preferencia
 60 sobre 30, hint correcto, auto unchanged, rechazo HDR/Profile2/AV1/120 y
 otras alturas. Compilación nativa verifica la propagación main/open/setup;
-build/firma correctas. Staging FTP preparado, activación pendiente de cierre.
+build/firma correctas. Ejecutable preparado localmente; no transferido: FTP
+no respondió y el propietario confirmó la consola apagada. No reintentar
+hasta que vuelva a encenderla. La última build activada sigue siendo DIAG102.
 Prueba candidata: `LXb3EKWsInQ` (Costa Rica), seleccionar 2160p/60 SDR, primero
 continuo y después controles; todavía no validado con streams reales ni
 show-existing en consola. No modificados exploit, payloads ni hypervisor.
