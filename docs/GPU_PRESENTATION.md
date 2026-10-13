@@ -887,6 +887,22 @@ Prueba candidata: `LXb3EKWsInQ` (Costa Rica), seleccionar 2160p/60 SDR, primero
 continuo y después controles; todavía no validado con streams reales ni
 show-existing en consola. No modificados exploit, payloads ni hypervisor.
 
+DIAG103 se transfirió y activó posteriormente al encender la consola, con
+DIAG102 respaldada. El propietario pidió no introducir ID ni buscar vídeos:
+la interfaz aún conservaba el ID anterior y calidad auto, lo que no facilitaba
+la prueba candidata.
+
+DIAG104 (`BOOT-DIAG-104-YT-4K60-PRESET`) preselecciona `LXb3EKWsInQ` y 2160p
+en la build de prueba. Al entrar en YouTube desde el selector inicia la consulta
+automáticamente si el probe está idle. Tras consulta, X reproduce sin teclado
+ni búsqueda. La pantalla muestra fps realmente seleccionados; para este preset
+rechaza iniciar si no es VP9 2160p/31..60 fps + AAC, evitando validar 30 fps
+por error. No cambia decoder, formato/policy de DIAG103 ni rutas locales.
+Verificación focal: compilación nativa de preset, entrada/consulta y guard;
+tests de decoder/formatos previamente pasados no repetidos. Build/firma y
+tamaño de upload correctos. Sandbox de Tube5 no montado antes de sustituir;
+DIAG104 activa y etiqueta verificada por FTP, DIAG103 respaldada.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

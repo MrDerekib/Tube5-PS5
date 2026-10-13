@@ -88,8 +88,13 @@ int capture_hardware_nv12(const tube5::VideoOutput &frame, void *context) noexce
 std::array<char, 256> network_url{};
 std::array<char, 65> console_token{};
 tube5::VideoKeyboard video_keyboard;
+#ifdef TUBE5_YT_4K60_CONTROL
+std::array<char, 12> direct_video_id{"LXb3EKWsInQ"};
+unsigned direct_height = 2160, quality_selected = 0;
+#else
 std::array<char, 12> direct_video_id{"bHIhgxav9LY"};
 unsigned direct_height = 0, quality_selected = 0;
+#endif
 enum class SearchPage
 {
     keyboard,
@@ -384,8 +389,9 @@ void paint(Canvas &canvas, const tube5::Navigation &nav, tube5::MediaPlayer &med
                           formats.avc, formats.vp9, formats.av1, formats.aac, formats.opus);
             canvas.text(120, 675, detail, 2, muted);
             std::snprintf(detail, sizeof(detail),
-                          "STREAM ITAG %u %uP AAC %u HTTP %ld CURL %d CERT %ld BYTES %u %s %s",
-                          formats.selected_itag, formats.selected_height, formats.audio_itag,
+                          "STREAM ITAG %u %uP/%uFPS AAC %u HTTP %ld CURL %d CERT %ld BYTES %u %s %s",
+                          formats.selected_itag, formats.selected_height, formats.selected_fps,
+                          formats.audio_itag,
                           result.source_http, result.source_curl, result.source_verify,
                           result.source_bytes, formats.selected_webm ? "WEBM" : "MP4",
                           result.source_valid ? "SI" : "NO");
@@ -989,7 +995,14 @@ int main()
             {
                 error[0] = 0;
                 if (source_selected == 0)
+                {
                     nav.screen = tube5::Screen::online;
+#ifdef TUBE5_YT_4K60_CONTROL
+                    if (!youtube_probe.loading() && youtube_probe.stage() == tube5::ProbeStage::idle)
+                        (void)youtube_probe.begin(tube5::ProbeMode::formats, direct_video_id.data(),
+                                                  direct_height);
+#endif
+                }
                 else if (source_selected == 1)
                 {
                     network_test = true;
@@ -1113,6 +1126,15 @@ int main()
                     if (youtube_probe.stage() == tube5::ProbeStage::ready &&
                         youtube_probe.result().source_valid)
                     {
+#ifdef TUBE5_YT_4K60_CONTROL
+                        if (direct_height == 2160 &&
+                            std::strcmp(direct_video_id.data(), "LXb3EKWsInQ") == 0 &&
+                            !tube5::youtube_vp9_pipeline_requested(youtube_probe.result().formats))
+                        {
+                            std::snprintf(error, sizeof(error), "PRUEBA: YOUTUBE NO OFRECE 2160P60 SDR");
+                            return;
+                        }
+#endif
                         direct_playback = true;
                         library_playback = false;
                         nav.screen = tube5::Screen::player;
