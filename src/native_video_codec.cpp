@@ -6,6 +6,7 @@
 #include "vp9_packet.hpp"
 #include "native_seek_gate.hpp"
 #include "playback_cadence.hpp"
+#include "seek_clock_rebase.hpp"
 #include <cmath>
 #include <SDL.h>
 #include <atomic>
@@ -44,6 +45,7 @@ std::uint64_t copy_total_us = 0, copy_max_us = 0;
 unsigned copy_calls = 0;
 tube5::SeekPreroll seek_preroll;
 tube5::SeekDecodeTimer seek_timer;
+tube5::SeekClockRebase seek_clock;
 std::uint64_t seek_now() noexcept
 {
     return tube5::cadence_clock_us(SDL_GetPerformanceCounter(), SDL_GetPerformanceFrequency());
@@ -81,7 +83,8 @@ void snapshot(const char *stage)
         "DECODE CALLS %u AVG US %llu MAX US %llu COPY CALLS %u AVG US %llu MAX US %llu\n"
         "PIPELINE DEPTH %u SLOTS %u PENDING PEAK %u DRAIN CALLS %u INPUT SLOTS %u\n"
         "HIDDEN MATERIALIZED %u OMITTED %u POLICY ERROR %u\n"
-        "MARKED VISIBLE %u PENDING HIDDEN %u VISIBLE %u AUX SUPPRESSED %u\n",
+        "MARKED VISIBLE %u PENDING HIDDEN %u VISIBLE %u AUX SUPPRESSED %u\n"
+        "SEEK CLOCK REBASE %u\n",
         tube5::failure_log_build_label(), vp9_mode ? "VP9 PROFILE 0" : "H264", native_width,
         native_height, stage, s.stage, s.active ? 1u : 0u, static_cast<unsigned>(fatal.load()),
         static_cast<unsigned>(s.error), static_cast<unsigned>(s.cleanup_error), s.submitted,
@@ -98,7 +101,8 @@ void snapshot(const char *stage)
         static_cast<unsigned long long>(copy_calls ? copy_total_us / copy_calls : 0),
         static_cast<unsigned long long>(copy_max_us), s.depth, s.slots, s.pending_peak,
         s.drain_calls, s.input_slots, s.hidden_materialized, s.hidden_omitted, s.policy_error,
-        s.marked_visible, s.pending_hidden, s.pending_visible, s.auxiliary_suppressed);
+        s.marked_visible, s.pending_hidden, s.pending_visible, s.auxiliary_suppressed,
+        seek_clock.applied());
     if (length > 0)
         (void)tube5::write_failure_log("/download0/tube5-hardware-player.log", text,
                                        std::min<std::size_t>(length, sizeof(text) - 1));
@@ -161,6 +165,10 @@ int collect()
     {
         const auto &s = tube5::hardware_stream_status();
         seek_timer.decoded(seek_now(), s.decode_calls, s.decode_total_us);
+        const auto *context = owner.load();
+        if (native_width == 3840 && s.depth == 3 && context &&
+            context->pkt_timebase.num > 0 && context->pkt_timebase.den > 0)
+            seek_clock.arm(SDL_ThreadID(), pts * av_q2d(context->pkt_timebase));
     }
     const auto copy_start = SDL_GetPerformanceCounter();
     av_frame_unref(pending);
@@ -294,6 +302,7 @@ bool native_codec_prepare_seek(double seconds) noexcept
     if (!std::isfinite(ticks) || ticks >= static_cast<double>(INT64_MAX))
         return false;
     seek_preroll.begin(static_cast<std::int64_t>(std::ceil(ticks)), reset_generation.load());
+    seek_clock.cancel();
     seek_timer.begin(seek_now(), reset_generation.load());
     return true;
 }
@@ -308,8 +317,17 @@ void native_codec_cancel_seek() noexcept
     Lock lock;
     seek_preroll.clear();
     seek_timer.cancel();
+    seek_clock.cancel();
 }
 SeekDecodeTiming native_codec_seek_timing() noexcept { return seek_timer.snapshot(); }
+double native_codec_seek_clock_adjust(double value) noexcept
+{
+    const auto worker = SDL_ThreadID();
+    // Normal playback, UI and audio never take an additional codec mutex.
+    if (!seek_clock.eligible(worker) || !mutex) return value;
+    Lock lock;
+    return seek_clock.apply(worker, value);
+}
 int native_codec_color_space() noexcept
 {
     const auto *context = owner.load();
@@ -351,6 +369,7 @@ void native_codec_adopt(AVCodecContext *context) noexcept
         return;
     Lock lock;
     vp9_mode = vp9;
+    seek_clock.reset();
     seek_preroll.clear();
     native_width = context->width;
     native_height = context->height;
@@ -509,6 +528,7 @@ extern "C" void __wrap_avcodec_free_context(AVCodecContext **context)
         owner = nullptr;
         seek_preroll.clear();
         seek_timer.cancel();
+        seek_clock.cancel();
     }
     __real_avcodec_free_context(context);
 }

@@ -1122,6 +1122,37 @@ Sesión: 5.291 uploads, 59,231 fps activos, 48 drops, máximo intervalo166,311 m
 2.263 preroll, 1.531 underruns con 14 saltos. Sin nueva build por el mero
 hecho de leer logs; baseline de reproducción DIAG109, instrumentación DIAG110.
 
+### DIAG111: eliminar el margen fijo después del preroll, conservando reloj A/V
+
+`BOOT-DIAG-111-VP9-SEEK-CLOCK` conserva DIAG110 y añade un hook puntual de
+`Kit_AdjustTimerBase`. Se verificaron en el archivo estático PacBrew de consola
+las constantes -0,1 del decoder thread y +0,1 del lector de vídeo. Cuando el
+primer frame de destino VP9 3840x2160 depth3 ya está decodificado, se arma un
+rebase para **ese worker y ese PTS**, bajo el mutex nativo. Solo intercepta la
+llamada posterior del mismo hilo cuyo argumento coincide con PTS-0,1 (tolerancia
+1 µs); la transforma en PTS+0,1 una única vez. Así el reloj compartido llega
+al mismo valor que alcanzaba tras esperar 200 ms, sin modificar las reglas de
+lectura normales ni introducir otro reloj/bias exclusivo para vídeo. El lector
+de audio no tiene el +0,1 de vídeo: conserva su comportamiento y su referencia
+read-only; no afirmar haber corregido aquí un desfase A/V previo.
+
+Prepare/cancel/free invalidan el rebase, adopt reinicia el contador. Un hilo
+distinto, otro PTS, valor no finito o distinta política de dependencia pasa
+intacto. El fast path no toma un mutex extra en UI/audio/reproducción normal;
+solo el worker elegible toma el mutex existente antes de aplicar la decisión.
+Log añade `SEEK CLOCK REBASE`; el historial mantiene decoded/upload/audio.
+No cambia red, DPB/pools, preroll, flags VP9 ni el contenido de referencia.
+
+Pruebas focales ASan/UBSan: wrapper con reloj simulado, guards de hilo/PTS,
+one-shot, superseded/cancel/reset y valores inválidos; integración con el timer
+REAL de la biblioteca alpha2 host enlazado con --wrap y tiempo determinista,
+comprueba eliminación exacta de 200 ms, referencias compartidas, follower de
+audio read-only, progresión normal y cierre de ambos timers. Build/firma nativas
+correctas. Pendiente consola: repetir +5/-5/timeline y escuchar sincronía tras
+cada salto. Mejora esperada ~200 ms por seek; no resuelve por sí sola los
+0,5–3,9 s previos de reconstrucción/demux/red. No declarar ganancia medida
+en PS5 hasta comparar el nuevo historial.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

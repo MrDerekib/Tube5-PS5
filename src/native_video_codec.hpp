@@ -23,6 +23,7 @@ bool native_codec_full_range() noexcept;
 unsigned native_codec_reset_generation() noexcept;
 unsigned native_codec_audio_reset_generation() noexcept;
 SeekDecodeTiming native_codec_seek_timing() noexcept;
+double native_codec_seek_clock_adjust(double value) noexcept;
 #else
 inline void native_codec_allow_open(bool, bool = false) noexcept
 {
