@@ -29,6 +29,24 @@ extern "C"
 
 namespace tube5
 {
+namespace
+{
+std::uint64_t seek_now() noexcept
+{
+    return cadence_clock_us(SDL_GetPerformanceCounter(), SDL_GetPerformanceFrequency());
+}
+}
+void MediaPlayer::save_seek_latency_report() noexcept
+{
+#ifdef TUBE5_DIAGNOSTICS
+    if (!seek_latency_.count) return;
+    if (auto *r = seek_latency_.current(); r && !r->presented)
+        r->native = native_codec_seek_timing();
+    char report[8192]{};
+    const auto size = seek_latency_.format(report, sizeof(report), failure_log_build_label());
+    (void)write_trace_log("/download0/tube5-seek-latency.log", report, size);
+#endif
+}
 void MediaPlayer::save_cadence_report(bool hardware, double end_position, double length) noexcept
 {
 #if defined(TUBE5_DIAGNOSTICS) && !defined(TUBE5_HOST)
@@ -459,7 +477,10 @@ void MediaPlayer::close() noexcept
         Kit_ClosePlayer(player_);
     end_pipeline_diagnostic();
     if (had_player)
+    {
         save_cadence_report(hardware, end_position, length);
+        save_seek_latency_report();
+    }
     player_ = nullptr;
     if (texture_)
         SDL_DestroyTexture(texture_);
@@ -497,6 +518,8 @@ void MediaPlayer::close() noexcept
     audio_seek_report_at_ = 0;
     audio_seek_bytes_before_ = 0;
     seek_dispatched_at_ = 0;
+    seek_request_us_ = 0;
+    seek_latency_ = {};
     network_ = false;
     youtube_ = false;
 }
@@ -550,6 +573,7 @@ void MediaPlayer::seek_to(double destination) noexcept
     pending_seek_ = target;
     cadence_.interrupt();
     seek_requested_at_ = SDL_GetTicks();
+    seek_request_us_ = seek_now();
     last_frame_at_ = seek_requested_at_;
     if (was_paused)
         paused_position_ = target;
@@ -584,10 +608,18 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
     if (!paused_ && pending_seek_ >= 0.0 && now - seek_requested_at_ >= 100 &&
         (seek_dispatched_at_ == 0 || now - seek_dispatched_at_ >= 500))
     {
+        const auto dispatch_us = seek_now();
         SDL_PauseAudioDevice(audio_, 1);
         cadence_.interrupt();
         reset_audio_reader();
+        if (auto *r = seek_latency_.current(); r && !r->presented)
+            r->native = native_codec_seek_timing();
         const bool vp9_seek = native_codec_prepare_seek(pending_seek_);
+        if (vp9_seek)
+        {
+            seek_latency_.begin(seek_request_us_, dispatch_us,
+                                static_cast<std::int64_t>(std::llround(pending_seek_ * 1000)));
+        }
         if ((audio_player_ || vp9_seek) && native_codec_active())
         {
             audio_seek_gate_.begin(native_codec_reset_generation(),
@@ -601,8 +633,11 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
         }
         const int video_seek = Kit_PlayerSeek(player_, pending_seek_);
         const int audio_seek = audio_player_ ? Kit_PlayerSeek(audio_player_, pending_seek_) : 0;
+        if (vp9_seek)
+            seek_latency_.current()->returned = seek_now();
         if (video_seek != 0 || audio_seek != 0)
         {
+            if (vp9_seek) seek_latency_.current()->status = 2;
             native_codec_cancel_seek();
             audio_seek_gate_.clear();
             resume_audio_reader();
@@ -659,6 +694,16 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
             {
                 frame_area_ = area;
                 ++frames_uploaded_;
+                if (auto *r = seek_latency_.current(); r && !r->status)
+                {
+                    const auto timing = native_codec_seek_timing();
+                    if (timing.decoded)
+                    {
+                        r->native = timing;
+                        r->presented = seek_now();
+                        r->status = 1;
+                    }
+                }
                 const auto frequency = SDL_GetPerformanceFrequency();
                 if (frequency)
                     cadence_.record(cadence_clock_us(SDL_GetPerformanceCounter(), frequency),
@@ -667,6 +712,8 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
                                                native_codec_audio_reset_generation()))
                 {
                     resume_audio_reader();
+                    if (auto *r = seek_latency_.current(); r && r->status == 1 && !r->audio)
+                        r->audio = seek_now();
                     audio_seek_bytes_before_ = audio_bytes_.load();
                     audio_seek_report_at_ = now;
                     save_audio_seek_report("VIDEO READY");
@@ -688,6 +735,7 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
     if (audio_seek_report_at_ && now - audio_seek_report_at_ >= 1000)
     {
         save_audio_seek_report("POST SEEK");
+        save_seek_latency_report();
         audio_seek_report_at_ = 0;
     }
     SDL_Rect target = destination;

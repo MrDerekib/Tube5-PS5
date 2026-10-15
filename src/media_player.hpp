@@ -2,6 +2,7 @@
 #pragma once
 #include "audio_seek_gate.hpp"
 #include "playback_cadence.hpp"
+#include "seek_latency.hpp"
 #include <SDL.h>
 #include <kitchensink2/kitchensink.h>
 #include <atomic>
@@ -113,6 +114,7 @@ class MediaPlayer final
     void save_failure_report(const char *stage, double position, unsigned frames) noexcept;
     void save_audio_seek_report(const char *stage) noexcept;
     void save_cadence_report(bool hardware, double end_position, double length) noexcept;
+    void save_seek_latency_report() noexcept;
     char failure_log_status_[80]{};
     SDL_Thread *opening_thread_ = nullptr;
     std::atomic<bool> opening_done_{false};
@@ -163,6 +165,8 @@ class MediaPlayer final
     double audio_seek_target_ = 0;
     Uint32 seek_requested_at_ = 0;
     Uint32 seek_dispatched_at_ = 0;
+    std::uint64_t seek_request_us_ = 0;
+    SeekLatencyHistory seek_latency_;
     char error_[256]{};
 };
 } // namespace tube5

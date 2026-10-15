@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include <cstddef>
+#include "seek_latency.hpp"
 struct AVCodecContext;
 struct AVPacket;
 struct AVFrame;
@@ -21,6 +22,7 @@ int native_codec_color_space() noexcept;
 bool native_codec_full_range() noexcept;
 unsigned native_codec_reset_generation() noexcept;
 unsigned native_codec_audio_reset_generation() noexcept;
+SeekDecodeTiming native_codec_seek_timing() noexcept;
 #else
 inline void native_codec_allow_open(bool, bool = false) noexcept
 {
@@ -67,5 +69,6 @@ inline unsigned native_codec_audio_reset_generation() noexcept
 {
     return 0;
 }
+inline SeekDecodeTiming native_codec_seek_timing() noexcept { return {}; }
 #endif
 } // namespace tube5

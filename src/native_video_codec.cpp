@@ -5,6 +5,7 @@
 #include "failure_log.hpp"
 #include "vp9_packet.hpp"
 #include "native_seek_gate.hpp"
+#include "playback_cadence.hpp"
 #include <cmath>
 #include <SDL.h>
 #include <atomic>
@@ -42,6 +43,11 @@ unsigned native_width = 1920, native_height = 1080;
 std::uint64_t copy_total_us = 0, copy_max_us = 0;
 unsigned copy_calls = 0;
 tube5::SeekPreroll seek_preroll;
+tube5::SeekDecodeTimer seek_timer;
+std::uint64_t seek_now() noexcept
+{
+    return tube5::cadence_clock_us(SDL_GetPerformanceCounter(), SDL_GetPerformanceFrequency());
+}
 struct Lock
 {
     Lock()
@@ -143,11 +149,18 @@ int collect()
         tube5::hardware_stream_release();
         return failure("PTS ORDER", AVERROR_INVALIDDATA);
     }
+    const bool seeking = vp9_mode && seek_preroll.waiting();
     if (vp9_mode && !seek_preroll.accept(pts, reset_generation.load()))
     {
+        seek_timer.skip();
         tube5::hardware_stream_release();
         ++skipped;
         return AVERROR(EAGAIN);
+    }
+    if (seeking && !seek_preroll.waiting())
+    {
+        const auto &s = tube5::hardware_stream_status();
+        seek_timer.decoded(seek_now(), s.decode_calls, s.decode_total_us);
     }
     const auto copy_start = SDL_GetPerformanceCounter();
     av_frame_unref(pending);
@@ -281,6 +294,7 @@ bool native_codec_prepare_seek(double seconds) noexcept
     if (!std::isfinite(ticks) || ticks >= static_cast<double>(INT64_MAX))
         return false;
     seek_preroll.begin(static_cast<std::int64_t>(std::ceil(ticks)), reset_generation.load());
+    seek_timer.begin(seek_now(), reset_generation.load());
     return true;
 }
 bool native_codec_seek_waiting() noexcept
@@ -293,7 +307,9 @@ void native_codec_cancel_seek() noexcept
         return;
     Lock lock;
     seek_preroll.clear();
+    seek_timer.cancel();
 }
+SeekDecodeTiming native_codec_seek_timing() noexcept { return seek_timer.snapshot(); }
 int native_codec_color_space() noexcept
 {
     const auto *context = owner.load();
@@ -407,6 +423,7 @@ int native_codec_send(AVCodecContext *context, const AVPacket *packet) noexcept
     }
     if (packet)
     {
+        seek_timer.packet(seek_now());
         code = av_packet_ref(input, packet);
         if (code < 0)
             return failure("PACKET REF", code);
@@ -469,7 +486,11 @@ extern "C" void __wrap_avcodec_flush_buffers(AVCodecContext *context)
                 clear_filter_state();
             }
             if (!code)
+            {
                 ++reset_generation;
+                const auto &s = tube5::hardware_stream_status();
+                seek_timer.reset(seek_now(), reset_generation.load(), s.decode_calls, s.decode_total_us);
+            }
             snapshot("RESET");
         }
     }
@@ -487,6 +508,7 @@ extern "C" void __wrap_avcodec_free_context(AVCodecContext **context)
         free_filter();
         owner = nullptr;
         seek_preroll.clear();
+        seek_timer.cancel();
     }
     __real_avcodec_free_context(context);
 }

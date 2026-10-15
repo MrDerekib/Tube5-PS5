@@ -1075,6 +1075,35 @@ de DIAG109. El corte determinista de los siete segundos queda superado en
 esta sesión; siguiente investigación acotada: latencia/fluidez de seek 4K60,
 manteniendo DIAG109 como baseline de reproducción.
 
+### DIAG110: latencia por seek sin cambiar la reproducción
+
+`BOOT-DIAG-110-VP9-SEEK-TIMING` añade un historial de 16 seeks VP9 nativos en
+`/download0/tube5-seek-latency.log`. Todas las fases son microsegundos relativos
+al inicio del dispatch de UI: entrada al prepare bajo mutex, retorno de las
+peticiones de seek (incluye preparación/logs anteriores), reset nativo terminado,
+primer paquete de vídeo post-reset ofrecido al filtro, primer frame que
+alcanza el destino (antes de copiar NV12), primer upload nuevo y apertura de la
+barrera de audio. WAIT mide desde la **última** pulsación agrupada. Añade frames
+descartados en preroll, llamadas nativas y tiempo dentro de Decode desde reset
+hasta el primer frame en destino. RESET→PACKET incluye demux/red y otras esperas:
+no es una medición exclusiva de HTTP. AUDIO es apertura de la barrera, no una
+medida de primer sonido audible; UPLOAD no equivale al flip HDMI.
+
+El worker escribe atomics bajo su mutex existente; UI no toma ese mutex para
+leer diagnósticos. Cambios de generación evitan atribuir paquetes anteriores
+al seek. Solo el primer paquete/target/frame queda marcado; un seek reemplazado
+se distingue de uno completado, el historial se reinicia al cerrar el player.
+Se guarda un segundo después de abrir la barrera (fuera del primer frame), o
+al cerrar el player tras join. Reporte de 8 KiB por el writer atómico de traces,
+sin I/O nuevo por frame. No modifica política VP9, pools, coalescing, seek,
+sincronización ni resolución; DIAG109 sigue siendo baseline de funcionamiento.
+
+Prueba focal ASan/UBSan: generaciones antiguas/wrap, primer paquete/target,
+conteos, cancelación/nuevo seek, fases relativas, superseded, wrap del anillo,
+formato acotado e integración real de guardado/lectura del historial. Build y
+firma válidos. Pendiente consola: varios +5/-5 separados por unos segundos y
+un salto de timeline; dejar la app abierta para rescatar los nuevos logs.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
