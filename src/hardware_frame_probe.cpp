@@ -902,6 +902,12 @@ static int hardware_bclip_step(HardwareFrameConsumer consumer, void *context) no
         const auto choice = select_vp9_output({pending, clip.slots}, output.padding);
         if (choice.error != Vp9OutputError::none)
             return fail("VP9 OUTPUT FLAG POLICY", -EINVAL);
+        if (choice.suppress)
+        {
+            clip.frame_used[returned] = false;
+            clip.stage = "PIPELINE AUXILIARY SUPPRESSED";
+            return 2;
+        }
         for (unsigned i = 0; i < clip.slots; ++i)
             if (choice.retire_mask & (1u << i))
             {
@@ -1313,10 +1319,19 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
                 event->selected = choice.input;
                 event->retire = choice.retire_mask;
                 event->policy = static_cast<unsigned>(choice.error);
+                event->suppressed = choice.suppress;
             }
             stream_status.policy_error = static_cast<unsigned>(choice.error);
             if (choice.error != Vp9OutputError::none)
                 return stream_failure("VP9 OUTPUT FLAG POLICY", -EINVAL);
+            if (choice.suppress)
+            {
+                // Ownership/layout were checked above. The surface is returned,
+                // but this auxiliary output completes no compressed input AU.
+                stream.frame_used[returned] = false;
+                ++stream_status.auxiliary_suppressed;
+                return 0;
+            }
             oldest = choice.input;
             for (unsigned i = 0; i < stream.input_slots; ++i)
                 if (choice.retire_mask & (1u << i))

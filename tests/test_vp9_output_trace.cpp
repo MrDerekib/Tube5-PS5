@@ -28,7 +28,7 @@ int main()
     assert(std::strstr(report, "EVENT 17 IN 17 "));
     assert(!std::strstr(report, "EVENT 16 IN 16 "));
     assert(std::strstr(report, "EVENT 80 IN 80 "));
-    assert(std::strstr(report, "POLICY 5\n"));
+    assert(std::strstr(report, "POLICY 5 SUPPRESS 0\n"));
     assert(std::strstr(report, "P 0:80/18446744073709551615/80000/0/1\n"));
     // DIAG107 regression: formatter passed, but the 4 KiB snapshot writer
     // rejected the history. Verify the actual atomic file, not just formatting.

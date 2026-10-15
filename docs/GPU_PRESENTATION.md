@@ -1026,6 +1026,39 @@ comprueba permisos 0644 y rechazo por encima de 64 KiB; también pasan las
 pruebas existentes de snapshots de 4 KiB. Pendiente repetir el fallo en consola
 para obtener por fin el historial; no es una corrección del player.
 
+DIAG108 obtuvo por fin el historial (`diag108-esX3nL`): mismo fallo a 7,363 s,
+472 llamadas. Las 64 firmas de luma coinciden con frames visibles del prefijo
+real decodificado por FFmpeg y escalado nearest-neighbor 8x8, sin re-descargar.
+En torno al keyframe, eventos 444/445/446 tienen la misma firma (frames de
+referencia 407/408; ambos comparten esas muestras), el evento 445 lleva byte
+11=1 y no hay hidden pendiente. 447 devuelve la firma de referencia 409 y 448
+la de 410. DIAG105 consumía un visible en 445; desde ahí los PTS quedan
+adelantados y se retiran hidden antes de tiempo. Otra salida marcada en 461
+consume el último visible y 472 falla con solo hidden pendiente. Las firmas
+son muestreadas, no una prueba de igualdad de todos los píxeles.
+
+### DIAG109: no consumir metadatos por una salida auxiliar sin hidden
+
+`BOOT-DIAG-109-VP9-AUX-REPEAT` sustituye la excepción equivocada de DIAG105:
+con indicador 1, ningún hidden y algún visible pendiente, suprime la superficie
+auxiliar **sin retirar ningún AU ni PTS**. Layout/ownership se validan antes,
+la superficie devuelta se libera, el input actual conserva sus bytes pendientes.
+El siguiente output normal sigue el FIFO visible correcto. La política con
+hidden pendiente, sus guards y la omisión de hidden anterior no cambian. Sin
+metadatos o con indicadores desconocidos sigue rechazando el output. La misma
+decisión se maneja en el consumidor de la prueba aislada para evitar un índice
+sentinela fuera del array. Log añade `AUX SUPPRESSED` e historial `SUPPRESS`.
+
+ASan/UBSan focal: política reproduce repetición con solo visibles, llegada de
+hidden posterior y retirada solo tras los visibles anteriores; mock de stream
+emite un output marcado adicional sin consumir input y luego ocho visibles,
+verifica PTS/píxeles, ownership/backpressure, drain y repetición tras reset.
+También pasan hidden materializado/omitido/adelantado y regresión de retención
+de superficies; integración de historial en disco sigue pasando tras añadir
+el campo. Sin pruebas del bridge ni cambios de red/pools/formatos. Pendiente
+reproducción real más allá de los siete segundos; no declarar reparación
+validada en consola hasta observar el resultado.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

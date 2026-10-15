@@ -75,7 +75,7 @@ void snapshot(const char *stage)
         "DECODE CALLS %u AVG US %llu MAX US %llu COPY CALLS %u AVG US %llu MAX US %llu\n"
         "PIPELINE DEPTH %u SLOTS %u PENDING PEAK %u DRAIN CALLS %u INPUT SLOTS %u\n"
         "HIDDEN MATERIALIZED %u OMITTED %u POLICY ERROR %u\n"
-        "MARKED VISIBLE %u PENDING HIDDEN %u VISIBLE %u\n",
+        "MARKED VISIBLE %u PENDING HIDDEN %u VISIBLE %u AUX SUPPRESSED %u\n",
         tube5::failure_log_build_label(), vp9_mode ? "VP9 PROFILE 0" : "H264", native_width,
         native_height, stage, s.stage, s.active ? 1u : 0u, static_cast<unsigned>(fatal.load()),
         static_cast<unsigned>(s.error), static_cast<unsigned>(s.cleanup_error), s.submitted,
@@ -92,7 +92,7 @@ void snapshot(const char *stage)
         static_cast<unsigned long long>(copy_calls ? copy_total_us / copy_calls : 0),
         static_cast<unsigned long long>(copy_max_us), s.depth, s.slots, s.pending_peak,
         s.drain_calls, s.input_slots, s.hidden_materialized, s.hidden_omitted, s.policy_error,
-        s.marked_visible, s.pending_hidden, s.pending_visible);
+        s.marked_visible, s.pending_hidden, s.pending_visible, s.auxiliary_suppressed);
     if (length > 0)
         (void)tube5::write_failure_log("/download0/tube5-hardware-player.log", text,
                                        std::min<std::size_t>(length, sizeof(text) - 1));

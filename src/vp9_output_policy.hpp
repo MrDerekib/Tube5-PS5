@@ -15,6 +15,7 @@ struct Vp9OutputChoice
 {
     unsigned input = 0, retire_mask = 0;
     Vp9OutputError error = Vp9OutputError::none;
+    bool suppress = false;
 };
 // No pixels, fixture CRCs or reference timestamps are available to this policy.
 // A later visible completion retires only earlier hidden AUs without retained
@@ -41,11 +42,11 @@ inline Vp9OutputChoice select_vp9_output(std::span<const Vp9PendingOutput> pendi
             if (choice.input == count || pending[i].tag < pending[choice.input].tag)
                 choice.input = i;
         }
-    // Byte 11 is not an exclusive hidden-frame flag. At a keyframe transition
-    // it can mark a valid output even with only visible AUs pending. In that
-    // case keep visible FIFO; never fabricate or discard a hidden input.
+    // A marked output without a hidden AU can be an auxiliary repeat, not a
+    // visible completion. Real-stream signatures match the previous picture.
+    // Release that surface without consuming any compressed input/visible PTS.
     if (indicator && choice.input == count && first_visible != count)
-        choice.input = first_visible;
+        return {count, 0, Vp9OutputError::none, true};
     if (choice.input == count)
         return {count, 0, indicator ? Vp9OutputError::missing_hidden
                                     : Vp9OutputError::missing_visible};

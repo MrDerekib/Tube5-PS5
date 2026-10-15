@@ -19,6 +19,7 @@ struct Vp9OutputEvent
     unsigned valid = 0, native_error = 0, indicator = 0;
     unsigned selected = 6, retire = 0, policy = 0;
     bool draining = false;
+    bool suppressed = false;
 };
 struct Vp9OutputTrace
 {
@@ -50,12 +51,12 @@ struct Vp9OutputTrace
         {
             const auto &e = events[index % 64];
             append("EVENT %llu IN %llu BYTES %u PREFIX %08X DRAIN %u OFFER %u ACCEPT %u "
-                   "RETURN %u VALID %u ERR %u FLAG %u SIG %016llX SELECT %u RETIRE %02X POLICY %u\n",
+                   "RETURN %u VALID %u ERR %u FLAG %u SIG %016llX SELECT %u RETIRE %02X POLICY %u SUPPRESS %u\n",
                    static_cast<unsigned long long>(index + 1),
                    static_cast<unsigned long long>(e.submitted), e.bytes, e.prefix,
                    e.draining ? 1u : 0u, e.offered, e.accepted, e.returned, e.valid,
                    e.native_error, e.indicator, static_cast<unsigned long long>(e.signature),
-                   e.selected, e.retire, e.policy);
+                   e.selected, e.retire, e.policy, e.suppressed ? 1u : 0u);
             for (unsigned i = 0; i < 6; ++i)
             {
                 const auto &p = e.pending[i];
