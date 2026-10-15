@@ -903,6 +903,28 @@ tests de decoder/formatos previamente pasados no repetidos. Build/firma y
 tamaño de upload correctos. Sandbox de Tube5 no montado antes de sustituir;
 DIAG104 activa y etiqueta verificada por FTP, DIAG103 respaldada.
 
+Resultado directo DIAG104: propietario informa reproducción seguida de salida
+del player. No llegó al final: 6,909 s de 313 s, 406 uploads/405 intervalos en
+6.794.856 µs (59,604 fps), máximo 18.446 µs, cero sync drops, PTS válidos y
+sin seek. Vídeo real VP9 Profile 0 3840x2160, hardware, profundidad tres,
+cuatro superficies/seis AUs. Audio 326 callbacks, 1.327.104 bytes PCM, dos
+underruns y error cero. No ENOMEM ni allocation failures.
+
+Aborto explícito `VP9 OUTPUT FLAG POLICY`, código 4 = `missing_hidden`:
+output nativo válido, error cero, byte 11 = 1, pero sin hidden pendiente que
+la política pudiera asociar. No atribuir el caso a show-existing, corrupción
+o una causa concreta sin capturar su secuencia de AUs/superficies. Decoder
+cerrado/cleanup cero, sin EOF. 445 AUs, 408 visibles recibidos/entregados,
+34 hidden (33 superficies + una omisión). La red de vídeo muestra CURL 42
+con RX cero en la última petición; no confundir ese posible aborto de lectura
+durante cierre con prueba de un fallo CDN primario. Log de audio-seek es viejo
+(DIAG102), no pertenece a esta reproducción. Logs privados `diag104-*`.
+
+Conclusión: arranque y cadencia breve de YouTube 4K60 SDR demostrados, no
+reproducción completa ni estabilidad. A petición de evaluar si continuar el
+proyecto tras el anuncio de ProsperoTube, se conserva el resultado de esta
+prueba acotada sin cambio de código ni nueva build en este turno.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
