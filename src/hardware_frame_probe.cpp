@@ -1188,7 +1188,7 @@ static int stream_failure(const char *stage, int code)
         static char report[65536];
         const auto size = stream_trace.format(report, sizeof(report),
                             failure_log_build_label(), stage, code);
-        (void)write_failure_log("/download0/tube5-vp9-output-trace.log", report, size);
+        (void)write_trace_log("/download0/tube5-vp9-output-trace.log", report, size);
     }
     return code;
 }

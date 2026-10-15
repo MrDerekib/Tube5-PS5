@@ -1008,6 +1008,24 @@ fallo de política con muestreo de superficie y cleanup; la regresión de
 ownership de DIAG106 sigue pasando. Esta build instrumenta, no afirma reparar
 el corte; pendiente prueba en consola con el mismo preset automático 4K60.
 
+DIAG107 en consola repite exactamente el fallo de DIAG106: 7,364 s, 433 uploads,
+59,592 fps, policy 5. Logs privados `diag107-NYEeo6`. El historial nuevo NO
+se guardó: `write_failure_log` limita los snapshots a 4096 bytes y rechazaba
+el reporte del anillo. La prueba de DIAG107 cubría el formato y el recorrido
+de fallo, pero no la integración de formato y guardado; no aporta evidencia
+adicional sobre la asociación de outputs.
+
+### DIAG108: reparar el guardado del historial
+
+`BOOT-DIAG-108-VP9-TRACE-WRITE` usa `write_trace_log`, con límite explícito de
+64 KiB y las mismas garantías de escritura atómica/permisos numéricos del
+snapshot normal, que conserva su límite de 4 KiB. No cambia reproducción,
+política, instrumentación ni preset. Prueba ASan/UBSan integra un historial
+real de más de 4 KiB con la escritura, lee/compara todos los bytes guardados,
+comprueba permisos 0644 y rechazo por encima de 64 KiB; también pasan las
+pruebas existentes de snapshots de 4 KiB. Pendiente repetir el fallo en consola
+para obtener por fin el historial; no es una corrección del player.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

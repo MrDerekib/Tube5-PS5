@@ -31,9 +31,10 @@ const char *failure_log_build_label() noexcept
 {
     return build;
 }
-int write_failure_log(const char *path, const char *report, std::size_t size) noexcept
+static int write_numeric_log(const char *path, const char *report, std::size_t size,
+                             std::size_t limit) noexcept
 {
-    if (!path || !report || !size || size > 4096 || std::strlen(path) > 190)
+    if (!path || !report || !size || size > limit || std::strlen(path) > 190)
         return EINVAL;
     char temporary[200]{};
     std::snprintf(temporary, sizeof(temporary), "%s.tmp", path);
@@ -67,5 +68,13 @@ int write_failure_log(const char *path, const char *report, std::size_t size) no
     if (error)
         (void)::unlink(temporary);
     return error;
+}
+int write_failure_log(const char *path, const char *report, std::size_t size) noexcept
+{
+    return write_numeric_log(path, report, size, 4096);
+}
+int write_trace_log(const char *path, const char *report, std::size_t size) noexcept
+{
+    return write_numeric_log(path, report, size, 65536);
 }
 } // namespace tube5
