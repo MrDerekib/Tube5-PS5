@@ -28,6 +28,11 @@ inline Vp9OutputChoice select_vp9_output(std::span<const Vp9PendingOutput> pendi
         return {count, 0, Vp9OutputError::empty};
     if (indicator > 1)
         return {count, 0, Vp9OutputError::flag};
+    unsigned first_visible = count;
+    for (unsigned i = 0; i < count; ++i)
+        if (pending[i].tag && pending[i].displayable &&
+            (first_visible == count || pending[i].tag < pending[first_visible].tag))
+            first_visible = i;
     for (unsigned i = 0; i < count; ++i)
         if (pending[i].tag && pending[i].displayable == (indicator == 0))
         {
@@ -36,6 +41,11 @@ inline Vp9OutputChoice select_vp9_output(std::span<const Vp9PendingOutput> pendi
             if (choice.input == count || pending[i].tag < pending[choice.input].tag)
                 choice.input = i;
         }
+    // Byte 11 is not an exclusive hidden-frame flag. At a keyframe transition
+    // it can mark a valid output even with only visible AUs pending. In that
+    // case keep visible FIFO; never fabricate or discard a hidden input.
+    if (indicator && choice.input == count && first_visible != count)
+        choice.input = first_visible;
     if (choice.input == count)
         return {count, 0, indicator ? Vp9OutputError::missing_hidden
                                     : Vp9OutputError::missing_visible};

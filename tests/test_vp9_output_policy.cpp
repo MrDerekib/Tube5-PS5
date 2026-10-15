@@ -26,6 +26,13 @@ int main()
     pending = {};
     assert(select_vp9_output(pending, 0).error == Vp9OutputError::missing_visible);
     assert(select_vp9_output(pending, 1).error == Vp9OutputError::missing_hidden);
+    pending = {{{103,true,true}, {101,true,false}, {102,true,true}, {}}};
+    // Real-stream regression: marked output at a keyframe, no hidden AU pending.
+    choice = select_vp9_output(pending, 1);
+    assert(choice.error == Vp9OutputError::none && choice.input == 1 && !choice.retire_mask);
+    pending[1] = {};
+    choice = select_vp9_output(pending, 1);
+    assert(choice.error == Vp9OutputError::none && choice.input == 2 && !choice.retire_mask);
     assert(select_vp9_output({}, 0).error == Vp9OutputError::empty);
     std::puts("VP9 flag-only output policy, FIFO, hidden omission, overtaking and guards passed");
 }

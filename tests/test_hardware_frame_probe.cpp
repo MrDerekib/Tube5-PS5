@@ -33,6 +33,7 @@ bool no_accepted_frames = false;
 bool vp9_hidden_fixture = false;
 bool missing_hidden_output = false;
 bool retain_missing_hidden = false;
+bool marked_visible_output = false;
 bool reorder_hidden_output = false;
 struct Pending
 {
@@ -123,6 +124,8 @@ void b_picture(tube5::VideoOutput *output, const tube5::VideoFrame *fallback = n
             std::memset(packet.frame.buffer, 16 + luma_index + (corrupt_pixels ? 1 : 0),
                         packet.frame.bytes);
             if (vp9_hidden_fixture && packet.input[0] == 0x84)
+                output->padding = 1;
+            if (marked_visible_output)
                 output->padding = 1;
             last_picture = {};
             last_picture.size = sizeof(last_picture);
@@ -377,6 +380,52 @@ extern "C" int sceVideodec2GetPictureInfo(const tube5::VideoOutput *output,
 }
 int main(int argc, char **argv)
 {
+    if (argc == 2 && std::strcmp(argv[1], "--vp9-marked-visible-stream") == 0)
+    {
+        vp9_mode = vp9_4k = vp9_pipeline = b_mode = vp9_hidden_fixture = true;
+        marked_visible_output = true;
+        assert(!tube5::hardware_stream_begin(tube5::HardwareFrameMode::vp9_2160, true));
+        unsigned char bytes[101]{};
+        bytes[0] = 0x86;
+        tube5::VideoOutput output{};
+        tube5::VideoPictureInfo info{};
+        unsigned delivered = 0;
+        const auto collect = [&]()
+        {
+            const int rc = tube5::hardware_stream_receive(output, info);
+            if (!rc)
+            {
+                assert(delivered < 8 && output.padding == 1);
+                assert(info.pts == static_cast<std::uint64_t>(delivered) * 1000000 / 60);
+                assert(info.dts == delivered);
+                assert(*static_cast<unsigned char *>(output.buffer) == 16 + delivered);
+                ++delivered;
+                assert(tube5::hardware_stream_send(bytes, sizeof(bytes), 0, 0) == 2);
+                tube5::hardware_stream_release();
+            }
+            else
+                assert(rc == 1 || rc == 2);
+            return rc;
+        };
+        for (unsigned au = 0; au < 8; ++au)
+        {
+            bytes[1] = au;
+            assert(!tube5::hardware_stream_send(bytes, sizeof(bytes),
+                       static_cast<std::uint64_t>(au) * 1000000 / 60, au));
+            collect();
+        }
+        assert(!tube5::hardware_stream_send(nullptr, 0, 0, 0));
+        unsigned drains = 0;
+        while (collect() != 1)
+            assert(++drains <= 4);
+        assert(delivered == 8 && tube5::hardware_stream_status().marked_visible == 8);
+        assert(!tube5::hardware_stream_status().hidden && !tube5::hardware_stream_status().policy_error);
+        assert(!tube5::hardware_stream_reset());
+        assert(!tube5::hardware_stream_close());
+        no_resources();
+        std::puts("VP9 marked-visible FIFO, PTS/pixels, retained buffers, drain/reset and cleanup passed");
+        return 0;
+    }
     if (argc == 2 && std::strcmp(argv[1], "--vp9-seek-priming") == 0)
     {
         vp9_mode = vp9_4k = vp9_pipeline = b_mode = vp9_hidden_fixture = true;

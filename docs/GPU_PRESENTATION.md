@@ -925,6 +925,32 @@ reproducción completa ni estabilidad. A petición de evaluar si continuar el
 proyecto tras el anuncio de ProsperoTube, se conserva el resultado de esta
 prueba acotada sin cambio de código ni nueva build en este turno.
 
+### DIAG105: corregir rechazo de salida marcada cuando solo hay visibles
+
+El propietario pidió corregir la salida temprana. Inspección focal de los
+primeros nueve segundos del stream VP9 SDR itag 315 del mismo vídeo, descargados
+solo para diagnóstico privado: 540 paquetes, 45 hidden, cero show-existing.
+El AU clave de 6,840 s tiene 435.373 bytes y cabecera 0x82, coincidencia exacta
+con el último AU del log DIAG104. No justificar el fallo como show-existing.
+El prefijo y sus logs permanecen bajo `.local/yt-vp9-fix-*`, fuera de Git.
+
+`BOOT-DIAG-105-VP9-MARKED-VISIBLE` corrige la suposición de que byte 11 = 1
+siempre exige un hidden pendiente. Cuando no hay hidden y sí visibles, asigna
+la salida al visible más antiguo conservando FIFO; no fabrica entradas ni
+suprime la imagen. Si hay hidden, mantiene la política anterior y sus guards
+de ambigüedad, retención, flags desconocidos y metadata ausente. Los checks de
+layout/capacidad/ownership y memoria no cambian. Telemetría cuenta MARKED
+VISIBLE y las clases de entradas pendientes para verificar el caso en consola.
+
+Pruebas focales ASan/UBSan: helper reproduce indicator 1 con solo visibles y
+tags fuera del orden de slots; stream materializa ocho salidas marcadas con
+PTS/píxeles correctos, input retenido, backpressure, drain/reset/cleanup.
+El stream de hidden materializados/omitidos/adelantados sigue pasando.
+Build y firma correctas, solo ejecutable/etiqueta preparados por FTP, mismo
+preset automático Costa Rica 2160p60. Pendiente cierre/activación y repetir
+el stream real para validar más allá de 6,9 s; no declarar reproducción completa
+ni correspondencia de píxeles real validada hasta esa prueba de consola.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

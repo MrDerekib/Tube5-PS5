@@ -1238,9 +1238,14 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
         if (stream.pipeline)
         {
             Vp9PendingOutput pending[6]{};
+            stream_status.pending_hidden = stream_status.pending_visible = 0;
             for (unsigned i = 0; i < stream.input_slots; ++i)
+            {
                 pending[i] = {stream.input[i].tag, stream.input[i].displayable,
                               stream.input[i].retained};
+                stream_status.pending_hidden += stream.input[i].tag && !stream.input[i].displayable;
+                stream_status.pending_visible += stream.input[i].tag && stream.input[i].displayable;
+            }
             const auto choice = select_vp9_output({pending, stream.input_slots}, output.padding);
             stream_status.policy_error = static_cast<unsigned>(choice.error);
             if (choice.error != Vp9OutputError::none)
@@ -1288,6 +1293,7 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
     stream.output = output;
     stream.picture = info.picture;
     stream.ready = true;
+    stream_status.marked_visible += stream.vp9 && output.padding != 0;
     return 0;
 }
 #endif
