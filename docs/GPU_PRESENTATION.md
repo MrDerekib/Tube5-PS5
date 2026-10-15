@@ -951,6 +951,35 @@ preset automático Costa Rica 2160p60. Pendiente cierre/activación y repetir
 el stream real para validar más allá de 6,9 s; no declarar reproducción completa
 ni correspondencia de píxeles real validada hasta esa prueba de consola.
 
+DIAG105 real: salió a 6,962 s, 409 uploads, 59,588 fps, sin drops/ENOMEM.
+La primera protección se superó (`MARKED VISIBLE 1`); falló otra después:
+policy 6 `retained_hidden`, un hidden/dos visibles pendientes. Último output
+válido, error cero, padding cero, offered/returned 0/0, accepted 1; cleanup
+cero. Logs privados `diag105-*`. No atribuir solución completa a DIAG105.
+
+### DIAG106: corregir la retención obsoleta al devolver superficies
+
+El código asociaba `frame.accepted` al input actual y dejaba `retained=true`
+incluso si esa misma superficie se devolvía para una salida anterior. Esto
+puede bloquear después la retirada de un hidden sin superficie, aunque su
+buffer ya no esté en manos del driver. El flag de aceptación no es propiedad
+permanente del AU comprimido.
+
+`BOOT-DIAG-106-VP9-SURFACE-OWNER` registra el tag del input ligado a cada
+superficie aceptada. Tras validar una salida, limpia la retención del input
+asociado a la superficie que realmente se devolvió. `frame_used` **no** se
+libera ahí: sigue ocupado hasta la copia/release del consumidor, o hasta
+suprimir la salida hidden. Reset limpia el mapa tras reset nativo. No se
+elimina el guard de retención, ni cambian pools, layout, política de flags,
+red o preset de vídeo.
+
+Host focal ASan/UBSan reproduce aceptación/devolución inmediata para un output
+anterior mientras se envía hidden, luego completion visible sin superficie
+hidden. Verifica metadata/píxeles, omisión, backpressure durante préstamo,
+drain/reset y cleanup. También pasan stream hidden y regresión marked-visible.
+Build/firma correctas; solo executable/etiqueta preparados por FTP. Pendiente
+cierre/activación y validar el stream real después del punto de 6,9 segundos.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:

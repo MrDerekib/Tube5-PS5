@@ -34,6 +34,7 @@ bool vp9_hidden_fixture = false;
 bool missing_hidden_output = false;
 bool retain_missing_hidden = false;
 bool marked_visible_output = false;
+bool immediate_surface_output = false;
 bool reorder_hidden_output = false;
 struct Pending
 {
@@ -340,8 +341,12 @@ extern "C" int sceVideodec2Decode(void *handle, tube5::VideoInput *input, tube5:
         frame->accepted = no_accepted_frames ||
                                   (missing_hidden_output && packet.input[0] == 0x84 &&
                                    !retain_missing_hidden) ? 0 : 1;
+        if (immediate_surface_output)
+            frame->accepted = b_submitted + 1 >= prime_after;
         if (!frame->accepted)
             packet.frame.buffer = nullptr;
+        if (immediate_surface_output)
+            packet.frame.buffer = nullptr; // Materialize into this call's offered surface.
         if (++b_submitted >= prime_after)
             b_picture(output, frame);
         return 0;
@@ -380,6 +385,54 @@ extern "C" int sceVideodec2GetPictureInfo(const tube5::VideoOutput *output,
 }
 int main(int argc, char **argv)
 {
+    if (argc == 2 && std::strcmp(argv[1], "--vp9-returned-surface-owner") == 0)
+    {
+        vp9_mode = vp9_4k = vp9_pipeline = b_mode = vp9_hidden_fixture = true;
+        immediate_surface_output = missing_hidden_output = true;
+        assert(!tube5::hardware_stream_begin(tube5::HardwareFrameMode::vp9_2160, true));
+        tube5::VideoOutput output{};
+        tube5::VideoPictureInfo info{};
+        unsigned char bytes[101]{};
+        unsigned delivered = 0;
+        const auto collect = [&]()
+        {
+            const int rc = tube5::hardware_stream_receive(output, info);
+            if (!rc)
+            {
+                assert(delivered < 7);
+                assert(info.pts == static_cast<std::uint64_t>(delivered) * 1000000 / 60);
+                assert(*static_cast<unsigned char *>(output.buffer) == 16 + delivered);
+                ++delivered;
+                // Even when driver ownership ended, the caller still owns the
+                // returned surface until copying/release: no new submit is allowed.
+                assert(tube5::hardware_stream_send(bytes, sizeof(bytes), 0, 0) == 2);
+                tube5::hardware_stream_release();
+            }
+            else
+                assert(rc == 1 || rc == 2);
+            return rc;
+        };
+        for (unsigned au = 0; au < 8; ++au)
+        {
+            const unsigned index = au < 4 ? au : au - 1;
+            bytes[0] = au == 3 ? 0x84 : 0x86;
+            bytes[1] = index;
+            assert(!tube5::hardware_stream_send(bytes, sizeof(bytes),
+                       static_cast<std::uint64_t>(index) * 1000000 / 60, index, au != 3));
+            collect();
+        }
+        assert(!tube5::hardware_stream_send(nullptr, 0, 0, 0));
+        unsigned drains = 0;
+        while (collect() != 1)
+            assert(++drains <= 4);
+        assert(delivered == 7 && tube5::hardware_stream_status().hidden_omitted == 1);
+        assert(!tube5::hardware_stream_status().policy_error);
+        assert(!tube5::hardware_stream_reset());
+        assert(!tube5::hardware_stream_close());
+        no_resources();
+        std::puts("VP9 returned-surface owner cleared, hidden omission, caller ownership, PTS and cleanup passed");
+        return 0;
+    }
     if (argc == 2 && std::strcmp(argv[1], "--vp9-marked-visible-stream") == 0)
     {
         vp9_mode = vp9_4k = vp9_pipeline = b_mode = vp9_hidden_fixture = true;

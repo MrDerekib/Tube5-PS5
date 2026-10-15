@@ -99,6 +99,7 @@ struct Stream
     unsigned drain_attempts = 0;
     bool displayable = true;
     bool frame_used[6]{};
+    std::uint64_t frame_input_tag[6]{};
     struct Input
     {
         std::uint64_t tag = 0, pts = 0, dts = 0;
@@ -1191,6 +1192,7 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
     {
         ++stream_status.accepted;
         stream.frame_used[offered] = true;
+        stream.frame_input_tag[offered] = stream.draining ? 0 : stream.input[stream.sync_input].tag;
         if (!stream.draining)
             stream.input[stream.sync_input].retained = true;
     }
@@ -1223,6 +1225,16 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
         (output.height & 1u) || output.pitch_bytes < output.width || output.pitch_bytes > 4096 ||
         (output.pitch_bytes & 1u) || output.bytes > clip.frame_stride || bytes > output.bytes)
         return stream_failure("OUTPUT LAYOUT", -EINVAL);
+    // accepted belongs to the offered surface, not permanently to its input AU.
+    // A surface can be returned for an older output in the same Decode call.
+    // Driver ownership has ended here; caller ownership remains frame_used until
+    // the NV12 copy/release. Do not confuse a stale acceptance with an in-flight AU.
+    const auto completed_tag = stream.frame_input_tag[returned];
+    if (completed_tag)
+        for (auto &pending : stream.input)
+            if (pending.tag == completed_tag)
+                pending.retained = false;
+    stream.frame_input_tag[returned] = 0;
     struct Guarded
     {
         std::uint64_t before = UINT64_C(0xc0dec0dec0dec0de);
