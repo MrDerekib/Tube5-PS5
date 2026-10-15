@@ -35,6 +35,7 @@ bool missing_hidden_output = false;
 bool retain_missing_hidden = false;
 bool marked_visible_output = false;
 bool immediate_surface_output = false;
+bool invalid_output_indicator = false;
 bool reorder_hidden_output = false;
 struct Pending
 {
@@ -349,6 +350,8 @@ extern "C" int sceVideodec2Decode(void *handle, tube5::VideoInput *input, tube5:
             packet.frame.buffer = nullptr; // Materialize into this call's offered surface.
         if (++b_submitted >= prime_after)
             b_picture(output, frame);
+        if (invalid_output_indicator && output->valid)
+            output->padding = 2;
         return 0;
     }
     assert(handle == &decoder && decoder && input->size == 48 && input->bytes > 100 &&
@@ -385,6 +388,25 @@ extern "C" int sceVideodec2GetPictureInfo(const tube5::VideoOutput *output,
 }
 int main(int argc, char **argv)
 {
+    if (argc == 2 && std::strcmp(argv[1], "--vp9-output-trace-error") == 0)
+    {
+        vp9_mode = vp9_4k = vp9_pipeline = b_mode = vp9_hidden_fixture = true;
+        invalid_output_indicator = true;
+        assert(!tube5::hardware_stream_begin(tube5::HardwareFrameMode::vp9_2160, true));
+        unsigned char bytes[101]{};
+        bytes[0] = 0x86;
+        for (unsigned i = 0; i < 4; ++i)
+        {
+            bytes[1] = i;
+            const int code = tube5::hardware_stream_send(bytes, sizeof(bytes), i * 16667, i);
+            assert(code == (i == 3 ? -EINVAL : 0));
+        }
+        assert(tube5::hardware_stream_status().policy_error == 2);
+        assert(!tube5::hardware_stream_close());
+        no_resources();
+        std::puts("VP9 policy failure trace, validated-surface sampling and cleanup passed");
+        return 0;
+    }
     if (argc == 2 && std::strcmp(argv[1], "--vp9-returned-surface-owner") == 0)
     {
         vp9_mode = vp9_4k = vp9_pipeline = b_mode = vp9_hidden_fixture = true;

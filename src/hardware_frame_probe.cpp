@@ -9,6 +9,7 @@ tube5::HardwareStreamStatus stream_status;
 #include "failure_log.hpp"
 #include "vp9_packet.hpp"
 #include "vp9_output_policy.hpp"
+#include "vp9_output_trace.hpp"
 #include <algorithm>
 #include <cerrno>
 #include <cstdio>
@@ -112,6 +113,8 @@ struct Stream
     bool ready = false, borrowed = false, draining = false, eof = false;
 };
 Stream stream;
+tube5::Vp9OutputTrace stream_trace;
+unsigned stream_prefix = 0;
 void clip_snapshot()
 {
 #ifdef TUBE5_HW_TIMING
@@ -1180,10 +1183,40 @@ static int stream_failure(const char *stage, int code)
 {
     stream_status.stage = stage;
     stream_status.error = code;
+    if (stream.vp9 && stream.pipeline)
+    {
+        static char report[65536];
+        const auto size = stream_trace.format(report, sizeof(report),
+                            failure_log_build_label(), stage, code);
+        (void)write_failure_log("/download0/tube5-vp9-output-trace.log", report, size);
+    }
     return code;
 }
 static int stream_output(unsigned offered, const VideoFrame &frame, const VideoOutput &output)
 {
+    Vp9OutputEvent *event = nullptr;
+    if (stream.vp9 && stream.pipeline)
+    {
+        Vp9OutputEvent next{};
+        next.submitted = stream.draining ? 0 : stream.input[stream.sync_input].tag;
+        next.bytes = stream.draining ? 0 : stream_status.last_au_bytes;
+        next.prefix = stream.draining ? 0 : stream_prefix;
+        next.draining = stream.draining;
+        next.offered = offered;
+        next.accepted = frame.accepted;
+        next.returned = stream.slots;
+        next.valid = output.valid;
+        next.native_error = output.error;
+        next.indicator = output.padding;
+        for (unsigned i = 0; i < stream.input_slots; ++i)
+        {
+            const auto &p = stream.input[i];
+            next.pending[i] = {p.tag, p.pts, p.dts, p.displayable, p.retained};
+        }
+        for (unsigned i = 0; i < stream.slots; ++i)
+            next.owners[i] = stream.frame_input_tag[i];
+        event = &stream_trace.push(next);
+    }
     stream_status.last_output = output;
     stream_status.last_offered = offered;
     stream_status.last_frame_accepted = frame.accepted;
@@ -1215,6 +1248,7 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
                                                 returned * clip.frame_stride)
         ++returned;
     stream_status.last_returned = returned;
+    if (event) event->returned = returned;
     const auto bytes = static_cast<std::uint64_t>(output.pitch_bytes) * output.height * 3 / 2;
     if (returned == stream.slots || (!stream.frame_used[returned] && returned != offered) ||
         output.codec != (stream.vp9 ? 0x00245bfdu : 1u) || output.pictures != 1 ||
@@ -1225,6 +1259,21 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
         (output.height & 1u) || output.pitch_bytes < output.width || output.pitch_bytes > 4096 ||
         (output.pitch_bytes & 1u) || output.bytes > clip.frame_stride || bytes > output.bytes)
         return stream_failure("OUTPUT LAYOUT", -EINVAL);
+    if (event)
+    {
+        // Layout has been validated. Sparse luma signature can be matched with
+        // a private software-decoded reference without guessing from byte 11.
+        auto hash = UINT64_C(14695981039346656037);
+        const auto *luma = static_cast<const unsigned char *>(output.buffer);
+        for (unsigned y = 0; y < 8; ++y)
+            for (unsigned x = 0; x < 8; ++x)
+            {
+                hash ^= luma[((2 * y + 1) * stream.height / 16) * output.pitch_bytes +
+                             (2 * x + 1) * stream.width / 16];
+                hash *= UINT64_C(1099511628211);
+            }
+        event->signature = hash;
+    }
     // accepted belongs to the offered surface, not permanently to its input AU.
     // A surface can be returned for an older output in the same Decode call.
     // Driver ownership has ended here; caller ownership remains frame_used until
@@ -1259,6 +1308,12 @@ static int stream_output(unsigned offered, const VideoFrame &frame, const VideoO
                 stream_status.pending_visible += stream.input[i].tag && stream.input[i].displayable;
             }
             const auto choice = select_vp9_output({pending, stream.input_slots}, output.padding);
+            if (event)
+            {
+                event->selected = choice.input;
+                event->retire = choice.retire_mask;
+                event->policy = static_cast<unsigned>(choice.error);
+            }
             stream_status.policy_error = static_cast<unsigned>(choice.error);
             if (choice.error != Vp9OutputError::none)
                 return stream_failure("VP9 OUTPUT FLAG POLICY", -EINVAL);
@@ -1346,6 +1401,8 @@ int hardware_stream_reset() noexcept
     const auto width = stream.width, height = stream.height;
     stream = {};
     stream.vp9 = vp9;
+    stream_trace = {};
+    stream_prefix = 0;
     stream.pipeline = pipeline;
     stream.slots = slots;
     stream.input_slots = input_slots;
@@ -1437,6 +1494,9 @@ int hardware_stream_send(const std::uint8_t *data, std::size_t bytes, std::uint6
     auto *packet = static_cast<unsigned char *>(resources.input.data) + input * mib;
     std::memcpy(packet, data, bytes);
     stream_status.last_au_bytes = bytes;
+    stream_prefix = 0;
+    for (std::size_t i = 0; i < std::min<std::size_t>(bytes, 4); ++i)
+        stream_prefix = (stream_prefix << 8) | data[i];
     stream_status.last_input_pts = pts;
     stream_status.last_input_dts = dts;
     stream_status.last_nal_mask = 0;

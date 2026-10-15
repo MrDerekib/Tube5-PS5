@@ -980,6 +980,34 @@ drain/reset y cleanup. También pasan stream hidden y regresión marked-visible.
 Build/firma correctas; solo executable/etiqueta preparados por FTP. Pendiente
 cierre/activación y validar el stream real después del punto de 6,9 segundos.
 
+DIAG106 real: corte a 7,364 s, 433 uploads, 59,590 fps, cero drops/ENOMEM,
+cleanup cero. La nueva protección de ownership superó el fallo anterior,
+pero la política termina con error 5 (`missing_visible`): salida nativa válida,
+error cero, byte 11 cero, un hidden y ningún visible pendiente. 472 AUs,
+435 recibidos, 36 hidden (33 materializados/3 omitidos), dos marked-visible.
+Logs privados `.local/console-logs/diag106-ZKWsoS`. La asociación de metadatos
+no queda validada por superar los fallos anteriores; no ampliar excepciones
+sin identificar las salidas reales.
+
+### DIAG107: historial acotado antes del fallo de asociación
+
+`BOOT-DIAG-107-VP9-OUTPUT-TRACE` mantiene la política de DIAG106 y añade un
+anillo de 64 operaciones. En fallo del stream escribe únicamente números en
+`/download0/tube5-vp9-output-trace.log`: tag enviado, tamaño/prefijo de cuatro
+bytes del AU, metadatos/retención pendientes antes de procesar el output,
+owners previos, superficie ofrecida/devuelta, aceptación, validez/indicador,
+selección/máscara/error de política. Tras validar el layout calcula FNV1a64
+de 64 muestras Y en los centros de una rejilla 8x8, para comparar con una
+referencia software privada y distinguir imágenes visibles sin fiarse del
+byte 11. Es una huella diagnóstica, no una verificación completa de píxeles.
+
+No hay I/O por frame, ni URLs/payloads/fotogramas completos en el log. Al
+reset se vacía el anillo. Formato acotado a 64 KiB, sin asignaciones dinámicas.
+Host ASan/UBSan verifica wrap/truncamiento/canarios/timestamps, recorrido de
+fallo de política con muestreo de superficie y cleanup; la regresión de
+ownership de DIAG106 sigue pasando. Esta build instrumenta, no afirma reparar
+el corte; pendiente prueba en consola con el mismo preset automático 4K60.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
