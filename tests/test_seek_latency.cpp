@@ -42,7 +42,7 @@ int main()
     r->status = 1;
     char report[8192];
     auto n = history.format(report, sizeof(report), "TEST");
-    assert(std::strstr(report, "1 5000 1 100 100 350 400 500 1000 1200 1300 2 7 500\n"));
+    assert(std::strstr(report, "1 5000 1 100 100 350 400 500 1000 1200 1300 2 7 500 0 0 0\n"));
     history.begin(2300, 2400, 6000);
     history.begin(2500, 2600, 7000);
     assert(history.records[1].status == 3); // Superseded, never reported complete.

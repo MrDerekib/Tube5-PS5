@@ -207,7 +207,8 @@ int MediaPlayer::open_source_worker(void *userdata) noexcept
 {
     auto *self = static_cast<MediaPlayer *>(userdata);
     memory_set_stage("SOURCE_OPEN");
-    self->source_ = self->youtube_ ? self->youtube_stream_.open(self->opening_path_)
+    self->source_ = self->youtube_ ? self->youtube_stream_.open(self->opening_path_,
+                                                             self->opening_vp9_pipeline_)
                                    : Kit_CreateSourceFromUrl(self->opening_path_);
     if (self->source_ && self->opening_audio_path_[0] && !network_session_interrupted())
         self->audio_source_ = self->youtube_audio_stream_.open(self->opening_audio_path_);
@@ -619,6 +620,11 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
         {
             seek_latency_.begin(seek_request_us_, dispatch_us,
                                 static_cast<std::int64_t>(std::llround(pending_seek_ * 1000)));
+            const auto net = youtube_stream_.transfer_timing();
+            auto *r = seek_latency_.current();
+            r->net_start_requests = net.completed;
+            r->net_start_ms = net.elapsed_ms;
+            r->net_start_bytes = net.bytes;
         }
         if ((audio_player_ || vp9_seek) && native_codec_active())
         {
@@ -701,6 +707,10 @@ void MediaPlayer::draw(SDL_Renderer *renderer, const SDL_Rect &destination) noex
                     {
                         r->native = timing;
                         r->presented = seek_now();
+                        const auto net = youtube_stream_.transfer_timing();
+                        r->net_requests = net.completed - r->net_start_requests;
+                        r->net_ms = net.elapsed_ms - r->net_start_ms;
+                        r->net_bytes = net.bytes - r->net_start_bytes;
                         r->status = 1;
                     }
                 }

@@ -69,6 +69,8 @@ struct SeekLatencyHistory
         std::uint64_t requested = 0, dispatch = 0, returned = 0, presented = 0, audio = 0;
         std::int64_t target_ms = 0;
         SeekDecodeTiming native{};
+        std::uint64_t net_start_requests = 0, net_start_ms = 0, net_start_bytes = 0;
+        std::uint64_t net_requests = 0, net_ms = 0, net_bytes = 0;
         unsigned status = 0; // 0 pending, 1 presented, 2 failed, 3 superseded.
     } records[16];
     unsigned count = 0;
@@ -94,7 +96,7 @@ struct SeekLatencyHistory
         };
         append("TUBE5 SEEK LATENCY V1\nBUILD %s\nTOTAL %u\n"
                "All phases US from dispatch (-1 unavailable); WAIT from last request.\n"
-               "N TARGET_MS STATE WAIT PREP RETURN RESET PACKET DECODED UPLOAD AUDIO SKIP CALLS HW_US\n"
+               "N TARGET_MS STATE WAIT PREP RETURN RESET PACKET DECODED UPLOAD AUDIO SKIP CALLS HW_US REQ HTTP_MS RX_KIB\n"
                "STATE 0 pending/closed, 1 uploaded, 2 failed, 3 superseded; UPLOAD not HDMI flip.\n",
                label, count);
         const unsigned start = count > 16 ? count - 16 : 0;
@@ -103,14 +105,17 @@ struct SeekLatencyHistory
             const auto &r = records[i % 16];
             const auto delta = [&](std::uint64_t time) -> long long
             { return time && time >= r.dispatch ? static_cast<long long>(time - r.dispatch) : -1; };
-            append("%u %lld %u %lld %lld %lld %lld %lld %lld %lld %lld %u %u %llu\n",
+            append("%u %lld %u %lld %lld %lld %lld %lld %lld %lld %lld %u %u %llu %llu %llu %llu\n",
                    i + 1, static_cast<long long>(r.target_ms), r.status,
                    r.requested && r.dispatch >= r.requested ?
                        static_cast<long long>(r.dispatch - r.requested) : -1,
                    delta(r.native.prepared), delta(r.returned), delta(r.native.reset),
                    delta(r.native.packet), delta(r.native.decoded), delta(r.presented),
                    delta(r.audio), r.native.skipped, r.native.calls,
-                   static_cast<unsigned long long>(r.native.decode_us));
+                   static_cast<unsigned long long>(r.native.decode_us),
+                   static_cast<unsigned long long>(r.net_requests),
+                   static_cast<unsigned long long>(r.net_ms),
+                   static_cast<unsigned long long>(r.net_bytes / 1024));
         }
         return used;
     }

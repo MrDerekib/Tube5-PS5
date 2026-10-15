@@ -36,6 +36,7 @@ curl_write_callback writer = nullptr, header = nullptr;
 void *writer_data = nullptr, *header_data = nullptr;
 char range[64]{};
 unsigned performs = 0;
+std::vector<std::pair<unsigned long long, unsigned long long>> requested_ranges;
 } // namespace
 extern "C" int __real_getaddrinfo(const char *, const char *, const addrinfo *, addrinfo **out)
 {
@@ -123,6 +124,7 @@ extern "C" CURLcode __wrap_curl_easy_perform(CURL *)
         return CURLE_OK;
     unsigned long long first = 0, last = 0;
     assert(std::sscanf(range, "%llu-%llu", &first, &last) == 2);
+    requested_ranges.emplace_back(first, last);
     assert(first < media.size());
     last = std::min(last, static_cast<unsigned long long>(media.size() - 1));
     if (reply != Reply::missing_range)
@@ -137,7 +139,7 @@ extern "C" CURLcode __wrap_curl_easy_perform(CURL *)
         length /= 2;
     if (reply == Reply::oversized)
     {
-        std::vector<char> huge(512 * 1024 + 1);
+        std::vector<char> huge(static_cast<std::size_t>(last - first + 2));
         return writer(huge.data(), 1, huge.size(), writer_data) ? CURLE_OK : CURLE_WRITE_ERROR;
     }
     return writer(media.data() + first, 1, length, writer_data) == length ? CURLE_OK
@@ -151,13 +153,14 @@ int main()
     assert(!media.empty());
     tube5::YouTubeStream source;
     constexpr const char *url = "https://rr1.googlevideo.com/videoplayback?fixture=1";
+    for (const bool larger : {false, true})
     for (const auto scenario :
          {Reply::valid, Reply::tls_error, Reply::wrong_range, Reply::missing_range, Reply::http_200,
           Reply::http_403, Reply::truncated, Reply::oversized, Reply::valid})
     {
         reply = scenario;
         tube5::begin_network_session();
-        auto *opened = source.open(url);
+        auto *opened = source.open(url, larger);
         tube5::finish_network_open();
         assert(static_cast<bool>(opened) == (reply == Reply::valid));
         if (!opened)
@@ -209,6 +212,65 @@ int main()
     source.diagnostic(2, diagnostic, sizeof(diagnostic));
     assert(std::strstr(diagnostic, "LAST OK 0-524287"));
     source.diagnostic(0, nullptr, 0);
+    // Larger 4K sequential window: no startup/first-seek growth, exact payload,
+    // 1 MiB only after consuming the first 512 KiB, then backward seek small.
+    media.resize(std::max<std::size_t>(media.size(), 8 * 1024 * 1024), 0);
+    reply = Reply::valid;
+    tube5::begin_network_session();
+    requested_ranges.clear();
+    opened = source.open(url, true);
+    tube5::finish_network_open();
+    assert(opened && !requested_ranges.empty());
+    assert(requested_ranges[0].second - requested_ranges[0].first + 1 == 512 * 1024);
+    io = static_cast<AVFormatContext *>(opened->format_ctx)->pb;
+    requested_ranges.clear();
+    std::uint64_t cursor = 4 * 1024 * 1024;
+    assert(io->seek(io->opaque, cursor, SEEK_SET) == static_cast<std::int64_t>(cursor));
+    const auto consume = [&](std::size_t remaining)
+    {
+        std::uint8_t block[32768];
+        while (remaining)
+        {
+            const int amount = io->read_packet(io->opaque, block,
+                                              std::min<std::size_t>(remaining, sizeof(block)));
+            assert(amount > 0 && static_cast<std::size_t>(amount) <= remaining);
+            assert(!std::memcmp(block, media.data() + cursor, amount));
+            remaining -= amount;
+            cursor += amount;
+        }
+    };
+    consume(512 * 1024);
+    assert(requested_ranges.size() == 1);
+    assert(requested_ranges.back().second - requested_ranges.back().first + 1 == 512 * 1024);
+    // A no-op position query/seek at the boundary keeps sequential growth.
+    assert(io->seek(io->opaque, 0, SEEK_CUR) == static_cast<std::int64_t>(cursor));
+    consume(1024 * 1024);
+    assert(requested_ranges.size() == 2);
+    assert(requested_ranges.back().second - requested_ranges.back().first + 1 == 1024 * 1024);
+    consume(1024 * 1024);
+    assert(requested_ranges.size() == 3);
+    assert(requested_ranges.back().second - requested_ranges.back().first + 1 == 1024 * 1024);
+    cursor = 3 * 1024 * 1024;
+    assert(io->seek(io->opaque, cursor, SEEK_SET) == static_cast<std::int64_t>(cursor));
+    consume(16);
+    assert(requested_ranges.size() == 4);
+    assert(requested_ranges.back().second - requested_ranges.back().first + 1 == 512 * 1024);
+    // Range growth must not weaken short/oversized response validation.
+    consume(512 * 1024 - 16);
+    reply = Reply::truncated;
+    assert(io->read_packet(io->opaque, sample, sizeof(sample)) < 0);
+    reply = Reply::oversized;
+    assert(io->read_packet(io->opaque, sample, sizeof(sample)) < 0);
+    reply = Reply::valid;
+    cursor = media.size() - 16;
+    assert(io->seek(io->opaque, cursor, SEEK_SET) == static_cast<std::int64_t>(cursor));
+    consume(16);
+    const auto at_eof = performs;
+    assert(io->read_packet(io->opaque, sample, sizeof(sample)) == AVERROR_EOF);
+    assert(performs == at_eof);
+    assert(source.transfer_timing().completed > 0 && source.transfer_timing().bytes > 0);
+    source.close();
+    assert(!source.transfer_timing().completed);
     tube5::begin_network_session();
     tube5::cancel_network_session();
     const auto before = performs;
@@ -218,4 +280,5 @@ int main()
     source.diagnostic(0, diagnostic, sizeof(diagnostic));
     assert(std::strstr(diagnostic, "REQ 0 OK 0 FAIL 0"));
     assert(!std::strstr(diagnostic, "HTTP 403"));
+    std::puts("YouTube ranges: initial/seek 512 KiB, sequential 1 MiB, payload, EOF, TLS/range errors and cancellation passed");
 }

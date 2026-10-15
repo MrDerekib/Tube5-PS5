@@ -54,8 +54,13 @@ bool youtube_content_range(const char *text, std::uint64_t wanted, std::uint64_t
 }
 struct YouTubeStream::State
 {
-    static constexpr std::size_t capacity = 512 * 1024;
-    std::unique_ptr<unsigned char[]> cache{new (std::nothrow) unsigned char[capacity]};
+    static constexpr std::size_t initial_capacity = 512 * 1024;
+    const std::size_t capacity;
+    std::unique_ptr<unsigned char[]> cache;
+    std::size_t request_capacity = initial_capacity;
+    bool sequential = false;
+    explicit State(bool larger) : capacity(larger ? 1024 * 1024 : initial_capacity),
+        cache(new (std::nothrow) unsigned char[capacity]) {}
     std::array<char, 8192> url{};
     CURL *curl = nullptr;
     curl_slist *mapping = nullptr;
@@ -68,6 +73,7 @@ struct YouTubeStream::State
     bool valid_range = false;
     std::atomic<unsigned> requests{0}, failures{0};
     std::atomic<std::uint64_t> bytes{0};
+    std::atomic<std::uint64_t> completed_requests{0}, transfer_ms{0};
     const Uint64 opened_at = SDL_GetTicks64();
     std::atomic<std::uint64_t> request_start{0}, request_end{0}, last_good_start{0},
         last_good_end{0}, age_ms{0}, elapsed_ms{0}, response_bytes{0};
@@ -93,10 +99,11 @@ struct YouTubeStream::State
                           new_connections.load());
         else if (row == 2)
             std::snprintf(text, size,
-                          "LAST OK %llu-%llu TOTAL RX %llu KIB SEEKS %u GET ANDROID H1.1",
+                          "LAST OK %llu-%llu TOTAL RX %llu KIB SEEKS %u GET ANDROID H1.1 CACHE %zu KIB",
                           static_cast<unsigned long long>(last_good_start.load()),
                           static_cast<unsigned long long>(last_good_end.load()),
-                          static_cast<unsigned long long>(bytes.load() / 1024), seek_calls.load());
+                          static_cast<unsigned long long>(bytes.load() / 1024), seek_calls.load(),
+                          capacity / 1024);
         else if (size)
             text[0] = 0;
     }
@@ -119,7 +126,7 @@ struct YouTubeStream::State
     static std::size_t receive(char *data, std::size_t size, std::size_t count, void *opaque)
     {
         auto &self = *static_cast<State *>(opaque);
-        if (size && count > (capacity - self.received) / size)
+        if (size && count > (self.request_capacity - self.received) / size)
             return 0;
         const auto length = size * count;
         std::memcpy(self.cache.get() + self.received, data, length);
@@ -150,7 +157,7 @@ struct YouTubeStream::State
             const char *p = value;
             while (*p == ' ' || *p == '\t')
                 ++p;
-            self.valid_range = youtube_content_range(p, self.position, capacity, self.expected_end,
+            self.valid_range = youtube_content_range(p, self.position, self.request_capacity, self.expected_end,
                                                      self.response_total);
         }
         return length;
@@ -162,23 +169,26 @@ struct YouTubeStream::State
         received = 0;
         cached = 0;
         valid_range = false;
+        request_capacity = sequential ? capacity : initial_capacity;
         const auto started = SDL_GetTicks64();
         const bool record = failures.load() == 0;
         if (record)
         {
             request_start = position;
-            request_end = position + capacity - 1;
+            request_end = position + request_capacity - 1;
             age_ms = started - opened_at;
         }
         char range[64]{};
         std::snprintf(range, sizeof(range), "%llu-%llu", static_cast<unsigned long long>(position),
-                      static_cast<unsigned long long>(position + capacity - 1));
+                      static_cast<unsigned long long>(position + request_capacity - 1));
         CURLcode code = curl_easy_setopt(curl, CURLOPT_RANGE, range);
         ++requests;
         if (record)
             recorded_request = requests.load();
         if (code == CURLE_OK)
             code = curl_easy_perform(curl);
+        transfer_ms += SDL_GetTicks64() - started;
+        ++completed_requests;
         long http = 0, verify = -1, connections = 0;
         (void)curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http);
         (void)curl_easy_getinfo(curl, CURLINFO_SSL_VERIFYRESULT, &verify);
@@ -208,6 +218,7 @@ struct YouTubeStream::State
         total = response_total;
         cache_start = position;
         cached = received;
+        sequential = true;
         bytes += received;
         if (record)
         {
@@ -260,11 +271,18 @@ struct YouTubeStream::State
                                                      : -1;
         if (base < 0 || offset < -base || offset > static_cast<std::int64_t>(self.total) - base)
             return AVERROR(EINVAL);
-        self.position = static_cast<std::uint64_t>(base + offset);
+        const auto destination = static_cast<std::uint64_t>(base + offset);
+        // A discontinuous read starts small. Seeking inside the existing cache
+        // reuses it; a no-op seek at its end must not disable sequential growth.
+        if (destination != self.position &&
+            (!self.cached || destination < self.cache_start ||
+             destination - self.cache_start >= self.cached))
+            self.sequential = false;
+        self.position = destination;
         return static_cast<std::int64_t>(self.position);
     }
 };
-Kit_Source *YouTubeStream::open(const char *url) noexcept
+Kit_Source *YouTubeStream::open(const char *url, bool larger_sequential_ranges) noexcept
 {
     close();
     error_[0] = 0;
@@ -275,10 +293,10 @@ Kit_Source *YouTubeStream::open(const char *url) noexcept
         std::snprintf(error_, sizeof(error_), "YT: URL HTTPS NO PERMITIDA");
         return nullptr;
     }
-    state_ = new (std::nothrow) State;
+    state_ = new (std::nothrow) State(larger_sequential_ranges);
     if (!state_ || !state_->cache)
     {
-        std::snprintf(error_, sizeof(error_), "YT: ENOMEM BUFFER HTTPS 512 KIB");
+        std::snprintf(error_, sizeof(error_), "YT: ENOMEM BUFFER HTTPS");
         close();
         return nullptr;
     }
@@ -397,8 +415,14 @@ const char *YouTubeStream::error() const noexcept
 }
 void YouTubeStream::status(char *text, std::size_t capacity) const noexcept
 {
-    std::snprintf(text, capacity, "YT HTTPS: REQ %u FAIL %u RX %llu KIB CACHE 512 KIB",
+    std::snprintf(text, capacity, "YT HTTPS: REQ %u FAIL %u RX %llu KIB CACHE %zu KIB",
                   state_ ? state_->requests.load() : 0, state_ ? state_->failures.load() : 0,
-                  static_cast<unsigned long long>(state_ ? state_->bytes.load() / 1024 : 0));
+                  static_cast<unsigned long long>(state_ ? state_->bytes.load() / 1024 : 0),
+                  state_ ? state_->capacity / 1024 : 0);
+}
+YouTubeTransferTiming YouTubeStream::transfer_timing() const noexcept
+{
+    return state_ ? YouTubeTransferTiming{state_->completed_requests.load(), state_->transfer_ms.load(),
+                                         state_->bytes.load()} : YouTubeTransferTiming{};
 }
 } // namespace tube5

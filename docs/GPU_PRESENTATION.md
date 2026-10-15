@@ -1153,6 +1153,42 @@ cada salto. Mejora esperada ~200 ms por seek; no resuelve por sí sola los
 0,5–3,9 s previos de reconstrucción/demux/red. No declarar ganancia medida
 en PS5 hasta comparar el nuevo historial.
 
+DIAG111 real (`diag111-Tekm5t`): 16/16 seeks, 16 rebases, EOF313/313 y errores
+nativo/política/cleanup cero. Decoded→upload pasa de 198,5–214,2 ms (media206,4)
+en DIAG110 a 3,2–18,7 ms (media11,7): ahorro de esa fase ~194,7 ms confirmado.
+La duración total desde dispatch fue 0,471–5,286 s, pero los destinos y GOPs
+no coinciden con DIAG110; no inferir regresión global ni mejora total de esos
+rangos. A/V percibido sigue requiriendo valoración del usuario. El snapshot
+de fallo etiquetado DIAG108 es histórico, no fallo nuevo. Cadencia activa
+59,410 fps, seis drops en esta sesión con 16 saltos.
+
+### DIAG112: agrupar lecturas consecutivas durante reconstrucción 4K60
+
+`BOOT-DIAG-112-VP9-RANGE-BATCH` mantiene decodificación/referencias/rebase y
+prueba una reducción de viajes HTTPS: únicamente el stream de vídeo con hint
+VP9 4K60 reserva cache de 1 MiB (+512 KiB respecto al baseline). Primer refill
+al abrir y tras seek fuera de cache permanece en 512 KiB, los consecutivos
+usan 1 MiB. Seek dentro de cache la reutiliza; consultar/seek no-op en su
+límite no reinicia el crecimiento. Audio/otros formatos conservan 512 KiB.
+No hay hilos/prefetch, realloc durante reproducción ni dependencia de PC.
+Cada respuesta se valida contra el tamaño de rango solicitado, no la memoria
+máxima, conservando TLS, 206, Content-Range, total y tamaño exacto de cuerpo.
+
+La parte del preroll fuera de Decode puede contener HTTP/demux/otros trabajos;
+esta build no presupone que todo ese tiempo sea de red. Añade en el historial
+por seek REQ/HTTP_MS/RX_KIB: diferencias de contadores de transferencias
+completadas desde prepare hasta el primer upload. HTTP_MS mide curl/refill;
+puede solaparse con Decode e incluir una transferencia iniciada antes del
+intervalo o read-ahead, no se debe sumar como una fase exclusivamente serial.
+
+ASan/UBSan focal con curl/DNS simulados sin peticiones externas: matriz de
+TLS/403/200/rangos/cuerpos inválidos en ambos modos; payload exacto, primer
+bloque tras seek de 512 KiB, siguientes de 1 MiB, backward seek pequeño,
+no-op de posición, EOF sin petición adicional, respuestas truncadas/oversized
+en rango grande, cancelación y cierre. Test del historial pasa con las nuevas
+columnas y guardado/lectura real. Pendiente medición PS5; no prometer ahorro
+total de seek ni velocidad extra del propio decoder hardware por este cambio.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
