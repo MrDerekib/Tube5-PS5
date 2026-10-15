@@ -1104,6 +1104,24 @@ formato acotado e integración real de guardado/lectura del historial. Build y
 firma válidos. Pendiente consola: varios +5/-5 separados por unos segundos y
 un salto de timeline; dejar la app abierta para rescatar los nuevos logs.
 
+DIAG110 consola (`diag110-hvFcax`): 14/14 seeks con estado uploaded, EOF a
+313/313 s y error nativo/política/cleanup cero. El historial ya permite medir:
+WAIT desde última pulsación ~103 ms; retorno de petición 3,3–4,2 ms desde
+dispatch, reset terminado 16,8–53,0 ms, primer paquete 86–274 ms. Primer frame
+en destino 0,559–3,896 s; upload 0,773–4,095 s desde dispatch (la espera al
+agrupar pulsaciones va aparte). Preroll 25–300 visibles por salto, 32–329 AUs,
+0,224–2,212 s acumulados dentro del Decode nativo. Hay esperas fuera de Decode
+durante preroll que estas métricas no atribuyen exclusivamente a red ni CPU.
+Decoded→upload añade 198–214 ms consistentemente; la fuente local de la
+dependencia alpha2 tiene -0,1 s al rebasar el reloj tras seek y +0,1 s al
+consultar el PTS de vídeo. Esto es una pista para una investigación acotada
+de sincronización, no autorización para quitar ambos offsets a ciegas ni
+prueba de que toda la latencia venga del reloj. Conservar A/V sincronizado.
+
+Sesión: 5.291 uploads, 59,231 fps activos, 48 drops, máximo intervalo166,311 ms,
+2.263 preroll, 1.531 underruns con 14 saltos. Sin nueva build por el mero
+hecho de leer logs; baseline de reproducción DIAG109, instrumentación DIAG110.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
