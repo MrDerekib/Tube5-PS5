@@ -1059,6 +1059,22 @@ el campo. Sin pruebas del bridge ni cambios de red/pools/formatos. Pendiente
 reproducción real más allá de los siete segundos; no declarar reparación
 validada en consola hasta observar el resultado.
 
+DIAG109 consola (`diag109-vO1KIe`): usuario confirma reproducción y seek con
+algún enganche. Llegó a EOF, posición final 313,000/313 s, **con 14/14 seeks**;
+no equivale a validar 313 s continuos sin saltos. Native/error/policy/cleanup
+cero. 19 auxiliares suprimidos sin consumir PTS, marked-visible cero, pico de
+cinco AUs, tres drains; 11.785 AUs, 10.852 visibles recibidos, 1.980 descartados
+por preroll y 8.872 entregados. 891 hidden (858 materializados/33 omitidos).
+Cadencia: 8.737 uploads, 59,372 fps en intervalos activos, máximo 34,990 ms,
+70 sync drops; 1.323 audio underruns durante una sesión con 14 saltos. No
+atribuir todos los underruns al seek ni usar estas cifras como prueba de
+fluidez perfecta o latencia individual del seek: no se mide aún la duración
+de cada petición/reset/red/preroll/primer frame. El snapshot de fallo y el
+historial presentes siguen etiquetados DIAG108; son históricos, no otro fallo
+de DIAG109. El corte determinista de los siete segundos queda superado en
+esta sesión; siguiente investigación acotada: latencia/fluidez de seek 4K60,
+manteniendo DIAG109 como baseline de reproducción.
+
 Dependencia local: [SDK público 1.0.1](https://github.com/blackbearreloaded/ps5-opengl/releases/tag/v1.0.1),
 archivo `ps5-opengl-sdk-1.0.1.tar.gz`, extraído en
 `.deps/gpu-sdk/ps5-opengl-sdk-1.0.1/`. SHA-256 del archivo:
